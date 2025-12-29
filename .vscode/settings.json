@@ -3,5 +3,33 @@
     {
       "mode": "auto"
     }
-  ]
+  ],
+  // Use the TypeScript version installed in your workspace's node_modules
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+
+  // Enable/disable the built-in TypeScript formatter
+  "typescript.format.enable": true,
+
+  // Automatically update import paths when moving/renaming files
+  "typescript.updateImportsOnFileMove.enabled": "prompt", // "always" or "never" also valid
+
+  // Enable CodeLens to show references count above symbols
+  "typescript.referencesCodeLens.enabled": true,
+
+  // General editor settings for a better TypeScript experience
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode", // Example using the Prettier extension
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "always",
+    "source.fixAll.ts": "always",
+    "source.organizeImports": "always"
+  }, 
+
+  // Exclude generated JavaScript files from the file explorer
+  "files.exclude": {
+    "**/*.js": {
+      "when": "$(basename).ts"
+    }
+  }
 }

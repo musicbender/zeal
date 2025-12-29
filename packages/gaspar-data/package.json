@@ -1,5 +1,5 @@
 {
-  "name": "@repo/api",
+  "name": "@repo/gaspar-data",
   "version": "0.0.0",
   "private": true,
   "license": "MIT",
@@ -31,8 +31,10 @@
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
+    "@repo/types": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@types/node": "^22.10.7",
+    "prettier-plugin-organize-imports": "^4.3.0",
     "ts-loader": "^9.4.3",
     "ts-node": "^10.9.2",
     "typescript": "5.5.4"

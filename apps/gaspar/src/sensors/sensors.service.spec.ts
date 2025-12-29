@@ -1,22 +1,19 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { describe, it, expect, beforeEach } from '@jest/globals';
+import { LinksService } from './sensors.service';
 
-import { LinksController } from './links.controller';
-import { LinksService } from './links.service';
-
-describe('LinksController', () => {
-  let controller: LinksController;
+describe('LinksService', () => {
+  let service: LinksService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      controllers: [LinksController],
       providers: [LinksService],
     }).compile();
 
-    controller = module.get<LinksController>(LinksController);
+    service = module.get<LinksService>(LinksService);
   });
 
   it('should be defined', () => {
-    expect(controller).toBeDefined();
+    expect(service).toBeDefined();
   });
 });
