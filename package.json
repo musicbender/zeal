@@ -1,14 +1,16 @@
 {
-  "name": "my-turborepo",
+  "name": "zeal",
   "version": "0.0.0",
   "private": true,
-  "description": "",
+  "description": "My personal monorepo",
   "author": "",
   "license": "UNLICENSED",
+  "type": "module",
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
     "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
     "test:e2e": "turbo run test:e2e",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
@@ -23,6 +25,6 @@
   },
   "packageManager": "pnpm@10.26.2",
   "engines": {
-    "node": ">=18"
+    "node": ">=24"
   }
 }

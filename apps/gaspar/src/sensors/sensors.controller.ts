@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 
 import { CreateSensorDto, UpdateSensorDto } from '@repo/gaspar-data';
-import { SensorService } from './sensors.service';
+import { SensorService } from './sensors.service.js';
 
 @Controller('sensors')
 export class SensorsController {

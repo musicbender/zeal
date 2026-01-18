@@ -1,1 +1,1 @@
-export * from './types/smart-home';
+export * from './types/smart-home.js';

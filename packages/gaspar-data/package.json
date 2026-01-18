@@ -2,11 +2,13 @@
   "name": "@repo/gaspar-data",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "license": "MIT",
   "scripts": {
     "dev": "pnpm build --watch",
     "build": "tsc -b -v",
-    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\""
+    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
+    "typecheck": "tsc --noEmit"
   },
   "main": "./dist/entry.js",
   "types": "./dist/entry.d.ts",
