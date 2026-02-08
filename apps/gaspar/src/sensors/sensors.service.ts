@@ -1,9 +1,7 @@
-import { Injectable } from '@nestjs/common';
 import { CreateSensorDto, Sensor, UpdateSensorDto } from '@repo/gaspar-data';
 import { randomUUID } from 'node:crypto';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 
-@Injectable()
 export class SensorService {
   constructor(private prisma: PrismaService) {}
 
@@ -26,20 +24,20 @@ export class SensorService {
     return this.prisma.sensor.findMany();
   }
 
-  findOne(id: number) {
+  findOne(id: string) {
     return this.prisma.sensor.findUnique({
       where: { id },   
     });
   }
 
-  update(id: number, updateSensorDto: UpdateSensorDto) {
+  update(id: string, updateSensorDto: UpdateSensorDto) {
     return this.prisma.sensor.update({
       where: { id },
       data: updateSensorDto,
     });
   }
 
-  remove(id: number) {
+  remove(id: string) {
     return this.prisma.sensor.delete({
       where: { id },
     });
