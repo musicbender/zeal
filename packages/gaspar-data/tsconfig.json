@@ -1,11 +1,10 @@
 {
-  "extends": "@repo/typescript-config/nestjs.json",
+  "extends": "@repo/typescript-config/base.json",
   "compilerOptions": {
     "allowJs": true,
-    "baseUrl": "src",
     "esModuleInterop": true,
-    "module": "NodeNext", 
-    "moduleResolution": "NodeNext", 
+    "module": "es2022",
+    "moduleResolution": "bundler",
     "outDir": "dist",
     "types": ["node"]
   },

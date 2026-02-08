@@ -1,7 +1,7 @@
 import { Room, SensorType } from '@repo/types';
 
 export class CreateSensorDto {
-  name: string;
-  type: SensorType;
-  room: Room | null;
-} 
+  declare name: string;
+  declare type: SensorType;
+  declare room: Room | null;
+}

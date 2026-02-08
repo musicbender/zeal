@@ -1,26 +1,21 @@
 # Gaspar
 
-## Getting Started
+Fastify REST API for smart home sensor management.
 
-First, run the development server:
+## Getting Started
 
 ```bash
 pnpm run dev
-# Also works with NPM, YARN, BUN, ...
 ```
 
-By default, your server will run at [localhost:3000](http://localhost:3000). You can use your favorite API platform like [Insomnia](https://insomnia.rest/) or [Postman](https://www.postman.com/) to test your APIs
+Server runs at [localhost:3000](http://localhost:3000).
 
-You can start editing the demo **APIs** by modifying [linksService](./src/links/links.service.ts) provider.
+## API Endpoints
 
-### Important Note 🚧
-
-If you plan to `build` or `test` the app. Please make sure to build the `packages/*` first.
-
-## Learn More
-
-Learn more about `NestJs` with following resources:
-
-- [Official Documentation](https://docs.nestjs.com) - A progressive Node.js framework for building efficient, reliable and scalable server-side applications.
-- [Official NestJS Courses](https://courses.nestjs.com) - Learn everything you need to master NestJS and tackle modern backend applications at any scale.
-- [GitHub Repo](https://github.com/nestjs/nest)
+- `GET /` — Health check
+- `GET /health` — Health route
+- `POST /sensors` — Create sensor
+- `GET /sensors` — List all sensors
+- `GET /sensors/:id` — Get sensor
+- `PATCH /sensors/:id` — Update sensor
+- `DELETE /sensors/:id` — Delete sensor

@@ -21,14 +21,15 @@
     "@fastify/cors": "^8.4.2",
     "@fastify/helmet": "^11.1.1",
     "@prisma/client": "^5.0.0",
+    "@repo/gaspar-data": "workspace:*",
+    "@repo/types": "workspace:*",
+    "dotenv": "^16.4.0",
     "fastify": "^4.25.2"
   },
   "devDependencies": {
     "@jest/globals": "^29.7.0",
     "@repo/eslint-config": "workspace:*",
-    "@repo/gaspar-data": "workspace:*",
     "@repo/jest-config": "workspace:*",
-    "@repo/types": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@types/jest": "30.0.0",
     "@types/node": "^22.10.7",

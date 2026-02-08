@@ -1,12 +1,12 @@
 import { Room, SensorType } from '@repo/types';
 
 export class Sensor {
-  id: string;
-  name: string;
-  type: SensorType;
-  room: Room | null;
-  isActive: boolean;
-  activeSince?: string | null;
-  updatedAt: string;
-  createdAt: string;
+  declare id: string;
+  declare name: string;
+  declare type: SensorType;
+  declare room: Room | null;
+  declare isActive: boolean;
+  declare activeSince: string | null;
+  declare updatedAt: string;
+  declare createdAt: string;
 }

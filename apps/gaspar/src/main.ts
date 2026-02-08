@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import fastifyCors from '@fastify/cors';
 import fastifyHelmet from '@fastify/helmet';
 import fastify from 'fastify';

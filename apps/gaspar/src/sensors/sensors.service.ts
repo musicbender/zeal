@@ -1,22 +1,17 @@
-import { CreateSensorDto, Sensor, UpdateSensorDto } from '@repo/gaspar-data';
-import { randomUUID } from 'node:crypto';
+import { CreateSensorDto, UpdateSensorDto } from '@repo/gaspar-data';
 import { PrismaService } from '../prisma/prisma.service';
 
 export class SensorService {
   constructor(private prisma: PrismaService) {}
 
   create(createSensorDto: CreateSensorDto) {
-    const newSensor: Sensor = {
-      id: randomUUID(),
-      isActive: false,
-      activeSince: null,
-      ...createSensorDto,
-      updatedAt: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-    };
-
     return this.prisma.sensor.create({
-      data: newSensor,
+      data: {
+        name: createSensorDto.name,
+        type: createSensorDto.type,
+        room: createSensorDto.room,
+        isActive: false,
+      },
     });
   }
 

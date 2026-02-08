@@ -23,6 +23,9 @@
     "typescript": "5.5.4",
     "turbo": "^2.7.2"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["@prisma/client", "@prisma/engines", "esbuild", "prisma"]
+  },
   "packageManager": "pnpm@10.26.2",
   "engines": {
     "node": ">=24"
