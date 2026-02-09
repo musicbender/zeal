@@ -94,49 +94,6 @@ importers:
         specifier: 5.5.4
         version: 5.5.4
 
-  apps/web:
-    dependencies:
-      '@repo/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
-      next:
-        specifier: 16.0.10
-        version: 16.0.10(@babel/core@7.29.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      react:
-        specifier: ^19.1.0
-        version: 19.2.4
-      react-dom:
-        specifier: ^19.1.0
-        version: 19.2.4(react@19.2.4)
-    devDependencies:
-      '@repo/eslint-config':
-        specifier: workspace:*
-        version: link:../../packages/eslint-config
-      '@repo/gaspar-data':
-        specifier: workspace:*
-        version: link:../../packages/gaspar-data
-      '@repo/typescript-config':
-        specifier: workspace:*
-        version: link:../../packages/typescript-config
-      '@types/node':
-        specifier: ^22.15.3
-        version: 22.19.10
-      '@types/react':
-        specifier: 19.1.0
-        version: 19.1.0
-      '@types/react-dom':
-        specifier: 19.1.1
-        version: 19.1.1(@types/react@19.1.0)
-      eslint:
-        specifier: ^9.31.0
-        version: 9.39.2
-      prettier-plugin-organize-imports:
-        specifier: ^4.3.0
-        version: 4.3.0(prettier@3.8.1)(typescript@5.8.2)
-      typescript:
-        specifier: 5.8.2
-        version: 5.8.2
-
   packages/eslint-config:
     devDependencies:
       '@eslint/js':
@@ -226,7 +183,7 @@ importers:
     devDependencies:
       prettier-plugin-organize-imports:
         specifier: ^4.3.0
-        version: 4.3.0(prettier@3.8.1)(typescript@5.5.4)
+        version: 4.3.0(prettier@3.8.1)(typescript@5.8.2)
 
   packages/typescript-config: {}
 
