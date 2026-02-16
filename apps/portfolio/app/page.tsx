@@ -1,7 +1,6 @@
+import HomePage from './HomePage';
+import { projects } from '../lib/projects';
+
 export default function Home() {
-	return (
-		<main>
-			<h1>Pat Jacobs</h1>
-		</main>
-	);
+	return <HomePage projects={projects} />;
 }

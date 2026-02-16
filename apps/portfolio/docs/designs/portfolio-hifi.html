@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pat Jacobs</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Space Mono', monospace;
+            background: #f5f5f3;
+            color: #2d2d2d;
+            overflow: hidden;
+            height: 100vh;
+            position: relative;
+            -webkit-font-smoothing: none;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        /* Pixel noise background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                repeating-linear-gradient(
+                    0deg,
+                    transparent,
+                    transparent 1px,
+                    rgba(45, 45, 45, 0.015) 1px,
+                    rgba(45, 45, 45, 0.015) 2px
+                ),
+                repeating-linear-gradient(
+                    90deg,
+                    transparent,
+                    transparent 1px,
+                    rgba(45, 45, 45, 0.015) 1px,
+                    rgba(45, 45, 45, 0.015) 2px
+                );
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        /* Subtle scanline effect */
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                to bottom,
+                transparent 50%,
+                rgba(0, 0, 0, 0.01) 50%
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 2;
+            animation: scanline 8s linear infinite;
+        }
+        
+        @keyframes scanline {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(4px); }
+        }
+        
+        /* All content above noise layer */
+        .content-layer {
+            position: relative;
+            z-index: 3;
+            height: 100vh;
+        }
+        
+        /* Scattered stats as decorative elements */
+        .stat-decoration {
+            font-size: 10px;
+            color: #9a9a98;
+            letter-spacing: 1px;
+            font-weight: 400;
+            opacity: 0.6;
+            transition: opacity 0.3s ease;
+        }
+        
+        .stat-decoration:hover {
+            opacity: 1;
+        }
+        
+        .stat-decoration .value {
+            color: #5a5a58;
+            font-weight: 400;
+            margin-left: 4px;
+            display: inline-block;
+            transition: none;
+        }
+        
+        .stat-decoration.realtime .value {
+            color: #4a4a48;
+        }
+        
+        /* Glitch color classes */
+        .glitch-red { color: #ff3366 !important; }
+        .glitch-teal { color: #00d9ff !important; }
+        .glitch-purple { color: #b84dff !important; }
+        .glitch-yellow { color: #ffd600 !important; }
+        
+        /* Stat groups */
+        .stat-group {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        
+        #group-1 { top: 30px; left: 40px; }
+        #group-2 { top: 30px; right: 40px; }
+        #group-3 { bottom: 30px; left: 40px; }
+        #group-4 { top: 50%; right: 40px; transform: translateY(-50%); }
+        
+        /* Main content container - geometric positioning */
+        .main {
+            position: absolute;
+            top: 28%;
+            left: 18%;
+            max-width: 420px;
+        }
+        
+        /* Header */
+        .header {
+            margin-bottom: 50px;
+        }
+        
+        .name {
+            font-size: 38px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            margin-bottom: 6px;
+            color: #2d2d2d;
+            text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.03);
+        }
+        
+        .title {
+            font-size: 11px;
+            color: #6a6a68;
+            font-weight: 400;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        
+        /* Blocky decorative element */
+        .blocks {
+            display: flex;
+            gap: 3px;
+            margin-top: 16px;
+            align-items: flex-end;
+        }
+        
+        .block {
+            width: 8px;
+            background: #d8d8d6;
+            transition: all 0.3s ease;
+        }
+        
+        .block:hover {
+            background: #6a6a68;
+        }
+        
+        .block:nth-child(1) { background: #6a6a68; height: 12px; }
+        .block:nth-child(2) { height: 8px; }
+        .block:nth-child(3) { background: #8a8a88; height: 6px; }
+        .block:nth-child(4) { height: 8px; }
+        .block:nth-child(5) { height: 10px; }
+        .block:nth-child(6) { height: 8px; }
+        .block:nth-child(7) { background: #6a6a68; height: 4px; }
+        .block:nth-child(8) { background: #8a8a88; height: 8px; }
+        
+        /* Projects section */
+        .projects {
+            margin-top: 32px;
+        }
+        
+        .projects-title {
+            font-size: 10px;
+            color: #9a9a98;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 18px;
+            opacity: 0.6;
+        }
+        
+        .project-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 11px;
+        }
+        
+        .project-item {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+            font-size: 12px;
+            color: #4a4a48;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            padding: 3px 0;
+            font-weight: 400;
+            position: relative;
+        }
+        
+        .project-item::before {
+            content: '';
+            position: absolute;
+            left: -8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 2px;
+            height: 0;
+            background: #2d2d2d;
+            transition: height 0.2s ease;
+        }
+        
+        .project-item:hover::before {
+            height: 100%;
+        }
+        
+        .project-item:hover {
+            color: #2d2d2d;
+            transform: translateX(2px);
+        }
+        
+        .project-icon {
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.3s ease;
+        }
+        
+        .project-item:hover .project-icon {
+            transform: scale(1.1);
+        }
+        
+        /* SVG Icons for projects */
+        svg {
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Contact - minimalist footer */
+        .contact {
+            position: absolute;
+            bottom: 30px;
+            right: 40px;
+            font-size: 10px;
+            color: #9a9a98;
+            display: flex;
+            gap: 16px;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+        
+        .contact a {
+            color: #9a9a98;
+            text-decoration: none;
+            transition: all 0.2s;
+            font-weight: 400;
+            position: relative;
+        }
+        
+        .contact a::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 0;
+            height: 1px;
+            background: #4a4a48;
+            transition: width 0.2s ease;
+        }
+        
+        .contact a:hover::after {
+            width: 100%;
+        }
+        
+        .contact a:hover {
+            color: #4a4a48;
+        }
+        
+        /* Cursor trail effect (subtle) */
+        .cursor-pixel {
+            position: fixed;
+            width: 2px;
+            height: 2px;
+            background: rgba(106, 106, 104, 0.3);
+            pointer-events: none;
+            z-index: 9999;
+            animation: fade-out 0.5s forwards;
+        }
+        
+        @keyframes fade-out {
+            to {
+                opacity: 0;
+                transform: scale(0);
+            }
+        }
+        
+        /* Glitch effect on name (very subtle) */
+        @keyframes glitch {
+            0%, 100% {
+                text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.03);
+            }
+            50% {
+                text-shadow: 
+                    2px 2px 0px rgba(0, 0, 0, 0.03),
+                    -1px 0 0 rgba(106, 106, 104, 0.1),
+                    1px 0 0 rgba(138, 138, 136, 0.1);
+            }
+        }
+        
+        .name:hover {
+            animation: glitch 0.3s ease;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .main {
+                top: 20%;
+                left: 8%;
+                max-width: 84%;
+            }
+            
+            .stat-decoration {
+                font-size: 9px;
+            }
+            
+            .stat-group {
+                gap: 5px;
+            }
+            
+            #group-1 { top: 20px; left: 20px; }
+            #group-2 { top: 20px; right: 20px; }
+            #group-3 { bottom: 100px; left: 20px; }
+            #group-4 { top: 50%; right: 20px; }
+            
+            .name { font-size: 28px; }
+            .contact { bottom: 20px; right: 20px; font-size: 9px; gap: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="content-layer">
+        <!-- Scattered stat groups as decoration -->
+        <div id="group-1" class="stat-group">
+            <div class="stat-decoration">
+                YRS<span class="value">8</span>
+            </div>
+            <div class="stat-decoration">
+                LOC<span class="value">SF</span>
+            </div>
+        </div>
+        
+        <div id="group-2" class="stat-group">
+            <div class="stat-decoration realtime">
+                CLK<span class="value" id="time-value">14:32:45</span>
+            </div>
+            <div class="stat-decoration realtime">
+                CFE<span class="value" id="coffee-value">4</span>
+            </div>
+        </div>
+        
+        <div id="group-3" class="stat-group">
+            <div class="stat-decoration">
+                SIL<span class="value">×3</span>
+            </div>
+            <div class="stat-decoration">
+                TAB<span class="value">47</span>
+            </div>
+        </div>
+        
+        <div id="group-4" class="stat-group">
+            <div class="stat-decoration">
+                STP<span class="value">42.8K</span>
+            </div>
+            <div class="stat-decoration">
+                FIX<span class="value">234</span>
+            </div>
+            <div class="stat-decoration">
+                SKL<span class="value" id="skill-value">React</span>
+            </div>
+        </div>
+        
+        <!-- Main centered content -->
+        <div class="main">
+            <div class="header">
+                <h1 class="name">Pat Jacobs</h1>
+                <div class="title">Software Engineer</div>
+                <div class="blocks">
+                    <div class="block"></div>
+                    <div class="block"></div>
+                    <div class="block"></div>
+                    <div class="block"></div>
+                    <div class="block"></div>
+                    <div class="block"></div>
+                    <div class="block"></div>
+                    <div class="block"></div>
+                </div>
+            </div>
+            
+            <div class="projects">
+                <div class="projects-title">—</div>
+                <ul class="project-list">
+                    <li class="project-item">
+                        <div class="project-icon">
+                            <svg viewBox="0 0 16 16" fill="none">
+                                <rect x="3" y="3" width="3" height="3" fill="#6a6a68"/>
+                                <rect x="10" y="3" width="3" height="3" fill="#6a6a68"/>
+                                <rect x="3" y="10" width="3" height="3" fill="#6a6a68"/>
+                            </svg>
+                        </div>
+                        <span>Neural Canvas</span>
+                    </li>
+                    <li class="project-item">
+                        <div class="project-icon">
+                            <svg viewBox="0 0 16 16" fill="none">
+                                <rect x="6" y="2" width="4" height="4" fill="#8a8a88"/>
+                                <rect x="2" y="6" width="4" height="4" fill="#8a8a88"/>
+                                <rect x="10" y="10" width="4" height="4" fill="#8a8a88"/>
+                            </svg>
+                        </div>
+                        <span>Temporal DB</span>
+                    </li>
+                    <li class="project-item">
+                        <div class="project-icon">
+                            <svg viewBox="0 0 16 16" fill="none">
+                                <rect x="2" y="7" width="5" height="2" fill="#6a6a68"/>
+                                <rect x="9" y="7" width="5" height="2" fill="#6a6a68"/>
+                                <rect x="7" y="2" width="2" height="5" fill="#6a6a68"/>
+                            </svg>
+                        </div>
+                        <span>Flux Protocol</span>
+                    </li>
+                    <li class="project-item">
+                        <div class="project-icon">
+                            <svg viewBox="0 0 16 16" fill="none">
+                                <rect x="4" y="4" width="3" height="3" fill="#8a8a88"/>
+                                <rect x="9" y="4" width="3" height="3" fill="#8a8a88"/>
+                                <rect x="4" y="9" width="3" height="3" fill="#8a8a88"/>
+                                <rect x="9" y="9" width="3" height="3" fill="#8a8a88"/>
+                            </svg>
+                        </div>
+                        <span>Mesh Router</span>
+                    </li>
+                    <li class="project-item">
+                        <div class="project-icon">
+                            <svg viewBox="0 0 16 16" fill="none">
+                                <rect x="3" y="5" width="3" height="6" fill="#6a6a68"/>
+                                <rect x="10" y="3" width="3" height="10" fill="#6a6a68"/>
+                            </svg>
+                        </div>
+                        <span>Quantum Metrics</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- Contact footer -->
+        <div class="contact">
+            <a href="/cdn-cgi/l/email-protection#f1819085b19489909c819d94df929e9c">EMAIL</a>
+            <a href="https://github.com/patjacobs" target="_blank">GITHUB</a>
+            <a href="https://linkedin.com/in/patjacobs" target="_blank">LINKEDIN</a>
+        </div>
+    </div>
+    
+    <script>
+        // Glitch effect system
+        const glitchChars = '!@#$%^&*()_+-=[]{}|;:,.<>?/~`0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+        const glitchColors = ['glitch-red', 'glitch-teal', 'glitch-purple', 'glitch-yellow'];
+        
+        function glitchText(element, finalText, iterations = 1, callback) {
+            let currentIteration = 0;
+            const originalColor = element.className;
+            
+            function runGlitch() {
+                if (currentIteration >= iterations) {
+                    // Final state - show real value
+                    element.textContent = finalText;
+                    element.className = '';
+                    if (callback) callback();
+                    return;
+                }
+                
+                // Generate random glitch text of same length
+                const glitchLength = finalText.length;
+                let glitchedText = '';
+                for (let i = 0; i < glitchLength; i++) {
+                    glitchedText += glitchChars[Math.floor(Math.random() * glitchChars.length)];
+                }
+                
+                // Random color for each glitch iteration
+                const randomColor = glitchColors[Math.floor(Math.random() * glitchColors.length)];
+                
+                element.textContent = glitchedText;
+                element.className = randomColor;
+                
+                currentIteration++;
+                setTimeout(runGlitch, 80); // 80ms between glitches
+            }
+            
+            runGlitch();
+        }
+        
+        // Real-time clock with glitch on update
+        let lastSecond = '';
+        function updateTime() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            const timeString = `${hours}:${minutes}:${seconds}`;
+            
+            const timeElement = document.getElementById('time-value');
+            
+            // Only glitch when seconds change
+            if (lastSecond !== seconds) {
+                glitchText(timeElement, timeString, 1);
+                lastSecond = seconds;
+            }
+        }
+        
+        updateTime();
+        setInterval(updateTime, 1000);
+        
+        // Simulate coffee counter with glitch on update
+        let coffeeCount = 4;
+        const coffeeElement = document.getElementById('coffee-value');
+        
+        function updateCoffee() {
+            if (Math.random() < 0.1) {
+                coffeeCount++;
+                glitchText(coffeeElement, String(coffeeCount), 1);
+            }
+        }
+        
+        setInterval(updateCoffee, 30000);
+        
+        // Rotating skills display with glitch
+        const skills = [
+            'Next.js',
+            'React 19',
+            'k8s',
+            'Node',
+            'Tailwind',
+            'Styled-C',
+            'Java',
+            'Spring',
+            'TypeScript',
+            'Redux',
+            'Docker',
+            'GraphQL',
+            'PostgreSQL',
+            'MongoDB',
+            'AWS',
+            'Python',
+            'FastAPI',
+            'Rust'
+        ];
+        
+        let skillIndex = 0;
+        function rotateSkill() {
+            skillIndex = (skillIndex + 1) % skills.length;
+            const skillElement = document.getElementById('skill-value');
+            glitchText(skillElement, skills[skillIndex], 1);
+        }
+        
+        setInterval(rotateSkill, 2000);
+        
+        // Initial load - glitch all stats 3 times
+        window.addEventListener('load', () => {
+            // Glitch all value elements on load
+            const allValues = document.querySelectorAll('.stat-decoration .value');
+            allValues.forEach(valueElement => {
+                const currentText = valueElement.textContent;
+                glitchText(valueElement, currentText, 3);
+            });
+        });
+        
+        // Subtle cursor trail effect
+        let lastPixelTime = 0;
+        document.addEventListener('mousemove', (e) => {
+            const now = Date.now();
+            if (now - lastPixelTime > 100) {
+                const pixel = document.createElement('div');
+                pixel.className = 'cursor-pixel';
+                pixel.style.left = e.pageX + 'px';
+                pixel.style.top = e.pageY + 'px';
+                document.body.appendChild(pixel);
+                
+                setTimeout(() => pixel.remove(), 500);
+                lastPixelTime = now;
+            }
+        });
+    </script>
+ 
