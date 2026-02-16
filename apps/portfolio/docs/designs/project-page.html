@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural Canvas — Pat Jacobs</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Space Mono', monospace;
+            background: #f5f5f3;
+            color: #2d2d2d;
+            overflow-x: hidden;
+            position: relative;
+            -webkit-font-smoothing: none;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        /* Pixel noise background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                repeating-linear-gradient(
+                    0deg,
+                    transparent,
+                    transparent 1px,
+                    rgba(45, 45, 45, 0.015) 1px,
+                    rgba(45, 45, 45, 0.015) 2px
+                ),
+                repeating-linear-gradient(
+                    90deg,
+                    transparent,
+                    transparent 1px,
+                    rgba(45, 45, 45, 0.015) 1px,
+                    rgba(45, 45, 45, 0.015) 2px
+                );
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        /* Subtle scanline effect */
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                to bottom,
+                transparent 50%,
+                rgba(0, 0, 0, 0.01) 50%
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 2;
+            animation: scanline 8s linear infinite;
+        }
+        
+        @keyframes scanline {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(4px); }
+        }
+        
+        /* All content above noise layer */
+        .content-layer {
+            position: relative;
+            z-index: 3;
+            min-height: 100vh;
+            padding: 40px;
+        }
+        
+        /* Back link */
+        .back-link {
+            position: fixed;
+            top: 30px;
+            left: 40px;
+            font-size: 10px;
+            color: #9a9a98;
+            text-decoration: none;
+            letter-spacing: 1px;
+            z-index: 100;
+            transition: color 0.2s;
+        }
+        
+        .back-link:hover {
+            color: #4a4a48;
+        }
+        
+        /* Metadata stats - top right corner */
+        .meta-stats {
+            position: fixed;
+            top: 30px;
+            right: 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            z-index: 100;
+        }
+        
+        .stat-decoration {
+            font-size: 10px;
+            color: #9a9a98;
+            letter-spacing: 1px;
+            font-weight: 400;
+            opacity: 0.6;
+        }
+        
+        .stat-decoration .value {
+            color: #5a5a58;
+            font-weight: 400;
+            margin-left: 4px;
+            display: inline-block;
+        }
+        
+        /* Glitch color classes */
+        .glitch-red { color: #ff3366 !important; }
+        .glitch-teal { color: #00d9ff !important; }
+        .glitch-purple { color: #b84dff !important; }
+        .glitch-yellow { color: #ffd600 !important; }
+        
+        /* Main container */
+        .container {
+            max-width: 700px;
+            margin: 80px auto 120px;
+        }
+        
+        /* Project icon */
+        .project-icon-large {
+            width: 40px;
+            height: 40px;
+            margin-bottom: 20px;
+        }
+        
+        .project-icon-large svg {
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Title */
+        .project-title {
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            margin-bottom: 8px;
+            color: #2d2d2d;
+        }
+        
+        .project-subtitle {
+            font-size: 11px;
+            color: #6a6a68;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 40px;
+        }
+        
+        /* Content sections */
+        .section {
+            margin-bottom: 50px;
+        }
+        
+        .section-title {
+            font-size: 10px;
+            color: #9a9a98;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 16px;
+            opacity: 0.6;
+        }
+        
+        .section-content {
+            font-size: 13px;
+            line-height: 1.8;
+            color: #4a4a48;
+            font-weight: 400;
+        }
+        
+        .section-content p {
+            margin-bottom: 16px;
+        }
+        
+        /* Screenshot placeholder */
+        .screenshot {
+            width: 100%;
+            height: 300px;
+            background: #e8e8e6;
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .screenshot::after {
+            content: 'SCREENSHOT';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 10px;
+            color: #9a9a98;
+            letter-spacing: 2px;
+            opacity: 0.3;
+        }
+        
+        /* Tech stack - scattered pills with unique layout */
+        .tech-scatter {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 8px;
+            align-items: center;
+            margin-top: 20px;
+        }
+        
+        .tech-item {
+            font-size: 10px;
+            color: #6a6a68;
+            border: 1px solid #d8d8d6;
+            padding: 5px 10px;
+            letter-spacing: 0.5px;
+            font-weight: 400;
+            position: relative;
+            transition: all 0.2s ease;
+        }
+        
+        /* Create visual rhythm with varying styles */
+        .tech-item:nth-child(2n) {
+            background: #e8e8e6;
+            border-color: #e8e8e6;
+        }
+        
+        .tech-item:nth-child(3n) {
+            padding: 6px 14px;
+        }
+        
+        .tech-item:nth-child(4n) {
+            margin-left: 12px;
+        }
+        
+        .tech-item:nth-child(5n) {
+            color: #8a8a88;
+        }
+        
+        .tech-item:hover {
+            background: #2d2d2d;
+            color: #f5f5f3;
+            border-color: #2d2d2d;
+        }
+        
+        /* Decorative pixel before some items */
+        .tech-item:nth-child(3n)::before {
+            content: '';
+            position: absolute;
+            left: -10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 2px;
+            height: 2px;
+            background: #9a9a98;
+        }
+        
+        /* Team grid */
+        .team-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+        
+        .team-member {
+            font-size: 12px;
+            color: #4a4a48;
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+        }
+        
+        .team-role {
+            font-size: 10px;
+            color: #9a9a98;
+            letter-spacing: 1px;
+        }
+        
+        /* Next project button */
+        .next-project {
+            position: fixed;
+            bottom: 30px;
+            right: 40px;
+            z-index: 100;
+        }
+        
+        .next-btn {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 11px;
+            color: #6a6a68;
+            text-decoration: none;
+            letter-spacing: 1px;
+            padding: 12px 16px;
+            background: transparent;
+            border: 1px solid #d8d8d6;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: 'Space Mono', monospace;
+            font-weight: 400;
+        }
+        
+        .next-btn:hover {
+            background: #2d2d2d;
+            color: #f5f5f3;
+            border-color: #2d2d2d;
+        }
+        
+        .next-icon {
+            width: 16px;
+            height: 16px;
+        }
+        
+        .next-icon svg {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .next-btn:hover .next-icon svg rect {
+            fill: #f5f5f3;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .content-layer {
+                padding: 20px;
+            }
+            
+            .container {
+                margin: 60px auto 100px;
+            }
+            
+            .back-link {
+                top: 20px;
+                left: 20px;
+            }
+            
+            .meta-stats {
+                top: 20px;
+                right: 20px;
+            }
+            
+            .project-title {
+                font-size: 24px;
+            }
+            
+            .team-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .next-project {
+                bottom: 20px;
+                right: 20px;
+            }
+            
+            .screenshot {
+                height: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="content-layer">
+        <!-- Back link -->
+        <a href="/" class="back-link">← BACK</a>
+        
+        <!-- Metadata stats -->
+        <div class="meta-stats">
+            <div class="stat-decoration">
+                YR<span class="value" id="year-value">2024</span>
+            </div>
+            <div class="stat-decoration">
+                DUR<span class="value" id="duration-value">6MO</span>
+            </div>
+            <div class="stat-decoration">
+                ROL<span class="value" id="role-value">LEAD</span>
+            </div>
+        </div>
+        
+        <!-- Main content -->
+        <div class="container">
+            <!-- Project icon -->
+            <div class="project-icon-large">
+                <svg viewBox="0 0 16 16" fill="none">
+                    <rect x="3" y="3" width="3" height="3" fill="#6a6a68"/>
+                    <rect x="10" y="3" width="3" height="3" fill="#6a6a68"/>
+                    <rect x="3" y="10" width="3" height="3" fill="#6a6a68"/>
+                </svg>
+            </div>
+            
+            <!-- Title -->
+            <h1 class="project-title">Neural Canvas</h1>
+            <div class="project-subtitle">AI-Powered Design Tool</div>
+            
+            <!-- Overview -->
+            <div class="section">
+                <div class="section-title">—</div>
+                <div class="section-content">
+                    <p>Neural Canvas is an experimental design tool that uses machine learning to generate and manipulate visual compositions in real-time. Built as a proof of concept for AI-assisted creative workflows, it bridges the gap between traditional design tools and generative systems.</p>
+                    <p>The project started as an exploration into how neural networks could understand and interpret design principles. We trained custom models on thousands of design compositions, teaching the system to recognize patterns in color theory, spatial relationships, and compositional balance.</p>
+                </div>
+            </div>
+            
+            <!-- Screenshots -->
+            <div class="section">
+                <div class="section-title">Interface</div>
+                <div class="screenshot"></div>
+                <div class="section-content">
+                    <p>The interface takes a minimalist approach, focusing on direct manipulation and real-time feedback. Users can sketch rough ideas and watch as the AI interprets and refines them, suggesting color palettes, layout variations, and compositional improvements.</p>
+                </div>
+                <div class="screenshot"></div>
+            </div>
+            
+            <!-- Technical approach -->
+            <div class="section">
+                <div class="section-title">Approach</div>
+                <div class="section-content">
+                    <p>We built a custom training pipeline using PyTorch to process design datasets. The model architecture combines CNN layers for visual feature extraction with transformer attention mechanisms for understanding compositional relationships.</p>
+                    <p>The frontend runs on React with a custom WebGL rendering engine for real-time canvas manipulation. We optimized for sub-100ms latency between user input and AI response, making the interaction feel immediate and natural.</p>
+                </div>
+            </div>
+            
+            <!-- Tech stack -->
+            <div class="section">
+                <div class="section-title">Technology</div>
+                <div class="tech-scatter">
+                    <div class="tech-item">React</div>
+                    <div class="tech-item">TypeScript</div>
+                    <div class="tech-item">PyTorch</div>
+                    <div class="tech-item">FastAPI</div>
+                    <div class="tech-item">WebGL</div>
+                    <div class="tech-item">PostgreSQL</div>
+                    <div class="tech-item">Docker</div>
+                    <div class="tech-item">AWS</div>
+                </div>
+            </div>
+            
+            <!-- Team -->
+            <div class="section">
+                <div class="section-title">Team</div>
+                <div class="team-grid">
+                    <div class="team-member">
+                        <span>Pat Jacobs</span>
+                        <span class="team-role">LEAD ENG</span>
+                    </div>
+                    <div class="team-member">
+                        <span>Alex Chen</span>
+                        <span class="team-role">ML ENG</span>
+                    </div>
+                    <div class="team-member">
+                        <span>Jordan Kim</span>
+                        <span class="team-role">DESIGNER</span>
+                    </div>
+                    <div class="team-member">
+                        <span>Sam Rivera</span>
+                        <span class="team-role">QA</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Next project -->
+        <div class="next-project">
+            <a href="/project-temporal-db" class="next-btn">
+                <span>NEXT PROJECT</span>
+                <div class="next-icon">
+                    <svg viewBox="0 0 16 16" fill="none">
+                        <rect x="6" y="2" width="4" height="4" fill="#6a6a68"/>
+                        <rect x="2" y="6" width="4" height="4" fill="#6a6a68"/>
+                        <rect x="10" y="10" width="4" height="4" fill="#6a6a68"/>
+                    </svg>
+                </div>
+            </a>
+        </div>
+    </div>
+    
+    <script>
+        // Glitch effect system
+        const glitchChars = '!@#$%^&*()_+-=[]{}|;:,.<>?/~`0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+        const glitchColors = ['glitch-red', 'glitch-teal', 'glitch-purple', 'glitch-yellow'];
+        
+        function glitchText(element, finalText, iterations = 1, callback) {
+            let currentIteration = 0;
+            const originalColor = element.className;
+            
+            function runGlitch() {
+                if (currentIteration >= iterations) {
+                    // Final state - show real value
+                    element.textContent = finalText;
+                    element.className = '';
+                    if (callback) callback();
+                    return;
+                }
+                
+                // Generate random glitch text of same length
+                const glitchLength = finalText.length;
+                let glitchedText = '';
+                for (let i = 0; i < glitchLength; i++) {
+                    glitchedText += glitchChars[Math.floor(Math.random() * glitchChars.length)];
+                }
+                
+                // Random color for each glitch iteration
+                const randomColor = glitchColors[Math.floor(Math.random() * glitchColors.length)];
+                
+                element.textContent = glitchedText;
+                element.className = randomColor;
+                
+                currentIteration++;
+                setTimeout(runGlitch, 80); // 80ms between glitches
+            }
+            
+            runGlitch();
+        }
+        
+        // Initial load - glitch all stats 3 times
+        window.addEventListener('load', () => {
+            const allValues = document.querySelectorAll('.stat-decoration .value');
+            allValues.forEach(valueElement => {
+                const currentText = valueElement.textContent;
+                glitchText(valueElement, currentText, 3);
+            });
+        });
+    </script>
+</body>
+</html>

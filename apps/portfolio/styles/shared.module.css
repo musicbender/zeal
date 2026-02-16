@@ -1,0 +1,112 @@
+/* ─── Shared page wrapper with noise + scanline overlays ─── */
+.body {
+	font-family: var(--font-mono);
+	background: var(--gray-1);
+	color: var(--gray-12);
+	position: relative;
+	-webkit-font-smoothing: none;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+/* Pixel noise grid */
+.body::before {
+	content: '';
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background-image: repeating-linear-gradient(
+			0deg,
+			transparent,
+			transparent 0.0625rem,
+			rgba(255, 255, 255, var(--noise-opacity)) 0.0625rem,
+			rgba(255, 255, 255, var(--noise-opacity)) 0.125rem
+		),
+		repeating-linear-gradient(
+			90deg,
+			transparent,
+			transparent 0.0625rem,
+			rgba(255, 255, 255, var(--noise-opacity)) 0.0625rem,
+			rgba(255, 255, 255, var(--noise-opacity)) 0.125rem
+		);
+	pointer-events: none;
+	z-index: 1;
+}
+
+/* Scanline sweep */
+.body::after {
+	content: '';
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background: linear-gradient(
+		to bottom,
+		transparent 50%,
+		rgba(255, 255, 255, var(--scanline-opacity)) 50%
+	);
+	background-size: 100% var(--space-1);
+	pointer-events: none;
+	z-index: 2;
+	animation: scanline 8s linear infinite;
+}
+
+@keyframes scanline {
+	0% {
+		transform: translateY(0);
+	}
+	100% {
+		transform: translateY(var(--space-1));
+	}
+}
+
+/* ─── Content layer (above overlays) ─── */
+.contentLayer {
+	position: relative;
+	z-index: 3;
+}
+
+/* ─── Stat decorations ─── */
+.statDecoration {
+	font-size: var(--text-sm);
+	color: var(--gray-7);
+	letter-spacing: var(--letter-spacing-1);
+	font-weight: var(--font-weight-regular);
+	opacity: 0.6;
+	transition: opacity 0.3s ease;
+}
+
+.statDecoration:hover {
+	opacity: 1;
+}
+
+.statValue {
+	color: var(--gray-9);
+	font-weight: var(--font-weight-regular);
+	margin-left: var(--space-1);
+	display: inline-block;
+	transition: none;
+}
+
+.realtime .statValue {
+	color: var(--gray-11);
+}
+
+/* ─── Section label (shared between overview dividers and section titles) ─── */
+.sectionLabel {
+	font-size: var(--text-sm);
+	color: var(--gray-7);
+	letter-spacing: 0.125rem;
+	text-transform: uppercase;
+	margin-bottom: var(--space-4);
+	opacity: 0.6;
+}
+
+/* ─── Responsive stat size ─── */
+@media (max-width: 48em) {
+	.statDecoration {
+		font-size: var(--text-xs);
+	}
+}

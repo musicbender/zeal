@@ -1,0 +1,284 @@
+/* ─── Project detail page styles ─── */
+
+.body {
+	composes: body from '../../../styles/shared.module.css';
+	overflow-x: hidden;
+}
+
+.contentLayer {
+	composes: contentLayer from '../../../styles/shared.module.css';
+	min-height: 100vh;
+	padding: var(--space-7);
+}
+
+.statDecoration {
+	composes: statDecoration from '../../../styles/shared.module.css';
+}
+
+.statValue {
+	composes: statValue from '../../../styles/shared.module.css';
+}
+
+/* ─── Back link ─── */
+.backLink {
+	position: fixed;
+	top: var(--space-7);
+	left: var(--space-7);
+	font-size: var(--text-sm);
+	color: var(--gray-7);
+	text-decoration: none;
+	letter-spacing: var(--letter-spacing-1);
+	z-index: 100;
+	transition: color 0.2s;
+}
+
+.backLink:hover {
+	color: var(--gray-11);
+}
+
+/* ─── Metadata stats ─── */
+.metaStats {
+	position: fixed;
+	top: var(--space-7);
+	right: var(--space-7);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+	z-index: 100;
+}
+
+/* ─── Container ─── */
+.container {
+	max-width: 43.75rem;
+	margin: var(--space-9) auto var(--space-9);
+}
+
+/* ─── Project icon ─── */
+.projectIconLarge {
+	width: var(--space-7);
+	height: var(--space-7);
+	margin-bottom: var(--space-5);
+}
+
+.projectIconLarge svg {
+	width: 100%;
+	height: 100%;
+}
+
+/* ─── Title ─── */
+.projectTitle {
+	font-size: var(--font-size-7);
+	font-weight: var(--font-weight-bold);
+	letter-spacing: var(--letter-spacing-7);
+	margin-bottom: var(--space-2);
+	color: var(--gray-12);
+	font-family: var(--font-mono);
+}
+
+.projectSubtitle {
+	font-size: var(--text-base);
+	color: var(--gray-8);
+	letter-spacing: 0.125rem;
+	text-transform: uppercase;
+	margin-bottom: var(--space-7);
+}
+
+/* ─── Content sections ─── */
+.section {
+	margin-bottom: var(--space-8);
+}
+
+.sectionTitle {
+	composes: sectionLabel from '../../../styles/shared.module.css';
+}
+
+.sectionContent {
+	font-size: var(--font-size-2);
+	line-height: var(--line-height-3);
+	color: var(--gray-11);
+	font-weight: var(--font-weight-regular);
+}
+
+.sectionContent p {
+	margin-bottom: var(--space-4);
+}
+
+/* ─── Screenshot placeholder ─── */
+.screenshot {
+	width: 100%;
+	height: 18.75rem;
+	background: var(--gray-2);
+	margin-bottom: var(--space-5);
+	position: relative;
+	overflow: hidden;
+}
+
+.screenshot::after {
+	content: 'SCREENSHOT';
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	font-size: var(--text-sm);
+	color: var(--gray-7);
+	letter-spacing: 0.125rem;
+	opacity: 0.3;
+}
+
+/* ─── Tech stack ─── */
+.techScatter {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-1) var(--space-2);
+	align-items: center;
+	margin-top: var(--space-5);
+}
+
+.techItem {
+	font-size: var(--text-sm);
+	color: var(--gray-9);
+	border: 0.0625rem solid var(--gray-4);
+	padding: 0.3125rem 0.625rem;
+	letter-spacing: var(--letter-spacing-1);
+	font-weight: var(--font-weight-regular);
+	position: relative;
+	transition: all 0.2s ease;
+}
+
+.techItem:nth-child(2n) {
+	background: var(--gray-2);
+	border-color: var(--gray-2);
+}
+
+.techItem:nth-child(3n) {
+	padding: var(--space-1) 0.875rem;
+}
+
+.techItem:nth-child(4n) {
+	margin-left: var(--space-3);
+}
+
+.techItem:nth-child(5n) {
+	color: var(--gray-7);
+}
+
+.techItem:hover {
+	background: var(--gray-12);
+	color: var(--gray-1);
+	border-color: var(--gray-12);
+}
+
+.techItem:nth-child(3n)::before {
+	content: '';
+	position: absolute;
+	left: -0.625rem;
+	top: 50%;
+	transform: translateY(-50%);
+	width: 0.125rem;
+	height: 0.125rem;
+	background: var(--gray-7);
+}
+
+/* ─── Team grid ─── */
+.teamGrid {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: var(--space-3);
+}
+
+.teamMember {
+	font-size: var(--font-size-1);
+	color: var(--gray-11);
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-2);
+}
+
+.teamRole {
+	font-size: var(--text-sm);
+	color: var(--gray-7);
+	letter-spacing: var(--letter-spacing-1);
+}
+
+/* ─── Next project button ─── */
+.nextProject {
+	position: fixed;
+	bottom: var(--space-7);
+	right: var(--space-7);
+	z-index: 100;
+}
+
+.nextBtn {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	font-size: var(--text-base);
+	color: var(--gray-9);
+	text-decoration: none;
+	letter-spacing: var(--letter-spacing-1);
+	padding: var(--space-3) var(--space-4);
+	background: transparent;
+	border: 0.0625rem solid var(--gray-4);
+	cursor: pointer;
+	transition: all 0.2s ease;
+	font-family: var(--font-mono);
+	font-weight: var(--font-weight-regular);
+}
+
+.nextBtn:hover {
+	background: var(--gray-12);
+	color: var(--gray-1);
+	border-color: var(--gray-12);
+}
+
+.nextIcon {
+	width: var(--space-4);
+	height: var(--space-4);
+}
+
+.nextIcon svg {
+	width: 100%;
+	height: 100%;
+}
+
+.nextBtn:hover .nextIcon svg rect {
+	fill: var(--gray-1);
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 48em) {
+	.contentLayer {
+		padding: var(--space-5);
+	}
+
+	.container {
+		margin: var(--space-8) auto var(--space-9);
+	}
+
+	.backLink {
+		top: var(--space-5);
+		left: var(--space-5);
+	}
+
+	.metaStats {
+		top: var(--space-5);
+		right: var(--space-5);
+	}
+
+	.projectTitle {
+		font-size: var(--font-size-6);
+	}
+
+	.teamGrid {
+		grid-template-columns: 1fr;
+	}
+
+	.nextProject {
+		bottom: var(--space-5);
+		right: var(--space-5);
+	}
+
+	.screenshot {
+		height: 12.5rem;
+	}
+}
