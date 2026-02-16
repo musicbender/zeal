@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import ProjectPage from './ProjectPage';
+import ProjectPage from './project-page';
 import { getNextProject, getProject, projects } from '../../../lib/projects';
 
 export function generateStaticParams() {
