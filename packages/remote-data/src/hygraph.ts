@@ -2,10 +2,16 @@ import 'server-only';
 
 import type { RichTextAST } from '@repo/utils/common/content';
 
-const HYGRAPH_ENDPOINT = process.env.HYGRAPH_ENDPOINT!;
+function getEndpoint(): string {
+  const endpoint = process.env.HYGRAPH_ENDPOINT;
+  if (!endpoint) {
+    throw new Error('HYGRAPH_ENDPOINT environment variable is not set');
+  }
+  return endpoint;
+}
 
 async function hygraphFetch<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
-  const res = await fetch(HYGRAPH_ENDPOINT, {
+  const res = await fetch(getEndpoint(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query, variables }),
