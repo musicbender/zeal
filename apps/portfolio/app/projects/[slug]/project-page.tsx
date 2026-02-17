@@ -4,7 +4,13 @@ import Link from 'next/link';
 import type { RichTextNode } from '@repo/utils/common/content';
 import { renderRichTextNode } from '@repo/utils/common/content-renderer';
 import type { ProjectIcon } from '@repo/utils/common/icon';
+import { ProjectIconSvg } from '@repo/ui/project-icon';
 import { useGlitchOnLoad } from '@repo/utils/hooks/glitch-effects';
+import { StatGroup } from '../../../components/stat-group/stat-group';
+import { ProjectTech } from '../../../components/project-tech/project-tech';
+import { ProjectTeam } from '../../../components/project-team/project-team';
+import { ProjectLinks } from '../../../components/project-links/project-links';
+import { NextProject } from '../../../components/next-project/next-project';
 import styles from './page.module.css';
 
 interface ProjectData {
@@ -43,33 +49,18 @@ export default function ProjectPage({ project, nextProject }: ProjectPageProps) 
 				</Link>
 
 				{/* Metadata stats */}
-				<div className={styles.metaStats}>
-					{project.year && (
-						<div className={styles.statDecoration}>
-							YR
-							<span className={styles.statValue} data-glitch-value>
-								{project.year}
-							</span>
-						</div>
-					)}
-				</div>
+				{project.year && (
+					<StatGroup
+						stats={[{ label: 'YR', value: project.year }]}
+						className={styles.metaStats}
+					/>
+				)}
 
 				{/* Main content */}
 				<div className={styles.container}>
 					{/* Project icon */}
 					<div className={styles.projectIconLarge}>
-						<svg viewBox="0 0 16 16" fill="none">
-							{project.icon.rects.map((r, i) => (
-								<rect
-									key={i}
-									x={r.x}
-									y={r.y}
-									width={r.w}
-									height={r.h}
-									fill={r.fill}
-								/>
-							))}
-						</svg>
+						<ProjectIconSvg icon={project.icon} />
 					</div>
 
 					{/* Title */}
@@ -94,13 +85,7 @@ export default function ProjectPage({ project, nextProject }: ProjectPageProps) 
 					{project.techList.length > 0 && (
 						<div className={styles.section}>
 							<div className={styles.sectionTitle}>Technology</div>
-							<div className={styles.techScatter}>
-								{project.techList.map((tech) => (
-									<div key={tech} className={styles.techItem}>
-										{tech}
-									</div>
-								))}
-							</div>
+							<ProjectTech items={project.techList} />
 						</div>
 					)}
 
@@ -108,13 +93,7 @@ export default function ProjectPage({ project, nextProject }: ProjectPageProps) 
 					{project.team.length > 0 && (
 						<div className={styles.section}>
 							<div className={styles.sectionTitle}>Team</div>
-							<div className={styles.teamGrid}>
-								{project.team.map((member) => (
-									<div key={member} className={styles.teamMember}>
-										<span>{member}</span>
-									</div>
-								))}
-							</div>
+							<ProjectTeam members={project.team} />
 						</div>
 					)}
 
@@ -122,56 +101,21 @@ export default function ProjectPage({ project, nextProject }: ProjectPageProps) 
 					{(project.externalUrl || project.githubRepoUrl) && (
 						<div className={styles.section}>
 							<div className={styles.sectionTitle}>Links</div>
-							<div className={styles.techScatter}>
-								{project.externalUrl && (
-									<a
-										href={project.externalUrl}
-										target="_blank"
-										rel="noopener noreferrer"
-										className={styles.techItem}
-									>
-										Website
-									</a>
-								)}
-								{project.githubRepoUrl && (
-									<a
-										href={project.githubRepoUrl}
-										target="_blank"
-										rel="noopener noreferrer"
-										className={styles.techItem}
-									>
-										GitHub
-									</a>
-								)}
-							</div>
+							<ProjectLinks
+								websiteUrl={project.externalUrl}
+								githubUrl={project.githubRepoUrl}
+							/>
 						</div>
 					)}
 				</div>
 
 				{/* Next project */}
 				{nextProject && (
-					<div className={styles.nextProject}>
-						<Link
-							href={`/projects/${nextProject.slug}`}
-							className={styles.nextBtn}
-						>
-							<span>NEXT PROJECT</span>
-							<div className={styles.nextIcon}>
-								<svg viewBox="0 0 16 16" fill="none">
-									{nextProject.icon.rects.map((r, i) => (
-										<rect
-											key={i}
-											x={r.x}
-											y={r.y}
-											width={r.w}
-											height={r.h}
-											fill={r.fill}
-										/>
-									))}
-								</svg>
-							</div>
-						</Link>
-					</div>
+					<NextProject
+						slug={nextProject.slug}
+						name={nextProject.name}
+						icon={nextProject.icon}
+					/>
 				)}
 			</div>
 		</div>

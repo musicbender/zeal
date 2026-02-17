@@ -1,0 +1,18 @@
+.statGroup {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.statDecoration {
+  composes: statDecoration from '../../styles/shared.module.css';
+}
+
+.statValue {
+  composes: statValue from '../../styles/shared.module.css';
+}
+
+.realtime {
+  composes: realtime from '../../styles/shared.module.css';
+}

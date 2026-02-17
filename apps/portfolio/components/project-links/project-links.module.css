@@ -1,0 +1,8 @@
+.techScatter {
+  composes: techScatter from '../project-tech/project-tech.module.css';
+}
+
+.techItem {
+  composes: techItem from '../project-tech/project-tech.module.css';
+  text-decoration: none;
+}
