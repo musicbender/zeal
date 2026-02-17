@@ -103,26 +103,37 @@
 	margin-bottom: var(--space-4);
 }
 
-/* ─── Screenshot placeholder ─── */
-.screenshot {
+/* ─── Body content ─── */
+.bodyParagraph {
+	margin-bottom: var(--space-4);
+}
+
+.bodyImage {
 	width: 100%;
-	height: 18.75rem;
-	background: var(--gray-2);
-	margin-bottom: var(--space-5);
-	position: relative;
+	margin: var(--space-5) 0;
 	overflow: hidden;
 }
 
-.screenshot::after {
-	content: 'SCREENSHOT';
-	position: absolute;
-	top: 50%;
-	left: 50%;
-	transform: translate(-50%, -50%);
-	font-size: var(--text-sm);
-	color: var(--gray-7);
-	letter-spacing: 0.125rem;
-	opacity: 0.3;
+.bodyImage img {
+	width: 100%;
+	height: auto;
+	display: block;
+}
+
+.bodyHeading {
+	font-size: var(--font-size-4);
+	font-weight: var(--font-weight-bold);
+	color: var(--gray-12);
+	margin-top: var(--space-6);
+	margin-bottom: var(--space-3);
+	letter-spacing: var(--letter-spacing-1);
+	font-family: var(--font-mono);
+}
+
+.bodyList {
+	margin-bottom: var(--space-4);
+	padding-left: var(--space-5);
+	color: var(--gray-11);
 }
 
 /* ─── Tech stack ─── */
@@ -278,7 +289,7 @@
 		right: var(--space-5);
 	}
 
-	.screenshot {
-		height: 12.5rem;
+	.bodyImage {
+		margin: var(--space-4) 0;
 	}
 }

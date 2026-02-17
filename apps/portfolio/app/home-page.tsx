@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import type { Project } from '../lib/projects';
+import type { ProjectIcon } from '../lib/projects';
 import {
 	useClockGlitch,
 	useCoffeeGlitch,
@@ -11,11 +11,22 @@ import {
 } from '../lib/glitch-effects';
 import styles from './page.module.css';
 
-export default function HomePage({ projects }: { projects: Project[] }) {
+interface HomeProject {
+	slug: string;
+	name: string;
+	icon: ProjectIcon;
+}
+
+interface HomePageProps {
+	projects: HomeProject[];
+	skills: { label: string; strength: number }[];
+}
+
+export default function HomePage({ projects, skills }: HomePageProps) {
 	useGlitchOnLoad('[data-glitch-value]');
 	useClockGlitch('time-value');
 	useCoffeeGlitch('coffee-value');
-	useSkillRotation('skill-value');
+	useSkillRotation('skill-value', skills);
 	useCursorTrail();
 
 	return (
