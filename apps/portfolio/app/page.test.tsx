@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import HomePage from './home-page';
-import { generateIcon } from '../lib/projects';
+import { generateIcon } from '@repo/utils/common/icon';
 
 const mockProjects = [
 	{ slug: 'test-project', name: 'Test Project', icon: generateIcon('test-project') },

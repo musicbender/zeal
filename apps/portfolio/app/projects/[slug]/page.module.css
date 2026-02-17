@@ -103,24 +103,20 @@
 	margin-bottom: var(--space-4);
 }
 
-/* ─── Body content ─── */
-.bodyParagraph {
-	margin-bottom: var(--space-4);
-}
-
-.bodyImage {
+.sectionContent .rich-text-image {
 	width: 100%;
 	margin: var(--space-5) 0;
 	overflow: hidden;
 }
 
-.bodyImage img {
+.sectionContent .rich-text-image img {
 	width: 100%;
 	height: auto;
 	display: block;
 }
 
-.bodyHeading {
+.sectionContent h2,
+.sectionContent h3 {
 	font-size: var(--font-size-4);
 	font-weight: var(--font-weight-bold);
 	color: var(--gray-12);
@@ -130,7 +126,8 @@
 	font-family: var(--font-mono);
 }
 
-.bodyList {
+.sectionContent ul,
+.sectionContent ol {
 	margin-bottom: var(--space-4);
 	padding-left: var(--space-5);
 	color: var(--gray-11);
@@ -289,7 +286,7 @@
 		right: var(--space-5);
 	}
 
-	.bodyImage {
+	.sectionContent .rich-text-image {
 		margin: var(--space-4) 0;
 	}
 }

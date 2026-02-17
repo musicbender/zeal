@@ -1,6 +1,6 @@
 import HomePage from './home-page';
-import { getHomeProjects, getTechSkills } from '../lib/hygraph';
-import { generateIcon } from '../lib/projects';
+import { getHomeProjects, getTechSkills } from '@repo/remote-data';
+import { generateIcon } from '@repo/utils/common/icon';
 
 export default async function Home() {
 	const [hygraphProjects, skills] = await Promise.all([getHomeProjects(), getTechSkills()]);

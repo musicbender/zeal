@@ -105,6 +105,12 @@ importers:
       '@radix-ui/themes':
         specifier: 3.3.0
         version: 3.3.0(@types/react-dom@19.2.3)(@types/react@19.2.13)(react-dom@19.2.4)(react@19.2.4)
+      '@repo/remote-data':
+        specifier: workspace:*
+        version: link:../../packages/remote-data
+      '@repo/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
       next:
         specifier: 16.1.6
         version: 16.1.6(@babel/core@7.29.0)(react-dom@19.2.4)(react@19.2.4)
@@ -114,9 +120,6 @@ importers:
       react-dom:
         specifier: 19.2.4
         version: 19.2.4(react@19.2.4)
-      server-only:
-        specifier: 0.0.1
-        version: 0.0.1
       zustand:
         specifier: 5.0.11
         version: 5.0.11(@types/react@19.2.13)(react@19.2.4)
@@ -246,6 +249,25 @@ importers:
         specifier: ^5.8.2
         version: 5.8.2
 
+  packages/remote-data:
+    dependencies:
+      '@repo/utils':
+        specifier: workspace:*
+        version: link:../utils
+      server-only:
+        specifier: 0.0.1
+        version: 0.0.1
+    devDependencies:
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.19.11
+      typescript:
+        specifier: 5.5.4
+        version: 5.5.4
+
   packages/types:
     devDependencies:
       prettier-plugin-organize-imports:
@@ -284,6 +306,22 @@ importers:
       typescript:
         specifier: 5.8.2
         version: 5.8.2
+
+  packages/utils:
+    dependencies:
+      react:
+        specifier: ^19.0.0
+        version: 19.2.4
+    devDependencies:
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/react':
+        specifier: 19.2.13
+        version: 19.2.13
+      typescript:
+        specifier: 5.5.4
+        version: 5.5.4
 
 packages:
 

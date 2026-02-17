@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import ProjectPage from './project-page';
-import { getAllProjects, getNextProject, getProjectBySlug } from '../../../lib/hygraph';
-import { generateIcon } from '../../../lib/projects';
+import { getAllProjects, getNextProject, getProjectBySlug } from '@repo/remote-data';
+import { generateIcon } from '@repo/utils/common/icon';
 
 export async function generateStaticParams() {
 	const projects = await getAllProjects();

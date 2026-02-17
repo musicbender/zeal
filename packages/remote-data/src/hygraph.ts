@@ -1,5 +1,7 @@
 import 'server-only';
 
+import type { RichTextAST } from '@repo/utils/common/content';
+
 const HYGRAPH_ENDPOINT = process.env.HYGRAPH_ENDPOINT!;
 
 async function hygraphFetch<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
@@ -35,26 +37,6 @@ export interface HygraphProject {
   projectPublishDate: string | null;
   lastDeployedOn: string | null;
   body: { raw: RichTextAST } | null;
-}
-
-export interface RichTextAST {
-  children: RichTextNode[];
-}
-
-export interface RichTextNode {
-  type?: string;
-  text?: string;
-  bold?: boolean;
-  italic?: boolean;
-  underline?: boolean;
-  children?: RichTextNode[];
-  src?: string;
-  altText?: string;
-  title?: string;
-  width?: number;
-  height?: number;
-  className?: string;
-  href?: string;
 }
 
 export interface HygraphTechSkill {

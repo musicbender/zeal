@@ -1,14 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import type { ProjectIcon } from '../lib/projects';
+import type { ProjectIcon } from '@repo/utils/common/icon';
 import {
 	useClockGlitch,
 	useCoffeeGlitch,
 	useCursorTrail,
 	useGlitchOnLoad,
 	useSkillRotation,
-} from '../lib/glitch-effects';
+} from '@repo/utils/hooks/glitch-effects';
 import styles from './page.module.css';
 
 interface HomeProject {

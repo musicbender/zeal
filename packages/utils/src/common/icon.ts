@@ -1,14 +1,7 @@
+import { hashString } from './strings';
+
 export interface ProjectIcon {
   rects: { x: number; y: number; w: number; h: number; fill: string }[];
-}
-
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) - hash + str.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash);
 }
 
 export function generateIcon(seed: string): ProjectIcon {
