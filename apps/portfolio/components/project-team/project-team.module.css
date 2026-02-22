@@ -1,0 +1,19 @@
+.teamGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3);
+}
+
+.teamMember {
+  font-size: var(--font-size-1);
+  color: var(--gray-11);
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+@media (max-width: 48em) {
+  .teamGrid {
+    grid-template-columns: 1fr;
+  }
+}

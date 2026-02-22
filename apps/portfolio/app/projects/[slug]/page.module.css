@@ -11,14 +11,6 @@
 	padding: var(--space-7);
 }
 
-.statDecoration {
-	composes: statDecoration from '../../../styles/shared.module.css';
-}
-
-.statValue {
-	composes: statValue from '../../../styles/shared.module.css';
-}
-
 /* ─── Back link ─── */
 .backLink {
 	position: fixed;
@@ -41,9 +33,6 @@
 	position: fixed;
 	top: var(--space-7);
 	right: var(--space-7);
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-1);
 	z-index: 100;
 }
 
@@ -103,146 +92,34 @@
 	margin-bottom: var(--space-4);
 }
 
-/* ─── Screenshot placeholder ─── */
-.screenshot {
+.sectionContent :global(.rich-text-image) {
 	width: 100%;
-	height: 18.75rem;
-	background: var(--gray-2);
-	margin-bottom: var(--space-5);
-	position: relative;
+	margin: var(--space-5) 0;
 	overflow: hidden;
 }
 
-.screenshot::after {
-	content: 'SCREENSHOT';
-	position: absolute;
-	top: 50%;
-	left: 50%;
-	transform: translate(-50%, -50%);
-	font-size: var(--text-sm);
-	color: var(--gray-7);
-	letter-spacing: 0.125rem;
-	opacity: 0.3;
-}
-
-/* ─── Tech stack ─── */
-.techScatter {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--space-1) var(--space-2);
-	align-items: center;
-	margin-top: var(--space-5);
-}
-
-.techItem {
-	font-size: var(--text-sm);
-	color: var(--gray-9);
-	border: 0.0625rem solid var(--gray-4);
-	padding: 0.3125rem 0.625rem;
-	letter-spacing: var(--letter-spacing-1);
-	font-weight: var(--font-weight-regular);
-	position: relative;
-	transition: all 0.2s ease;
-}
-
-.techItem:nth-child(2n) {
-	background: var(--gray-2);
-	border-color: var(--gray-2);
-}
-
-.techItem:nth-child(3n) {
-	padding: var(--space-1) 0.875rem;
-}
-
-.techItem:nth-child(4n) {
-	margin-left: var(--space-3);
-}
-
-.techItem:nth-child(5n) {
-	color: var(--gray-7);
-}
-
-.techItem:hover {
-	background: var(--gray-12);
-	color: var(--gray-1);
-	border-color: var(--gray-12);
-}
-
-.techItem:nth-child(3n)::before {
-	content: '';
-	position: absolute;
-	left: -0.625rem;
-	top: 50%;
-	transform: translateY(-50%);
-	width: 0.125rem;
-	height: 0.125rem;
-	background: var(--gray-7);
-}
-
-/* ─── Team grid ─── */
-.teamGrid {
-	display: grid;
-	grid-template-columns: repeat(2, 1fr);
-	gap: var(--space-3);
-}
-
-.teamMember {
-	font-size: var(--font-size-1);
-	color: var(--gray-11);
-	display: flex;
-	align-items: baseline;
-	gap: var(--space-2);
-}
-
-.teamRole {
-	font-size: var(--text-sm);
-	color: var(--gray-7);
-	letter-spacing: var(--letter-spacing-1);
-}
-
-/* ─── Next project button ─── */
-.nextProject {
-	position: fixed;
-	bottom: var(--space-7);
-	right: var(--space-7);
-	z-index: 100;
-}
-
-.nextBtn {
-	display: flex;
-	align-items: center;
-	gap: var(--space-3);
-	font-size: var(--text-base);
-	color: var(--gray-9);
-	text-decoration: none;
-	letter-spacing: var(--letter-spacing-1);
-	padding: var(--space-3) var(--space-4);
-	background: transparent;
-	border: 0.0625rem solid var(--gray-4);
-	cursor: pointer;
-	transition: all 0.2s ease;
-	font-family: var(--font-mono);
-	font-weight: var(--font-weight-regular);
-}
-
-.nextBtn:hover {
-	background: var(--gray-12);
-	color: var(--gray-1);
-	border-color: var(--gray-12);
-}
-
-.nextIcon {
-	width: var(--space-4);
-	height: var(--space-4);
-}
-
-.nextIcon svg {
+.sectionContent :global(.rich-text-image) img {
 	width: 100%;
-	height: 100%;
+	height: auto;
+	display: block;
 }
 
-.nextBtn:hover .nextIcon svg rect {
-	fill: var(--gray-1);
+.sectionContent h2,
+.sectionContent h3 {
+	font-size: var(--font-size-4);
+	font-weight: var(--font-weight-bold);
+	color: var(--gray-12);
+	margin-top: var(--space-6);
+	margin-bottom: var(--space-3);
+	letter-spacing: var(--letter-spacing-1);
+	font-family: var(--font-mono);
+}
+
+.sectionContent ul,
+.sectionContent ol {
+	margin-bottom: var(--space-4);
+	padding-left: var(--space-5);
+	color: var(--gray-11);
 }
 
 /* ─── Responsive ─── */
@@ -269,16 +146,7 @@
 		font-size: var(--font-size-6);
 	}
 
-	.teamGrid {
-		grid-template-columns: 1fr;
-	}
-
-	.nextProject {
-		bottom: var(--space-5);
-		right: var(--space-5);
-	}
-
-	.screenshot {
-		height: 12.5rem;
+	.sectionContent :global(.rich-text-image) {
+		margin: var(--space-4) 0;
 	}
 }

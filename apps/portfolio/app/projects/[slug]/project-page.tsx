@@ -1,13 +1,40 @@
 'use client';
 
 import Link from 'next/link';
-import type { Project } from '../../../lib/projects';
-import { useGlitchOnLoad } from '../../../lib/glitch-effects';
+import type { RichTextNode } from '@repo/utils/common/content';
+import { renderRichTextNode } from '@repo/utils/common/content-renderer';
+import type { ProjectIcon } from '@repo/utils/common/icon';
+import { ProjectIconSvg } from '@repo/ui/project-icon';
+import { useGlitchOnLoad } from '@repo/utils/hooks/glitch-effects';
+import { StatGroup } from '../../../components/stat-group/stat-group';
+import { ProjectTech } from '../../../components/project-tech/project-tech';
+import { ProjectTeam } from '../../../components/project-team/project-team';
+import { ProjectLinks } from '../../../components/project-links/project-links';
+import { NextProject } from '../../../components/next-project/next-project';
 import styles from './page.module.css';
 
+interface ProjectData {
+	projectId: string;
+	title: string;
+	description: string | null;
+	year: string | null;
+	techList: string[];
+	team: string[];
+	externalUrl: string | null;
+	githubRepoUrl: string | null;
+	icon: ProjectIcon;
+	body: { raw: { children: RichTextNode[] } } | null;
+}
+
+interface NextProjectData {
+	slug: string;
+	name: string;
+	icon: ProjectIcon;
+}
+
 interface ProjectPageProps {
-	project: Project;
-	nextProject: Project;
+	project: ProjectData;
+	nextProject: NextProjectData | null;
 }
 
 export default function ProjectPage({ project, nextProject }: ProjectPageProps) {
@@ -22,122 +49,74 @@ export default function ProjectPage({ project, nextProject }: ProjectPageProps) 
 				</Link>
 
 				{/* Metadata stats */}
-				<div className={styles.metaStats}>
-					<div className={styles.statDecoration}>
-						YR
-						<span className={styles.statValue} data-glitch-value>
-							{project.year}
-						</span>
-					</div>
-					<div className={styles.statDecoration}>
-						DUR
-						<span className={styles.statValue} data-glitch-value>
-							{project.duration}
-						</span>
-					</div>
-					<div className={styles.statDecoration}>
-						ROL
-						<span className={styles.statValue} data-glitch-value>
-							{project.role}
-						</span>
-					</div>
-				</div>
+				{project.year && (
+					<StatGroup
+						stats={[{ label: 'YR', value: project.year }]}
+						className={styles.metaStats}
+					/>
+				)}
 
 				{/* Main content */}
 				<div className={styles.container}>
 					{/* Project icon */}
 					<div className={styles.projectIconLarge}>
-						<svg viewBox="0 0 16 16" fill="none">
-							{project.icon.rects.map((r, i) => (
-								<rect
-									key={i}
-									x={r.x}
-									y={r.y}
-									width={r.w}
-									height={r.h}
-									fill={r.fill}
-								/>
-							))}
-						</svg>
+						<ProjectIconSvg icon={project.icon} />
 					</div>
 
 					{/* Title */}
-					<h1 className={styles.projectTitle}>{project.name}</h1>
-					<div className={styles.projectSubtitle}>{project.subtitle}</div>
+					<h1 className={styles.projectTitle}>{project.title}</h1>
+					{project.description && (
+						<div className={styles.projectSubtitle}>{project.description}</div>
+					)}
 
-					{/* Overview */}
-					<div className={styles.section}>
-						<div className={styles.sectionTitle}>&mdash;</div>
-						<div className={styles.sectionContent}>
-							{project.overview.map((p, i) => (
-								<p key={i}>{p}</p>
-							))}
-						</div>
-					</div>
-
-					{/* Dynamic sections */}
-					{project.sections.map((section, i) => (
-						<div key={i} className={styles.section}>
-							<div className={styles.sectionTitle}>{section.title}</div>
-							{section.hasScreenshots && <div className={styles.screenshot} />}
+					{/* Body content from Hygraph rich text */}
+					{project.body?.raw?.children && (
+						<div className={styles.section}>
+							<div className={styles.sectionTitle}>&mdash;</div>
 							<div className={styles.sectionContent}>
-								{section.content.map((p, j) => (
-									<p key={j}>{p}</p>
-								))}
+								{project.body.raw.children.map((node, i) =>
+									renderRichTextNode(node, i),
+								)}
 							</div>
-							{section.hasScreenshots && <div className={styles.screenshot} />}
 						</div>
-					))}
+					)}
 
 					{/* Tech stack */}
-					<div className={styles.section}>
-						<div className={styles.sectionTitle}>Technology</div>
-						<div className={styles.techScatter}>
-							{project.tech.map((tech) => (
-								<div key={tech} className={styles.techItem}>
-									{tech}
-								</div>
-							))}
+					{project.techList.length > 0 && (
+						<div className={styles.section}>
+							<div className={styles.sectionTitle}>Technology</div>
+							<ProjectTech items={project.techList} />
 						</div>
-					</div>
+					)}
 
 					{/* Team */}
-					<div className={styles.section}>
-						<div className={styles.sectionTitle}>Team</div>
-						<div className={styles.teamGrid}>
-							{project.team.map((member) => (
-								<div key={member.name} className={styles.teamMember}>
-									<span>{member.name}</span>
-									<span className={styles.teamRole}>{member.role}</span>
-								</div>
-							))}
+					{project.team.length > 0 && (
+						<div className={styles.section}>
+							<div className={styles.sectionTitle}>Team</div>
+							<ProjectTeam members={project.team} />
 						</div>
-					</div>
+					)}
+
+					{/* Links */}
+					{(project.externalUrl || project.githubRepoUrl) && (
+						<div className={styles.section}>
+							<div className={styles.sectionTitle}>Links</div>
+							<ProjectLinks
+								websiteUrl={project.externalUrl}
+								githubUrl={project.githubRepoUrl}
+							/>
+						</div>
+					)}
 				</div>
 
 				{/* Next project */}
-				<div className={styles.nextProject}>
-					<Link
-						href={`/projects/${nextProject.slug}`}
-						className={styles.nextBtn}
-					>
-						<span>NEXT PROJECT</span>
-						<div className={styles.nextIcon}>
-							<svg viewBox="0 0 16 16" fill="none">
-								{nextProject.icon.rects.map((r, i) => (
-									<rect
-										key={i}
-										x={r.x}
-										y={r.y}
-										width={r.w}
-										height={r.h}
-										fill={r.fill}
-									/>
-								))}
-							</svg>
-						</div>
-					</Link>
-				</div>
+				{nextProject && (
+					<NextProject
+						slug={nextProject.slug}
+						name={nextProject.name}
+						icon={nextProject.icon}
+					/>
+				)}
 			</div>
 		</div>
 	);

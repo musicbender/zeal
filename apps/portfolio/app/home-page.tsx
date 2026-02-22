@@ -1,111 +1,86 @@
 'use client';
 
 import Link from 'next/link';
-import type { Project } from '../lib/projects';
+import type { ProjectIcon } from '@repo/utils/common/icon';
+import { ProjectIconSvg } from '@repo/ui/project-icon';
+import { DecorativeBlocks } from '@repo/ui/decorative-blocks';
 import {
 	useClockGlitch,
 	useCoffeeGlitch,
 	useCursorTrail,
 	useGlitchOnLoad,
 	useSkillRotation,
-} from '../lib/glitch-effects';
+} from '@repo/utils/hooks/glitch-effects';
+import { StatGroup } from '../components/stat-group/stat-group';
+import { SocialLinks } from '../components/social-links/social-links';
 import styles from './page.module.css';
 
-export default function HomePage({ projects }: { projects: Project[] }) {
+interface HomeProject {
+	slug: string;
+	name: string;
+	icon: ProjectIcon;
+}
+
+interface HomePageProps {
+	projects: HomeProject[];
+	skills: { label: string; strength: number }[];
+}
+
+const socialLinks = [
+	{ label: 'EMAIL', href: 'mailto:pat@patjacobs.dev' },
+	{ label: 'GITHUB', href: 'https://github.com/musicbender', external: true },
+	{ label: 'LINKEDIN', href: 'https://linkedin.com/in/patjacobs', external: true },
+];
+
+export default function HomePage({ projects, skills }: HomePageProps) {
 	useGlitchOnLoad('[data-glitch-value]');
 	useClockGlitch('time-value');
 	useCoffeeGlitch('coffee-value');
-	useSkillRotation('skill-value');
+	useSkillRotation('skill-value', skills);
 	useCursorTrail();
 
 	return (
 		<div className={styles.body}>
 			<div className={styles.contentLayer}>
-				{/* Stat group 1 - top left */}
-				<div className={`${styles.statGroup} ${styles.group1}`}>
-					<div className={styles.statDecoration}>
-						YRS
-						<span className={styles.statValue} data-glitch-value>
-							8
-						</span>
-					</div>
-					<div className={styles.statDecoration}>
-						LOC
-						<span className={styles.statValue} data-glitch-value>
-							SF
-						</span>
-					</div>
-				</div>
+				<StatGroup
+					stats={[
+						{ label: 'YRS', value: '8' },
+						{ label: 'LOC', value: 'SF' },
+					]}
+					className={styles.group1}
+				/>
 
-				{/* Stat group 2 - top right */}
-				<div className={`${styles.statGroup} ${styles.group2}`}>
-					<div className={`${styles.statDecoration} ${styles.realtime}`}>
-						CLK
-						<span className={styles.statValue} id="time-value" data-glitch-value>
-							00:00:00
-						</span>
-					</div>
-					<div className={`${styles.statDecoration} ${styles.realtime}`}>
-						CFE
-						<span className={styles.statValue} id="coffee-value" data-glitch-value>
-							4
-						</span>
-					</div>
-				</div>
+				<StatGroup
+					stats={[
+						{ label: 'CLK', value: '00:00:00', id: 'time-value', realtime: true },
+						{ label: 'CFE', value: '4', id: 'coffee-value', realtime: true },
+					]}
+					className={styles.group2}
+				/>
 
-				{/* Stat group 3 - bottom left (STP, FIX, SKL) */}
-				<div className={`${styles.statGroup} ${styles.group3}`}>
-					<div className={styles.statDecoration}>
-						STP
-						<span className={styles.statValue} data-glitch-value>
-							42.8K
-						</span>
-					</div>
-					<div className={styles.statDecoration}>
-						FIX
-						<span className={styles.statValue} data-glitch-value>
-							234
-						</span>
-					</div>
-					<div className={styles.statDecoration}>
-						SKL
-						<span className={styles.statValue} id="skill-value" data-glitch-value>
-							React
-						</span>
-					</div>
-				</div>
+				<StatGroup
+					stats={[
+						{ label: 'STP', value: '42.8K' },
+						{ label: 'FIX', value: '234' },
+						{ label: 'SKL', value: 'React', id: 'skill-value' },
+					]}
+					className={styles.group3}
+				/>
 
-				{/* Stat group 4 - right center, vertical text (SIL, TAB) */}
-				<div className={`${styles.statGroup} ${styles.group4}`}>
-					<div className={styles.statDecoration}>
-						SIL
-						<span className={styles.statValue} data-glitch-value>
-							&times;3
-						</span>
-					</div>
-					<div className={styles.statDecoration}>
-						TAB
-						<span className={styles.statValue} data-glitch-value>
-							47
-						</span>
-					</div>
-				</div>
+				<StatGroup
+					stats={[
+						{ label: 'SIL', value: '\u00d73' },
+						{ label: 'TAB', value: '47' },
+					]}
+					className={styles.group4}
+				/>
 
 				{/* Main content */}
 				<div className={styles.main}>
 					<div className={styles.header}>
 						<h1 className={styles.name}>Pat Jacobs</h1>
 						<div className={styles.title}>Software Engineer</div>
-						<div className={styles.blocks}>
-							<div className={styles.block} />
-							<div className={styles.block} />
-							<div className={styles.block} />
-							<div className={styles.block} />
-							<div className={styles.block} />
-							<div className={styles.block} />
-							<div className={styles.block} />
-							<div className={styles.block} />
-						</div>
+						<DecorativeBlocks />
 					</div>
 
 					<div className={styles.projects}>
@@ -118,18 +93,7 @@ export default function HomePage({ projects }: { projects: Project[] }) {
 										className={styles.projectItem}
 									>
 										<div className={styles.projectIcon}>
-											<svg viewBox="0 0 16 16" fill="none">
-												{project.icon.rects.map((r, i) => (
-													<rect
-														key={i}
-														x={r.x}
-														y={r.y}
-														width={r.w}
-														height={r.h}
-														fill={r.fill}
-													/>
-												))}
-											</svg>
+											<ProjectIconSvg icon={project.icon} />
 										</div>
 										<span>{project.name}</span>
 									</Link>
@@ -139,28 +103,7 @@ export default function HomePage({ projects }: { projects: Project[] }) {
 					</div>
 				</div>
 
-				{/* Contact */}
-				<div className={styles.contact}>
-					<a href="mailto:pat@patjacobs.dev" className={styles.contactLink}>
-						EMAIL
-					</a>
-					<a
-						href="https://github.com/musicbender"
-						target="_blank"
-						rel="noopener noreferrer"
-						className={styles.contactLink}
-					>
-						GITHUB
-					</a>
-					<a
-						href="https://linkedin.com/in/patjacobs"
-						target="_blank"
-						rel="noopener noreferrer"
-						className={styles.contactLink}
-					>
-						LINKEDIN
-					</a>
-				</div>
+				<SocialLinks links={socialLinks} />
 			</div>
 		</div>
 	);

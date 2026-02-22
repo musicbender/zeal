@@ -85,38 +85,39 @@ export function useCoffeeGlitch(elementId: string) {
 	}, [elementId]);
 }
 
-export function useSkillRotation(elementId: string) {
+export function useSkillRotation(
+	elementId: string,
+	skills: { label: string; strength: number }[],
+) {
 	useEffect(() => {
-		const skills = [
-			'Next.js',
-			'React 19',
-			'k8s',
-			'Node',
-			'Styled-C',
-			'Java',
-			'Spring',
-			'TypeScript',
-			'Redux',
-			'Docker',
-			'GraphQL',
-			'PostgreSQL',
-			'MongoDB',
-			'AWS',
-			'Python',
-			'FastAPI',
-			'Rust',
-		];
+		if (skills.length === 0) return;
 
-		let skillIndex = 0;
+		// Build weighted pool: higher strength = more likely to appear
+		const pool: string[] = [];
+		for (const skill of skills) {
+			const weight = Math.max(1, skill.strength);
+			for (let i = 0; i < weight; i++) {
+				pool.push(skill.label);
+			}
+		}
+
+		let lastSkill = '';
 
 		const interval = setInterval(() => {
-			skillIndex = (skillIndex + 1) % skills.length;
+			let next = pool[Math.floor(Math.random() * pool.length)]!;
+			// Avoid repeating the same skill twice in a row
+			if (pool.length > 1) {
+				while (next === lastSkill) {
+					next = pool[Math.floor(Math.random() * pool.length)]!;
+				}
+			}
+			lastSkill = next;
 			const el = document.getElementById(elementId);
-			if (el) glitchText(el, skills[skillIndex]!, 1);
+			if (el) glitchText(el, next, 1);
 		}, 2000);
 
 		return () => clearInterval(interval);
-	}, [elementId]);
+	}, [elementId, skills]);
 }
 
 export function useCursorTrail() {
