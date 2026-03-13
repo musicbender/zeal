@@ -3,8 +3,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(dirname "$SCRIPT_DIR")"
-ENV_FILE="$APP_DIR/.env"
-TMP_ENV_FILE="$APP_DIR/.env.pull.tmp"
+ENV_FILE="$APP_DIR/.env.development.local"
+TMP_ENV_FILE="$APP_DIR/.env.development.local.tmp"
 
 # Check vercel CLI is installed
 if ! command -v vercel &>/dev/null; then
@@ -18,11 +18,11 @@ vercel env pull "$TMP_ENV_FILE" --yes 2>/dev/null
 
 if [ ! -f "$ENV_FILE" ]; then
   mv "$TMP_ENV_FILE" "$ENV_FILE"
-  echo "✓ Pulled env vars to .env"
+  echo "✓ Pulled env vars to .env.development.local"
 elif diff -q "$ENV_FILE" "$TMP_ENV_FILE" &>/dev/null; then
   rm "$TMP_ENV_FILE"
-  echo "✓ .env is already up to date"
+  echo "✓ .env.development.local is already up to date"
 else
   mv "$TMP_ENV_FILE" "$ENV_FILE"
-  echo "✓ .env updated with latest env vars"
+  echo "✓ .env.development.local updated with latest env vars"
 fi

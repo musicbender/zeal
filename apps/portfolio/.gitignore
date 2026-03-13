@@ -1,4 +1,4 @@
 .next
 out
 node_modules
-.env.pull.tmp
+.env.development.local.tmp
