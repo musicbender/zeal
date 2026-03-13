@@ -17,7 +17,7 @@
 		"@repo/remote-data": "workspace:*",
 		"@repo/ui": "workspace:*",
 		"@repo/utils": "workspace:*",
-		"next": "16.1.6",
+		"next": "16.1.5",
 		"react": "19.2.4",
 		"react-dom": "19.2.4",
 		"zustand": "5.0.11"
