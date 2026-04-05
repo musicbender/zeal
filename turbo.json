@@ -1,6 +1,24 @@
 {
   "$schema": "https://turborepo.com/schema.json",
   "globalDependencies": ["**/.env.*local"],
+  "globalEnv": [
+    "DATABASE_URL",
+    "DATABASE_URL_UNPOOLED",
+    "NEON_PROJECT_ID",
+    "PGDATABASE",
+    "PGHOST",
+    "PGHOST_UNPOOLED",
+    "PGPASSWORD",
+    "PGUSER",
+    "PORTFOLIO_API_KEY",
+    "PORTFOLIO_BASE_URL",
+    "POSTGRES_DATABASE",
+    "POSTGRES_HOST",
+    "POSTGRES_PASSWORD",
+    "POSTGRES_URL",
+    "POSTGRES_URL_NON_POOLING",
+    "POSTGRES_URL_NO_SSL"
+  ],
   "tasks": {
     "dev": {
       "cache": false,
@@ -8,24 +26,7 @@
     },
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
-      "env": [
-        "DATABASE_URL",
-        "DATABASE_URL_UNPOOLED",
-        "NEON_PROJECT_ID",
-        "PGDATABASE",
-        "PGHOST",
-        "PGHOST_UNPOOLED",
-        "PGPASSWORD",
-        "PGUSER",
-        "PORTFOLIO_API_KEY",
-        "POSTGRES_DATABASE",
-        "POSTGRES_HOST",
-        "POSTGRES_PASSWORD",
-        "POSTGRES_URL",
-        "POSTGRES_URL_NON_POOLING",
-        "POSTGRES_URL_NO_SSL"
-      ]
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
     "prisma:generate": {},
     "prisma:migrate": {},
@@ -33,12 +34,7 @@
     "lint": {},
     "test": {},
     "test:e2e": {
-      "cache": false,
-      "env": [
-        "PORTFOLIO_BASE_URL",
-        "PORTFOLIO_API_KEY",
-        "POSTGRES_URL"
-      ]
+      "cache": false
     },
   }
 }

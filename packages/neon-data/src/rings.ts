@@ -5,14 +5,14 @@ import type { CreateRingDto, UpdateRingDto } from './dtos';
 import type { Ring } from './types';
 
 export async function getAllRings(): Promise<Ring[]> {
-  const rows = await sql`
+  const rows = await sql()`
     SELECT * FROM rings ORDER BY created_on DESC
   `;
   return rows as Ring[];
 }
 
 export async function createRing(dto: CreateRingDto): Promise<Ring> {
-  const rows = await sql`
+  const rows = await sql()`
     INSERT INTO rings (
       name, description, base_material, other_materials,
       techniques, gemstones, size, weight_grams, images
@@ -34,7 +34,7 @@ export async function createRing(dto: CreateRingDto): Promise<Ring> {
 }
 
 export async function updateRing(id: number, dto: UpdateRingDto): Promise<Ring | null> {
-  const rows = await sql`
+  const rows = await sql()`
     UPDATE rings SET
       name             = COALESCE(${dto.name ?? null}, name),
       description      = COALESCE(${dto.description ?? null}, description),
@@ -52,7 +52,7 @@ export async function updateRing(id: number, dto: UpdateRingDto): Promise<Ring |
 }
 
 export async function deleteRing(id: number): Promise<boolean> {
-  const rows = await sql`
+  const rows = await sql()`
     DELETE FROM rings WHERE id = ${id} RETURNING id
   `;
   return rows.length > 0;

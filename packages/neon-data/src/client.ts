@@ -1,13 +1,16 @@
 import 'server-only';
 
-import { neon } from '@neondatabase/serverless';
+import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 
-function getConnectionString(): string {
-  const url = process.env.POSTGRES_URL;
-  if (!url) {
-    throw new Error('POSTGRES_URL environment variable is not set');
+let _sql: NeonQueryFunction<false, false> | undefined;
+
+export function sql(): NeonQueryFunction<false, false> {
+  if (!_sql) {
+    const url = process.env.POSTGRES_URL;
+    if (!url) {
+      throw new Error('POSTGRES_URL environment variable is not set');
+    }
+    _sql = neon(url);
   }
-  return url;
+  return _sql;
 }
-
-export const sql = neon(getConnectionString());

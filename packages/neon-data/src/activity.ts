@@ -5,7 +5,7 @@ import type { CreateActivityDto, UpdateActivityDto } from './dtos';
 import type { Activity } from './types';
 
 export async function getActivityForToday(): Promise<Activity[]> {
-  const rows = await sql`
+  const rows = await sql()`
     SELECT *
     FROM activity
     WHERE sampled_on::date = CURRENT_DATE
@@ -15,7 +15,7 @@ export async function getActivityForToday(): Promise<Activity[]> {
 }
 
 export async function getActivityLast30Days(): Promise<Activity[]> {
-  const rows = await sql`
+  const rows = await sql()`
     SELECT *
     FROM activity
     WHERE sampled_on >= NOW() - INTERVAL '30 days'
@@ -25,7 +25,7 @@ export async function getActivityLast30Days(): Promise<Activity[]> {
 }
 
 export async function createActivity(dto: CreateActivityDto): Promise<Activity> {
-  const rows = await sql`
+  const rows = await sql()`
     INSERT INTO activity (sampled_on, step_count, exercise_minutes, calories_burned, minutes_standing)
     VALUES (${dto.sampled_on}, ${dto.step_count}, ${dto.exercise_minutes}, ${dto.calories_burned}, ${dto.minutes_standing})
     RETURNING *
@@ -34,7 +34,7 @@ export async function createActivity(dto: CreateActivityDto): Promise<Activity> 
 }
 
 export async function updateActivity(id: number, dto: UpdateActivityDto): Promise<Activity | null> {
-  const rows = await sql`
+  const rows = await sql()`
     UPDATE activity SET
       sampled_on       = COALESCE(${dto.sampled_on ?? null}, sampled_on),
       step_count       = COALESCE(${dto.step_count ?? null}, step_count),
@@ -48,7 +48,7 @@ export async function updateActivity(id: number, dto: UpdateActivityDto): Promis
 }
 
 export async function deleteActivity(id: number): Promise<boolean> {
-  const rows = await sql`
+  const rows = await sql()`
     DELETE FROM activity WHERE id = ${id} RETURNING id
   `;
   return rows.length > 0;
