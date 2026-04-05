@@ -1,0 +1,9 @@
+{
+  "extends": "@repo/typescript-config/base.json",
+  "compilerOptions": {
+    "moduleResolution": "bundler",
+    "noEmit": true
+  },
+  "include": ["playwright.config.ts", "tests/**/*.ts"],
+  "exclude": ["node_modules"]
+}

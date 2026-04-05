@@ -1,0 +1,18 @@
+{
+  "name": "portfolio-e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "install:browsers": "playwright install --with-deps chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.15.3",
+    "dotenv": "^16.5.0",
+    "typescript": "5.5.4"
+  }
+}
