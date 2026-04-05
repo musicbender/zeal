@@ -38,7 +38,7 @@ jobs:
           URL="${PORTFOLIO_BASE_URL}"
           echo "Waiting for $URL to be ready..."
           for i in $(seq 1 30); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || true)
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "x-vercel-protection-bypass: ${VERCEL_AUTOMATION_BYPASS_SECRET}" "$URL" || true)
             if [ "$STATUS" = "200" ]; then
               echo "Deployment is ready!"
               exit 0
@@ -50,6 +50,7 @@ jobs:
           exit 1
         env:
           PORTFOLIO_BASE_URL: ${{ github.event.deployment_status.target_url }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
 
       - name: Run E2E tests against preview URL
         working-directory: apps/portfolio-e2e
@@ -57,3 +58,4 @@ jobs:
         env:
           PORTFOLIO_BASE_URL: ${{ github.event.deployment_status.target_url }}
           PORTFOLIO_API_KEY: ${{ secrets.PORTFOLIO_API_KEY }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}

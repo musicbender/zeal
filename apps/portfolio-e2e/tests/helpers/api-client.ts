@@ -7,10 +7,15 @@ export function getApiKey(): string {
 }
 
 function authHeaders(apiKey: string): Record<string, string> {
-  return {
+  const headers: Record<string, string> = {
     Authorization: `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
   };
+  const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+  if (bypassSecret) {
+    headers['x-vercel-protection-bypass'] = bypassSecret;
+  }
+  return headers;
 }
 
 export function makeApiClient(request: APIRequestContext, apiKey: string) {
