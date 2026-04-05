@@ -10,13 +10,21 @@
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"],
       "env": [
+        "DATABASE_URL",
+        "DATABASE_URL_UNPOOLED",
+        "NEON_PROJECT_ID",
+        "PGDATABASE",
+        "PGHOST",
+        "PGHOST_UNPOOLED",
+        "PGPASSWORD",
+        "PGUSER",
+        "PORTFOLIO_API_KEY",
+        "POSTGRES_DATABASE",
+        "POSTGRES_HOST",
+        "POSTGRES_PASSWORD",
         "POSTGRES_URL",
         "POSTGRES_URL_NON_POOLING",
-        "PGHOST",
-        "PGUSER",
-        "PGPASSWORD",
-        "PGDATABASE",
-        "PORTFOLIO_API_KEY"
+        "POSTGRES_URL_NO_SSL"
       ]
     },
     "prisma:generate": {},
