@@ -164,7 +164,7 @@ importers:
         specifier: 4.0.18
         version: 4.0.18(@types/node@22.19.11)(jsdom@26.1.0)(terser@5.46.0)(tsx@4.21.0)
 
-  apps/portfolio-e2e-test:
+  apps/portfolio-e2e:
     devDependencies:
       '@playwright/test':
         specifier: ^1.52.0

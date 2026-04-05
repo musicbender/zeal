@@ -36,7 +36,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run E2E tests against preview URL
-        working-directory: apps/portfolio-e2e-test
+        working-directory: apps/portfolio-e2e
         run: pnpm test:e2e --project=api
         env:
           PORTFOLIO_BASE_URL: ${{ github.event.deployment_status.target_url }}
