@@ -35,6 +35,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Playwright browsers
+        run: pnpm --filter portfolio-e2e install:browsers
+
       - name: Run E2E tests against preview URL
         working-directory: apps/portfolio-e2e
         run: pnpm test:e2e --project=api
