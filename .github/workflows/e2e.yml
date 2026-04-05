@@ -1,9 +1,6 @@
 name: E2E Tests
 
-# Triggered automatically by Vercel's GitHub integration when a preview deployment completes.
-# `github.event.deployment_status.target_url` contains the live preview URL.
-# Note: Vercel typically names preview environments "Preview" but may use "Preview – <project-name>".
-# Check the environment name on your first PR deployment and adjust the filter below if needed.
+# Triggered by Vercel's GitHub integration when a deployment status changes.
 on:
   deployment_status:
 
@@ -23,8 +20,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -37,6 +32,24 @@ jobs:
 
       - name: Install Playwright browsers
         run: pnpm --filter portfolio-e2e install:browsers
+
+      - name: Wait for deployment to be ready
+        run: |
+          URL="${PORTFOLIO_BASE_URL}"
+          echo "Waiting for $URL to be ready..."
+          for i in $(seq 1 30); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || true)
+            if [ "$STATUS" = "200" ]; then
+              echo "Deployment is ready!"
+              exit 0
+            fi
+            echo "Attempt $i: status $STATUS, waiting 10s..."
+            sleep 10
+          done
+          echo "Deployment not ready after 5 minutes"
+          exit 1
+        env:
+          PORTFOLIO_BASE_URL: ${{ github.event.deployment_status.target_url }}
 
       - name: Run E2E tests against preview URL
         working-directory: apps/portfolio-e2e
