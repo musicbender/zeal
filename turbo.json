@@ -8,7 +8,16 @@
     },
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
+      "env": [
+        "POSTGRES_URL",
+        "POSTGRES_URL_NON_POOLING",
+        "PGHOST",
+        "PGUSER",
+        "PGPASSWORD",
+        "PGDATABASE",
+        "PORTFOLIO_API_KEY"
+      ]
     },
     "prisma:generate": {},
     "prisma:migrate": {},
