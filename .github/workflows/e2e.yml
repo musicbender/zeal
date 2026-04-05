@@ -1,0 +1,43 @@
+name: E2E Tests
+
+# Triggered automatically by Vercel's GitHub integration when a preview deployment completes.
+# `github.event.deployment_status.target_url` contains the live preview URL.
+# Note: Vercel typically names preview environments "Preview" but may use "Preview – <project-name>".
+# Check the environment name on your first PR deployment and adjust the filter below if needed.
+on:
+  deployment_status:
+
+jobs:
+  e2e:
+    name: Playwright API tests
+    runs-on: ubuntu-latest
+
+    # Only run when a Preview deployment succeeds
+    if: |
+      github.event.deployment_status.state == 'success' &&
+      startsWith(github.event.deployment_status.environment, 'Preview')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run E2E tests against preview URL
+        working-directory: apps/portfolio-e2e-test
+        run: pnpm test:e2e --project=api
+        env:
+          PORTFOLIO_BASE_URL: ${{ github.event.deployment_status.target_url }}
+          PORTFOLIO_API_KEY: ${{ secrets.PORTFOLIO_API_KEY }}

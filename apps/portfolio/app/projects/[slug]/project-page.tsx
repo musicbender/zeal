@@ -1,16 +1,16 @@
 'use client';
 
-import Link from 'next/link';
+import { ProjectIconSvg } from '@repo/ui/project-icon';
 import type { RichTextNode } from '@repo/utils/common/content';
 import { renderRichTextNode } from '@repo/utils/common/content-renderer';
 import type { ProjectIcon } from '@repo/utils/common/icon';
-import { ProjectIconSvg } from '@repo/ui/project-icon';
 import { useGlitchOnLoad } from '@repo/utils/hooks/glitch-effects';
-import { StatGroup } from '../../../components/stat-group/stat-group';
-import { ProjectTech } from '../../../components/project-tech/project-tech';
-import { ProjectTeam } from '../../../components/project-team/project-team';
-import { ProjectLinks } from '../../../components/project-links/project-links';
+import Link from 'next/link';
 import { NextProject } from '../../../components/next-project/next-project';
+import { ProjectLinks } from '../../../components/project-links/project-links';
+import { ProjectTeam } from '../../../components/project-team/project-team';
+import { ProjectTech } from '../../../components/project-tech/project-tech';
+import { StatGroup } from '../../../components/stat-group/stat-group';
 import styles from './page.module.css';
 
 interface ProjectData {
@@ -33,12 +33,16 @@ interface NextProjectData {
 }
 
 interface ProjectPageProps {
-	project: ProjectData;
+	project?: ProjectData;
 	nextProject: NextProjectData | null;
 }
 
 export default function ProjectPage({ project, nextProject }: ProjectPageProps) {
 	useGlitchOnLoad('[data-glitch-value]');
+
+	if (!project) {
+		return;
+	}
 
 	return (
 		<div className={styles.body}>

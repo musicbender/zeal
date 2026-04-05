@@ -1,7 +1,7 @@
-import { notFound } from 'next/navigation';
-import ProjectPage from './project-page';
 import { getAllProjects, getNextProject, getProjectBySlug } from '@repo/remote-data';
 import { generateIcon } from '@repo/utils/common/icon';
+import { notFound } from 'next/navigation';
+import ProjectPage from './project-page';
 
 export async function generateStaticParams() {
 	const projects = await getAllProjects();
@@ -25,12 +25,16 @@ export default async function ProjectDetailPage({
 }) {
 	const { slug } = await params;
 	const [project, allProjects] = await Promise.all([getProjectBySlug(slug), getAllProjects()]);
-	if (!project) notFound();
+	if (!project) {
+		notFound();
+		return;
+	}
 
-	const next = await getNextProject(project.order!, allProjects);
+	const next = await getNextProject(project?.order, allProjects);
 
 	const projectData = {
 		...project,
+		projectId: project.projectId,
 		icon: generateIcon(project.projectId),
 		year: project.projectPublishDate ? new Date(project.projectPublishDate).getFullYear().toString() : null,
 	};

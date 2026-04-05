@@ -24,6 +24,13 @@
     "typecheck": {},
     "lint": {},
     "test": {},
-    "test:e2e": {}
+    "test:e2e": {
+      "cache": false,
+      "env": [
+        "PORTFOLIO_BASE_URL",
+        "PORTFOLIO_API_KEY",
+        "POSTGRES_URL"
+      ]
+    }
   }
 }

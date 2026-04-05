@@ -136,11 +136,14 @@ export async function getProjectBySlug(slug: string): Promise<HygraphProject | n
 }
 
 export async function getNextProject(
-  currentOrder: number,
-  allProjects: HygraphProject[],
+  currentOrder?: number | null,
+  allProjects?: HygraphProject[],
 ): Promise<HygraphProject | null> {
+  if (currentOrder == null || currentOrder === undefined || !allProjects) return null;
+
   const sorted = allProjects.filter((p) => p.order != null).sort((a, b) => a.order! - b.order!);
   if (sorted.length === 0) return null;
+
   const currentIndex = sorted.findIndex((p) => p.order === currentOrder);
   const nextIndex = (currentIndex + 1) % sorted.length;
   return sorted[nextIndex] ?? null;
