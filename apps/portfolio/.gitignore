@@ -2,3 +2,5 @@
 out
 node_modules
 .env.development.local.tmp
+.vercel
+.env*.local

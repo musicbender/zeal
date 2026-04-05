@@ -31,6 +31,6 @@
         "PORTFOLIO_API_KEY",
         "POSTGRES_URL"
       ]
-    }
+    },
   }
 }

@@ -1,15 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
-import { config as loadDotenv } from 'dotenv';
-import path from 'path';
-
-// Load .env.development.local from the portfolio app when running locally
-loadDotenv({ path: path.resolve(__dirname, '../portfolio/.env.development.local') });
 
 const isCI = !!process.env.PORTFOLIO_BASE_URL;
 const baseURL = process.env.PORTFOLIO_BASE_URL ?? 'http://localhost:3000';
 
 export default defineConfig({
   testDir: './tests',
+  globalSetup: './tests/global-setup.ts',
   fullyParallel: true,
   forbidOnly: isCI,
   retries: isCI ? 2 : 0,
