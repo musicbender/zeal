@@ -1,9 +1,9 @@
 'use client';
 
-import Link from 'next/link';
-import type { ProjectIcon } from '@repo/utils/common/icon';
-import { ProjectIconSvg } from '@repo/ui/project-icon';
+import { Heading } from '@radix-ui/themes';
 import { DecorativeBlocks } from '@repo/ui/decorative-blocks';
+import { ProjectIconSvg } from '@repo/ui/project-icon';
+import type { ProjectIcon } from '@repo/utils/common/icon';
 import {
 	useClockGlitch,
 	useCoffeeGlitch,
@@ -11,8 +11,9 @@ import {
 	useGlitchOnLoad,
 	useSkillRotation,
 } from '@repo/utils/hooks/glitch-effects';
-import { StatGroup } from '../components/stat-group/stat-group';
+import Link from 'next/link';
 import { SocialLinks } from '../components/social-links/social-links';
+import { StatGroup } from '../components/stat-group/stat-group';
 import styles from './page.module.css';
 
 interface HomeProject {
@@ -78,7 +79,9 @@ export default function HomePage({ projects, skills }: HomePageProps) {
 				{/* Main content */}
 				<div className={styles.main}>
 					<div className={styles.header}>
-						<h1 className={styles.name}>Pat Jacobs</h1>
+						<Heading as="h1" mb="8" size="9" className={styles.name}>
+							Pat Jacobs
+						</Heading>
 						<div className={styles.title}>Software Engineer</div>
 						<DecorativeBlocks />
 					</div>

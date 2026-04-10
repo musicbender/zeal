@@ -49,25 +49,24 @@
 
 /* ─── Main content ─── */
 .main {
-	position: absolute;
-	top: 28%;
-	left: 18%;
-	max-width: 26.25rem;
+	margin-top: 12rem;
+  margin-left: 15vw;
+	max-width: 50rem;
 }
 
 /* ─── Header ─── */
 .header {
-	margin-bottom: var(--space-8);
+	margin-bottom: var(--space-16);
 }
 
 .name {
-	font-size: var(--font-size-8);
+	font-size: 7rem;
 	font-weight: var(--font-weight-bold);
 	letter-spacing: var(--letter-spacing-8);
-	margin-bottom: var(--space-1);
+	line-height: 0.7;
 	color: var(--gray-12);
 	text-shadow: 0.125rem 0.125rem 0 rgba(0, 0, 0, 0.15);
-	font-family: var(--font-mono);
+	font-family: var(--font-cufel);
 }
 
 .name:hover {
