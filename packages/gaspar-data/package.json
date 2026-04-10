@@ -20,10 +20,12 @@
 	},
 	"exports": {
 		".": {
+			"types": "./src/entry.ts",
 			"import": "./dist/entry.js",
 			"require": "./dist/entry.js"
 		},
 		"./*": {
+			"types": "./src/*.ts",
 			"import": "./dist/*.js",
 			"require": "./dist/*.js"
 		}
