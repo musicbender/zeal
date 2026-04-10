@@ -1,40 +1,41 @@
 {
-  "$schema": "https://turborepo.com/schema.json",
-  "globalDependencies": ["**/.env.*local"],
-  "globalEnv": [
-    "DATABASE_URL",
-    "DATABASE_URL_UNPOOLED",
-    "NEON_PROJECT_ID",
-    "PGDATABASE",
-    "PGHOST",
-    "PGHOST_UNPOOLED",
-    "PGPASSWORD",
-    "PGUSER",
-    "PORTFOLIO_API_KEY",
-    "PORTFOLIO_BASE_URL",
-    "POSTGRES_DATABASE",
-    "POSTGRES_HOST",
-    "POSTGRES_PASSWORD",
-    "POSTGRES_URL",
-    "POSTGRES_URL_NON_POOLING",
-    "POSTGRES_URL_NO_SSL"
-  ],
-  "tasks": {
-    "dev": {
-      "cache": false,
-      "persistent": true
-    },
-    "build": {
-      "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
-    },
-    "prisma:generate": {},
-    "prisma:migrate": {},
-    "typecheck": {},
-    "lint": {},
-    "test": {},
-    "test:e2e": {
-      "cache": false
-    },
-  }
+	"$schema": "https://turborepo.com/schema.json",
+	"globalDependencies": ["**/.env.*local"],
+	"globalEnv": [
+		"DATABASE_URL",
+		"DATABASE_URL_UNPOOLED",
+		"NEON_PROJECT_ID",
+		"PGDATABASE",
+		"PGHOST",
+		"PGHOST_UNPOOLED",
+		"PGPASSWORD",
+		"PGUSER",
+		"PORTFOLIO_API_KEY",
+		"HYGRAPH_ENDPOINT",
+		"PORTFOLIO_BASE_URL",
+		"POSTGRES_DATABASE",
+		"POSTGRES_HOST",
+		"POSTGRES_PASSWORD",
+		"POSTGRES_URL",
+		"POSTGRES_URL_NON_POOLING",
+		"POSTGRES_URL_NO_SSL"
+	],
+	"tasks": {
+		"dev": {
+			"cache": false,
+			"persistent": true
+		},
+		"build": {
+			"dependsOn": ["^build"],
+			"outputs": [".next/**", "!.next/cache/**", "dist/**"]
+		},
+		"prisma:generate": {},
+		"prisma:migrate": {},
+		"typecheck": {},
+		"lint": {},
+		"test": {},
+		"test:e2e": {
+			"cache": false
+		}
+	}
 }

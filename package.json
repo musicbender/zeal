@@ -1,33 +1,42 @@
 {
-  "name": "zeal",
-  "version": "0.0.0",
-  "private": true,
-  "description": "My personal monorepo",
-  "author": "",
-  "license": "UNLICENSED",
-  "type": "module",
-  "scripts": {
-    "dev": "turbo run dev",
-    "build": "turbo run build",
-    "test": "turbo run test",
-    "typecheck": "turbo run typecheck",
-    "test:e2e": "turbo run test:e2e",
-    "lint": "turbo run lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\""
-  },
-  "devDependencies": {
-    "@repo/eslint-config": "workspace:*",
-    "@repo/typescript-config": "workspace:*",
-    "prettier": "^3.2.5",
-    "prettier-plugin-organize-imports": "^4.3.0",
-    "typescript": "5.5.4",
-    "turbo": "^2.7.2"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": ["@prisma/client", "@prisma/engines", "esbuild", "prisma"]
-  },
-  "packageManager": "pnpm@10.26.2",
-  "engines": {
-    "node": ">=24"
-  }
+	"name": "zeal",
+	"version": "0.0.0",
+	"private": true,
+	"description": "My personal monorepo",
+	"author": "",
+	"license": "UNLICENSED",
+	"type": "module",
+	"scripts": {
+		"dev": "turbo run dev",
+		"build": "turbo run build",
+		"test": "turbo run test",
+		"typecheck": "turbo run typecheck",
+		"test:e2e": "turbo run test:e2e",
+		"lint": "turbo run lint",
+		"format": "prettier --write \"**/*.{ts,tsx,md}\"",
+		"prepare": "husky"
+	},
+	"devDependencies": {
+		"@repo/eslint-config": "workspace:*",
+		"@repo/typescript-config": "workspace:*",
+		"eslint": "^9.39.3",
+		"husky": "9.1.7",
+		"lint-staged": "16.4.0",
+		"prettier": "^3.2.5",
+		"prettier-plugin-organize-imports": "^4.3.0",
+		"turbo": "^2.7.2",
+		"typescript": "5.5.4"
+	},
+	"pnpm": {
+		"onlyBuiltDependencies": [
+			"@prisma/client",
+			"@prisma/engines",
+			"esbuild",
+			"prisma"
+		]
+	},
+	"packageManager": "pnpm@10.26.2",
+	"engines": {
+		"node": ">=24"
+	}
 }
