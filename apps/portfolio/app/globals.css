@@ -1,11 +1,7 @@
 @import '@radix-ui/themes/styles.css';
 
 /* ─── Custom theme extensions ─── */
-/* Only define tokens Radix Themes doesn't provide */
 :root {
-	/* Font — wire Space Mono into Radix's system */
-	--font-mono: var(--font-space-mono), monospace;
-
 	/* Glitch accent colors (not part of any standard scale) */
 	--color-glitch-red: #ff3366;
 	--color-glitch-teal: #00d9ff;
@@ -29,6 +25,16 @@
 	box-sizing: border-box;
 	margin: 0;
 	padding: 0;
+}
+
+/* ─── Wire next/font into Radix Themes ─── */
+.radix-themes {
+	--default-font-family: var(--font-inconsolata), monospace;
+	--heading-font-family: var(--font-cufel), sans-serif;
+	--strong-font-family: var(--font-inconsolata), monospace;
+	--em-font-family: var(--font-inconsolata), monospace;
+	--quote-font-family: var(--font-inconsolata), monospace;
+	--code-font-family: var(--font-inconsolata), monospace;
 }
 
 /* ─── Global glitch color classes (applied via JS) ─── */

@@ -1,9 +1,9 @@
 'use client';
 
-import Link from 'next/link';
-import type { ProjectIcon } from '@repo/utils/common/icon';
-import { ProjectIconSvg } from '@repo/ui/project-icon';
+import { Heading, Text } from '@radix-ui/themes';
 import { DecorativeBlocks } from '@repo/ui/decorative-blocks';
+import { ProjectIconSvg } from '@repo/ui/project-icon';
+import type { ProjectIcon } from '@repo/utils/common/icon';
 import {
 	useClockGlitch,
 	useCoffeeGlitch,
@@ -11,8 +11,9 @@ import {
 	useGlitchOnLoad,
 	useSkillRotation,
 } from '@repo/utils/hooks/glitch-effects';
-import { StatGroup } from '../components/stat-group/stat-group';
+import Link from 'next/link';
 import { SocialLinks } from '../components/social-links/social-links';
+import { StatGroup } from '../components/stat-group/stat-group';
 import styles from './page.module.css';
 
 interface HomeProject {
@@ -78,13 +79,19 @@ export default function HomePage({ projects, skills }: HomePageProps) {
 				{/* Main content */}
 				<div className={styles.main}>
 					<div className={styles.header}>
-						<h1 className={styles.name}>Pat Jacobs</h1>
-						<div className={styles.title}>Software Engineer</div>
+						<Heading as="h1" mb="8" className={styles.name}>
+							Pat Jacobs
+						</Heading>
+						<Text as="p" size="1" weight="regular" className={styles.title}>
+							Software Engineer
+						</Text>
 						<DecorativeBlocks />
 					</div>
 
 					<div className={styles.projects}>
-						<div className={styles.projectsTitle}>&mdash;</div>
+						<Text as="p" size="1" color="gray" className={styles.projectsTitle}>
+							&mdash;
+						</Text>
 						<ul className={styles.projectList}>
 							{projects.map((project) => (
 								<li key={project.slug}>
@@ -95,7 +102,7 @@ export default function HomePage({ projects, skills }: HomePageProps) {
 										<div className={styles.projectIcon}>
 											<ProjectIconSvg icon={project.icon} />
 										</div>
-										<span>{project.name}</span>
+										<Text as="span" size="1">{project.name}</Text>
 									</Link>
 								</li>
 							))}

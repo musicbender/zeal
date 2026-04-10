@@ -1,3 +1,4 @@
+import { Text } from '@radix-ui/themes';
 import styles from './social-links.module.css';
 
 export interface SocialLink {
@@ -14,14 +15,15 @@ export function SocialLinks({ links }: SocialLinksProps) {
   return (
     <div className={styles.contact}>
       {links.map((link) => (
-        <a
-          key={link.label}
-          href={link.href}
-          className={styles.contactLink}
-          {...(link.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-        >
-          {link.label}
-        </a>
+        <Text asChild size="1" key={link.label}>
+          <a
+            href={link.href}
+            className={styles.contactLink}
+            {...(link.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+          >
+            {link.label}
+          </a>
+        </Text>
       ))}
     </div>
   );

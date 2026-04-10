@@ -1,15 +1,21 @@
 import { Theme } from '@radix-ui/themes';
 import type { Metadata } from 'next';
+import { Inconsolata } from 'next/font/google';
 import localFont from 'next/font/local';
 import './globals.css';
 
-const spaceMono = localFont({
+const cufel = localFont({
 	src: [
-		{ path: '../public/fonts/SpaceMono-Regular.woff2', weight: '400', style: 'normal' },
-		{ path: '../public/fonts/SpaceMono-Bold.woff2', weight: '700', style: 'normal' },
+		{ path: '../public/fonts/CUFEL.woff2', weight: '400', style: 'normal' },
 	],
-	variable: '--font-space-mono',
+	variable: '--font-cufel',
 });
+
+const inconsolata = Inconsolata({
+	weight: ['400'],
+	subsets: ['latin'],
+	variable: '--font-inconsolata',
+})
 
 export const metadata: Metadata = {
 	title: 'Pat Jacobs',
@@ -19,7 +25,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
 	return (
 		<html lang="en">
-			<body className={spaceMono.variable}>
+			<body className={`${inconsolata.variable} ${cufel.variable}`}>
 				<Theme appearance="dark" accentColor="gray" radius="none" scaling="100%">
 					{children}
 				</Theme>
