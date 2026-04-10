@@ -1,5 +1,6 @@
 'use client';
 
+import { Heading, Text } from '@radix-ui/themes';
 import { ProjectIconSvg } from '@repo/ui/project-icon';
 import type { RichTextNode } from '@repo/utils/common/content';
 import { renderRichTextNode } from '@repo/utils/common/content-renderer';
@@ -48,9 +49,11 @@ export default function ProjectPage({ project, nextProject }: ProjectPageProps) 
 		<div className={styles.body}>
 			<div className={styles.contentLayer}>
 				{/* Back link */}
-				<Link href="/" className={styles.backLink}>
-					&larr; BACK
-				</Link>
+				<Text asChild size="1" color="gray">
+					<Link href="/" className={styles.backLink}>
+						&larr; BACK
+					</Link>
+				</Text>
 
 				{/* Metadata stats */}
 				{project.year && (
@@ -68,15 +71,21 @@ export default function ProjectPage({ project, nextProject }: ProjectPageProps) 
 					</div>
 
 					{/* Title */}
-					<h1 className={styles.projectTitle}>{project.title}</h1>
+					<Heading as="h1" size="7" weight="bold" className={styles.projectTitle}>
+						{project.title}
+					</Heading>
 					{project.description && (
-						<div className={styles.projectSubtitle}>{project.description}</div>
+						<Text as="p" size="1" color="gray" className={styles.projectSubtitle}>
+							{project.description}
+						</Text>
 					)}
 
 					{/* Body content from Hygraph rich text */}
 					{project.body?.raw?.children && (
 						<div className={styles.section}>
-							<div className={styles.sectionTitle}>&mdash;</div>
+							<Text as="p" size="1" color="gray" className={styles.sectionTitle}>
+								&mdash;
+							</Text>
 							<div className={styles.sectionContent}>
 								{project.body.raw.children.map((node, i) =>
 									renderRichTextNode(node, i),
@@ -88,7 +97,9 @@ export default function ProjectPage({ project, nextProject }: ProjectPageProps) 
 					{/* Tech stack */}
 					{project.techList.length > 0 && (
 						<div className={styles.section}>
-							<div className={styles.sectionTitle}>Technology</div>
+							<Text as="p" size="1" color="gray" className={styles.sectionTitle}>
+								Technology
+							</Text>
 							<ProjectTech items={project.techList} />
 						</div>
 					)}
@@ -96,7 +107,9 @@ export default function ProjectPage({ project, nextProject }: ProjectPageProps) 
 					{/* Team */}
 					{project.team.length > 0 && (
 						<div className={styles.section}>
-							<div className={styles.sectionTitle}>Team</div>
+							<Text as="p" size="1" color="gray" className={styles.sectionTitle}>
+								Team
+							</Text>
 							<ProjectTeam members={project.team} />
 						</div>
 					)}
@@ -104,7 +117,9 @@ export default function ProjectPage({ project, nextProject }: ProjectPageProps) 
 					{/* Links */}
 					{(project.externalUrl || project.githubRepoUrl) && (
 						<div className={styles.section}>
-							<div className={styles.sectionTitle}>Links</div>
+							<Text as="p" size="1" color="gray" className={styles.sectionTitle}>
+								Links
+							</Text>
 							<ProjectLinks
 								websiteUrl={project.externalUrl}
 								githubUrl={project.githubRepoUrl}

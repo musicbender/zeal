@@ -1,6 +1,6 @@
 'use client';
 
-import { Heading } from '@radix-ui/themes';
+import { Heading, Text } from '@radix-ui/themes';
 import { DecorativeBlocks } from '@repo/ui/decorative-blocks';
 import { ProjectIconSvg } from '@repo/ui/project-icon';
 import type { ProjectIcon } from '@repo/utils/common/icon';
@@ -79,15 +79,19 @@ export default function HomePage({ projects, skills }: HomePageProps) {
 				{/* Main content */}
 				<div className={styles.main}>
 					<div className={styles.header}>
-						<Heading as="h1" mb="8" size="9" className={styles.name}>
+						<Heading as="h1" mb="8" className={styles.name}>
 							Pat Jacobs
 						</Heading>
-						<div className={styles.title}>Software Engineer</div>
+						<Text as="p" size="1" weight="regular" className={styles.title}>
+							Software Engineer
+						</Text>
 						<DecorativeBlocks />
 					</div>
 
 					<div className={styles.projects}>
-						<div className={styles.projectsTitle}>&mdash;</div>
+						<Text as="p" size="1" color="gray" className={styles.projectsTitle}>
+							&mdash;
+						</Text>
 						<ul className={styles.projectList}>
 							{projects.map((project) => (
 								<li key={project.slug}>
@@ -98,7 +102,7 @@ export default function HomePage({ projects, skills }: HomePageProps) {
 										<div className={styles.projectIcon}>
 											<ProjectIconSvg icon={project.icon} />
 										</div>
-										<span>{project.name}</span>
+										<Text as="span" size="1">{project.name}</Text>
 									</Link>
 								</li>
 							))}

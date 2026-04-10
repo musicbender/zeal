@@ -16,8 +16,6 @@
 	position: fixed;
 	top: var(--space-7);
 	left: var(--space-7);
-	font-size: var(--text-sm);
-	color: var(--gray-7);
 	text-decoration: none;
 	letter-spacing: var(--letter-spacing-1);
 	z-index: 100;
@@ -56,17 +54,11 @@
 
 /* ─── Title ─── */
 .projectTitle {
-	font-size: var(--font-size-7);
-	font-weight: var(--font-weight-bold);
 	letter-spacing: var(--letter-spacing-7);
 	margin-bottom: var(--space-2);
-	color: var(--gray-12);
-	font-family: var(--font-mono);
 }
 
 .projectSubtitle {
-	font-size: var(--text-base);
-	color: var(--gray-8);
 	letter-spacing: 0.125rem;
 	text-transform: uppercase;
 	margin-bottom: var(--space-7);
@@ -112,7 +104,6 @@
 	margin-top: var(--space-6);
 	margin-bottom: var(--space-3);
 	letter-spacing: var(--letter-spacing-1);
-	font-family: var(--font-mono);
 }
 
 .sectionContent ul,
@@ -140,10 +131,6 @@
 	.metaStats {
 		top: var(--space-5);
 		right: var(--space-5);
-	}
-
-	.projectTitle {
-		font-size: var(--font-size-6);
 	}
 
 	.sectionContent :global(.rich-text-image) {

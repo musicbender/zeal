@@ -18,7 +18,6 @@
   border: 0.0625rem solid var(--gray-4);
   cursor: pointer;
   transition: all 0.2s ease;
-  font-family: var(--font-mono);
   font-weight: var(--font-weight-regular);
 }
 

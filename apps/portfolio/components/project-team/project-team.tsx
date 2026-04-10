@@ -1,3 +1,4 @@
+import { Text } from '@radix-ui/themes';
 import styles from './project-team.module.css';
 
 interface ProjectTeamProps {
@@ -8,9 +9,9 @@ export function ProjectTeam({ members }: ProjectTeamProps) {
   return (
     <div className={styles.teamGrid}>
       {members.map((member) => (
-        <div key={member} className={styles.teamMember}>
-          <span>{member}</span>
-        </div>
+        <Text as="div" size="1" key={member} className={styles.teamMember}>
+          {member}
+        </Text>
       ))}
     </div>
   );

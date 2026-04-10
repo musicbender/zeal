@@ -1,6 +1,5 @@
 /* ─── Shared page wrapper with noise + scanline overlays ─── */
 .body {
-	font-family: var(--font-mono);
 	background: var(--gray-1);
 	color: var(--gray-12);
 	position: relative;

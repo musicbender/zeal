@@ -13,7 +13,8 @@ const cufel = localFont({
 
 const inconsolata = Inconsolata({
 	weight: ['400'],
-  subsets: ['latin'],
+	subsets: ['latin'],
+	variable: '--font-inconsolata',
 })
 
 export const metadata: Metadata = {
@@ -24,7 +25,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
 	return (
 		<html lang="en">
-			<body className={inconsolata.className + ' ' + cufel.variable}>
+			<body className={`${inconsolata.variable} ${cufel.variable}`}>
 				<Theme appearance="dark" accentColor="gray" radius="none" scaling="100%">
 					{children}
 				</Theme>

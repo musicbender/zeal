@@ -5,7 +5,6 @@
 }
 
 .teamMember {
-  font-size: var(--font-size-1);
   color: var(--gray-11);
   display: flex;
   align-items: baseline;

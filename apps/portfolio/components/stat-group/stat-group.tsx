@@ -1,5 +1,6 @@
 'use client';
 
+import { Text } from '@radix-ui/themes';
 import styles from './stat-group.module.css';
 
 export interface StatItem {
@@ -18,15 +19,17 @@ export function StatGroup({ stats, className }: StatGroupProps) {
   return (
     <div className={`${styles.statGroup} ${className ?? ''}`}>
       {stats.map((stat) => (
-        <div
+        <Text
+          as="div"
+          size="1"
           key={stat.label}
           className={`${styles.statDecoration}${stat.realtime ? ` ${styles.realtime}` : ''}`}
         >
           {stat.label}
-          <span className={styles.statValue} id={stat.id} data-glitch-value>
+          <Text as="span" className={styles.statValue} id={stat.id} data-glitch-value>
             {stat.value}
-          </span>
-        </div>
+          </Text>
+        </Text>
       ))}
     </div>
   );
