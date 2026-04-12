@@ -1,12 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import HomePage from './home-page';
-import { generateIcon } from '@repo/utils/common/icon';
-
-const mockProjects = [
-	{ slug: 'test-project', name: 'Test Project', icon: generateIcon('test-project') },
-	{ slug: 'another-project', name: 'Another Project', icon: generateIcon('another-project') },
-];
 
 const mockSkills = [
 	{ label: 'React', strength: 10 },
@@ -15,13 +9,15 @@ const mockSkills = [
 
 describe('Home', () => {
 	it('renders the heading', () => {
-		render(<HomePage projects={mockProjects} skills={mockSkills} />);
+		render(<HomePage skills={mockSkills} />);
 		expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Pat Jacobs');
 	});
 
-	it('renders project links', () => {
-		render(<HomePage projects={mockProjects} skills={mockSkills} />);
-		expect(screen.getAllByText('Test Project').length).toBeGreaterThan(0);
-		expect(screen.getAllByText('Another Project').length).toBeGreaterThan(0);
+	it('renders navigation items', () => {
+		render(<HomePage skills={mockSkills} />);
+		expect(screen.getByText('about')).toBeDefined();
+		expect(screen.getByText('projects')).toBeDefined();
+		expect(screen.getByText('skills')).toBeDefined();
+		expect(screen.getByText('contact')).toBeDefined();
 	});
 });

@@ -15,7 +15,8 @@
 	left: 0;
 	width: 100%;
 	height: 100%;
-	background-image: repeating-linear-gradient(
+	background-image:
+		repeating-linear-gradient(
 			0deg,
 			transparent,
 			transparent 0.0625rem,
@@ -70,10 +71,10 @@
 /* ─── Stat decorations ─── */
 .statDecoration {
 	font-size: var(--text-sm);
-	color: var(--gray-7);
+	color: var(--gray-9);
 	letter-spacing: var(--letter-spacing-1);
 	font-weight: var(--font-weight-regular);
-	opacity: 0.6;
+	opacity: 0.8;
 	transition: opacity 0.3s ease;
 }
 
@@ -82,7 +83,7 @@
 }
 
 .statValue {
-	color: var(--gray-9);
+	color: var(--gray-11);
 	font-weight: var(--font-weight-regular);
 	margin-left: var(--space-1);
 	display: inline-block;

@@ -1,15 +1,8 @@
+import { getTechSkills } from '@repo/remote-data';
 import HomePage from './home-page';
-import { getHomeProjects, getTechSkills } from '@repo/remote-data';
-import { generateIcon } from '@repo/utils/common/icon';
 
 export default async function Home() {
-	const [hygraphProjects, skills] = await Promise.all([getHomeProjects(), getTechSkills()]);
+	const skills = await getTechSkills();
 
-	const projects = hygraphProjects.map((p) => ({
-		slug: p.projectId,
-		name: p.title,
-		icon: generateIcon(p.projectId),
-	}));
-
-	return <HomePage projects={projects} skills={skills} />;
+	return <HomePage skills={skills} />;
 }

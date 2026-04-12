@@ -2,8 +2,6 @@
 
 import { Heading, Text } from '@radix-ui/themes';
 import { DecorativeBlocks } from '@repo/ui/decorative-blocks';
-import { ProjectIconSvg } from '@repo/ui/project-icon';
-import type { ProjectIcon } from '@repo/utils/common/icon';
 import {
 	useClockGlitch,
 	useCoffeeGlitch,
@@ -11,19 +9,12 @@ import {
 	useGlitchOnLoad,
 	useSkillRotation,
 } from '@repo/utils/hooks/glitch-effects';
-import Link from 'next/link';
+import { useCallback, useState } from 'react';
 import { SocialLinks } from '../components/social-links/social-links';
 import { StatGroup } from '../components/stat-group/stat-group';
 import styles from './page.module.css';
 
-interface HomeProject {
-	slug: string;
-	name: string;
-	icon: ProjectIcon;
-}
-
 interface HomePageProps {
-	projects: HomeProject[];
 	skills: { label: string; strength: number }[];
 }
 
@@ -33,7 +24,12 @@ const socialLinks = [
 	{ label: 'LINKEDIN', href: 'https://linkedin.com/in/patjacobs', external: true },
 ];
 
-export default function HomePage({ projects, skills }: HomePageProps) {
+const navItems = ['about', 'projects', 'skills', 'contact'];
+
+export default function HomePage({ skills }: HomePageProps) {
+	const [activeItem, setActiveItem] = useState<string | null>(null);
+	const handleHover = useCallback((key: string) => setActiveItem(key), []);
+
 	useGlitchOnLoad('[data-glitch-value]');
 	useClockGlitch('time-value');
 	useCoffeeGlitch('coffee-value');
@@ -88,26 +84,24 @@ export default function HomePage({ projects, skills }: HomePageProps) {
 						<DecorativeBlocks />
 					</div>
 
-					<div className={styles.projects}>
-						<Text as="p" size="1" color="gray" className={styles.projectsTitle}>
-							&mdash;
-						</Text>
-						<ul className={styles.projectList}>
-							{projects.map((project) => (
-								<li key={project.slug}>
-									<Link
-										href={`/projects/${project.slug}`}
-										className={styles.projectItem}
+					<nav className={styles.nav}>
+						<ul className={styles.navList}>
+							{navItems.map((item) => (
+								<li key={item}>
+									<button
+										type="button"
+										className={`${styles.navItem} ${activeItem === item ? styles.navItemActive : ''}`}
+										onMouseEnter={() => handleHover(item)}
 									>
-										<div className={styles.projectIcon}>
-											<ProjectIconSvg icon={project.icon} />
-										</div>
-										<Text as="span" size="1">{project.name}</Text>
-									</Link>
+										<span className={styles.navCaret}>&gt;</span>
+										<Text as="span" size="1">
+											{item}
+										</Text>
+									</button>
 								</li>
 							))}
 						</ul>
-					</div>
+					</nav>
 				</div>
 
 				<SocialLinks links={socialLinks} />
