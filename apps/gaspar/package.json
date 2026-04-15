@@ -22,7 +22,7 @@
 		"@repo/gaspar-data": "workspace:*",
 		"@repo/types": "workspace:*",
 		"dotenv": "^16.4.0",
-		"fastify": "^5.8.3"
+		"fastify": "^5.8.5"
 	},
 	"devDependencies": {
 		"@repo/eslint-config": "workspace:*",
