@@ -1,7 +1,6 @@
 'use client';
 
 import { Heading, Text } from '@radix-ui/themes';
-import { DecorativeBlocks } from '@repo/ui/decorative-blocks';
 import {
 	useClockGlitch,
 	useCoffeeGlitch,
@@ -78,10 +77,9 @@ export default function HomePage({ skills }: HomePageProps) {
 						<Heading as="h1" mb="8" className={styles.name}>
 							Pat Jacobs
 						</Heading>
-						<Text as="p" size="1" weight="regular" className={styles.title}>
-							Software Engineer
+						<Text as="p" size="1" weight="bold" mb="4" className={styles.title}>
+							{'/// Software Engineer'}
 						</Text>
-						<DecorativeBlocks />
 					</div>
 
 					<nav className={styles.nav}>

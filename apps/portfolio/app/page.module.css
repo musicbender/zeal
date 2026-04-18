@@ -88,7 +88,7 @@
 .title {
 	letter-spacing: 0.125rem;
 	text-transform: uppercase;
-	margin-bottom: var(--space-4);
+	color: var(--gray-10);
 }
 
 /* ─── Navigation menu ─── */
@@ -121,7 +121,7 @@
 
 .navCaret {
 	font-family: var(--font-inconsolata), monospace;
-	font-size: var(--text-sm);
+	font-size: var(--text-medium);
 	color: var(--gray-7);
 	position: absolute;
 	left: -0.875rem;
