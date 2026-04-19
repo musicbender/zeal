@@ -24,6 +24,7 @@ type DrawerPage = 'about' | 'projects' | 'skills' | 'contact';
 interface DrawerData {
 	about: HygraphSection | null;
 	contact: HygraphSection | null;
+	skillsSection: HygraphSection | null;
 	skills: string[];
 	projects: { slug: string; title: string; subtitle: string | null }[];
 }
@@ -130,7 +131,7 @@ export default function HomePage({ skills, drawerData }: HomePageProps) {
 					{activeDrawer === 'projects' && <ProjectsContent projects={drawerData.projects} />}
 					{activeDrawer === 'skills' && (
 						<SkillsContent
-							heading={drawerData.about?.heading?.replace(/_/g, ' ') ?? 'stuff i know'}
+							heading={drawerData.skillsSection?.heading?.replace(/_/g, ' ') ?? 'stuff i know'}
 							skills={drawerData.skills}
 						/>
 					)}

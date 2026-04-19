@@ -10,6 +10,7 @@ const mockSkills = [
 const mockDrawerData = {
 	about: null,
 	contact: null,
+	skillsSection: null,
 	skills: [],
 	projects: [],
 };

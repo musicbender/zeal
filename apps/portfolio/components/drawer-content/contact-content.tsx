@@ -27,7 +27,7 @@ export function ContactContent({ section }: ContactContentProps) {
 				<span data-drawer-glitch>{heading}</span>
 			</Heading>
 			<Text as="p" className={styles.subtext}>
-				/// get in touch
+				{'/// get in touch'}
 			</Text>
 
 			{section?.body?.raw?.children && (

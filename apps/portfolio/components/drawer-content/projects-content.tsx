@@ -50,7 +50,7 @@ export function ProjectsContent({ projects }: ProjectsContentProps) {
 				<span data-drawer-glitch>projects</span>
 			</Heading>
 			<Text as="p" className={styles.subtext}>
-				/// selected work
+				{'/// some of my work'}
 			</Text>
 
 			<ul className={projectStyles.list}>

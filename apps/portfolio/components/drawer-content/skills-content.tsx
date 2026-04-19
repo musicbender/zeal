@@ -22,7 +22,7 @@ export function SkillsContent({ heading, skills }: SkillsContentProps) {
 				<span data-drawer-glitch>{heading}</span>
 			</Heading>
 			<Text as="p" className={styles.subtext}>
-				/// technologies &amp; tools
+				{'/// technologies & tools'}
 			</Text>
 
 			<div className={skillStyles.marqueeContainer}>

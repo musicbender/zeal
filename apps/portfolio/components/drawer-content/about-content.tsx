@@ -13,7 +13,7 @@ interface AboutContentProps {
 export function DrawerContent({ section }: AboutContentProps) {
 	useGlitchOnLoad('[data-drawer-glitch]');
 
-	const heading = section?.heading?.replace(/_/g, ' ') ?? 'about me';
+	const heading = section?.heading?.replace(/_/g, ' ') ?? 'about';
 
 	return (
 		<>
@@ -21,7 +21,7 @@ export function DrawerContent({ section }: AboutContentProps) {
 				<span data-drawer-glitch>{heading}</span>
 			</Heading>
 			<Text as="p" className={styles.subtext}>
-				/// who i am
+				{'/// who i am'}
 			</Text>
 
 			{section?.body?.raw?.children && (

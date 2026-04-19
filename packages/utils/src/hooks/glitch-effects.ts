@@ -6,7 +6,12 @@ const GLITCH_CHARS =
 	'!@#$%^&*()_+-=[]{}|;:,.<>?/~`0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 const GLITCH_COLORS = ['glitch-red', 'glitch-teal', 'glitch-purple', 'glitch-yellow'];
 
-function glitchText(element: HTMLElement, finalText: string, iterations = 1, callback?: () => void) {
+function glitchText(
+	element: HTMLElement,
+	finalText: string,
+	iterations = 1,
+	callback?: () => void
+) {
 	let currentIteration = 0;
 
 	function runGlitch() {
@@ -37,8 +42,12 @@ export function useGlitchOnLoad(selector: string) {
 	useEffect(() => {
 		const allValues = document.querySelectorAll<HTMLElement>(selector);
 		allValues.forEach((el) => {
-			const currentText = el.textContent || '';
-			glitchText(el, currentText, 3);
+			// Preserve original text so strict mode double-fires don't read glitched text
+			if (!el.dataset.originalText) {
+				el.dataset.originalText = el.textContent || '';
+			}
+			const finalText = el.dataset.originalText;
+			glitchText(el, finalText, 3);
 		});
 	}, [selector]);
 }
@@ -85,10 +94,7 @@ export function useCoffeeGlitch(elementId: string) {
 	}, [elementId]);
 }
 
-export function useSkillRotation(
-	elementId: string,
-	skills: { label: string; strength: number }[],
-) {
+export function useSkillRotation(elementId: string, skills: { label: string; strength: number }[]) {
 	useEffect(() => {
 		if (skills.length === 0) return;
 
