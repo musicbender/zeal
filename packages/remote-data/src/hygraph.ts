@@ -29,6 +29,7 @@ export interface HygraphProject {
 	id: string;
 	projectId: string;
 	title: string;
+	subtitle: string | null;
 	description: string | null;
 	overview: string | null;
 	projectType: 'Work' | 'Experiment';
@@ -74,6 +75,7 @@ export async function getHomeProjects(): Promise<HygraphProject[]> {
         id
         projectId
         title
+        subtitle
         description
         order
         techList

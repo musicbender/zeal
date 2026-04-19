@@ -13,13 +13,13 @@
 
 /* ─── Stat group positions ─── */
 .group1 {
-	top: var(--space-7);
-	left: var(--space-7);
+	top: var(--space-5);
+	left: var(--space-5);
 }
 
 .group2 {
-	top: var(--space-7);
-	right: var(--space-7);
+	top: var(--space-5);
+	right: var(--space-5);
 }
 
 .group3 {
@@ -49,7 +49,7 @@
 
 /* ─── Main content ─── */
 .main {
-	margin-top: 12rem;
+	padding-top: 12rem;
 	margin-left: 15vw;
 	max-width: 50rem;
 }
@@ -143,29 +143,40 @@
 /* ─── Responsive ─── */
 @media (max-width: 48em) {
 	.main {
-		top: 20%;
-		left: 8%;
+		padding-top: 6rem;
+		margin-left: 8%;
 		max-width: 84%;
 	}
 
 	.group1 {
-		top: var(--space-5);
-		left: var(--space-5);
+		top: var(--space-4);
+		left: var(--space-4);
 	}
 	.group2 {
-		top: var(--space-5);
-		right: var(--space-5);
+		top: var(--space-4);
+		right: var(--space-4);
 	}
 	.group3 {
 		bottom: 6.25rem;
-		left: var(--space-5);
+		left: var(--space-4);
 	}
 	.group4 {
 		top: 50%;
-		right: var(--space-5);
+		right: var(--space-4);
 	}
 
 	.name {
-		font-size: var(--font-size-7);
+		font-size: var(--font-size-9);
+	}
+}
+
+/* Landscape mobile / short viewports */
+@media (max-height: 32em) {
+	.main {
+		padding-top: 3.25rem;
+	}
+
+	.header {
+		margin-bottom: var(--space-6);
 	}
 }

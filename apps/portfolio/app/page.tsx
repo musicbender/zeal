@@ -1,5 +1,4 @@
 import { getHomeProjects, getSectionById, getSkills, getTechSkills } from '@repo/remote-data';
-import { generateIcon } from '@repo/utils/common/icon';
 import HomePage from './home-page';
 
 export default async function Home() {
@@ -14,8 +13,7 @@ export default async function Home() {
 	const projectsList = projects.map((p) => ({
 		slug: p.projectId,
 		title: p.title,
-		description: p.description,
-		icon: generateIcon(p.projectId),
+		subtitle: p.subtitle,
 	}));
 
 	return (

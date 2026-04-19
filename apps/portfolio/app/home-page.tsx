@@ -2,7 +2,6 @@
 
 import { Heading, Text } from '@radix-ui/themes';
 import type { HygraphSection } from '@repo/remote-data';
-import type { ProjectIcon } from '@repo/utils/common/icon';
 import {
 	useClockGlitch,
 	useCoffeeGlitch,
@@ -26,7 +25,7 @@ interface DrawerData {
 	about: HygraphSection | null;
 	contact: HygraphSection | null;
 	skills: string[];
-	projects: { slug: string; title: string; description: string | null; icon: ProjectIcon }[];
+	projects: { slug: string; title: string; subtitle: string | null }[];
 }
 
 interface HomePageProps {
@@ -93,7 +92,7 @@ export default function HomePage({ skills, drawerData }: HomePageProps) {
 				{/* Main content */}
 				<div className={styles.main}>
 					<div className={styles.header}>
-						<Heading as="h1" mb="8" className={styles.name}>
+						<Heading as="h1" mb={{ initial: '4', sm: '6', lg: '6' }} className={styles.name}>
 							Pat Jacobs
 						</Heading>
 						<Text as="p" size="1" weight="bold" mb="4" className={styles.title}>
