@@ -1,5 +1,5 @@
 import { getHomeProjects, getSectionById, getSkills, getTechSkills } from '@repo/remote-data';
-import { contactEnabled } from '../services/flags';
+import { contactEnabled } from '../lib/flags';
 import HomePage from './home-page';
 
 export default async function Home() {
