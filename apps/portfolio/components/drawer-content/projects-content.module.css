@@ -1,0 +1,80 @@
+/* ─── Projects list in drawer ─── */
+
+.list {
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+
+.item {
+	display: flex;
+	align-items: center;
+	gap: var(--space-4);
+	padding: var(--space-4) var(--space-3);
+	text-decoration: none;
+	color: var(--gray-11);
+	border: 1px solid transparent;
+	transition:
+		border-color 0.15s ease,
+		background 0.15s ease;
+}
+
+.item:hover {
+	border-color: var(--gray-4);
+	background: rgba(255, 255, 255, 0.02);
+}
+
+.index {
+	font-size: var(--text-xs);
+	color: var(--gray-7);
+	letter-spacing: 0.125rem;
+	font-family: var(--font-inconsolata), monospace;
+	flex-shrink: 0;
+}
+
+.icon {
+	width: var(--space-5);
+	height: var(--space-5);
+	flex-shrink: 0;
+}
+
+.icon svg {
+	width: 100%;
+	height: 100%;
+}
+
+.info {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+	flex: 1;
+	min-width: 0;
+}
+
+.title {
+	color: var(--gray-12);
+	letter-spacing: var(--letter-spacing-1);
+}
+
+.desc {
+	letter-spacing: 0.05rem;
+	text-transform: uppercase;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.arrow {
+	font-size: var(--font-size-2);
+	color: var(--gray-6);
+	flex-shrink: 0;
+	transition:
+		color 0.15s ease,
+		transform 0.15s ease;
+}
+
+.item:hover .arrow {
+	color: var(--gray-11);
+	transform: translateX(2px);
+}

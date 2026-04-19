@@ -1,0 +1,280 @@
+/* ─── Drawer overlay + panel ─── */
+
+.overlay {
+	position: fixed;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	width: 33.333%;
+	z-index: 100;
+	pointer-events: none;
+}
+
+/* ─── Panel ─── */
+.panel {
+	position: absolute;
+	inset: 0;
+	background: var(--gray-1);
+	border-left: 1px solid var(--gray-4);
+	box-shadow: -1rem 0 3rem rgba(0, 0, 0, 0.5);
+	pointer-events: auto;
+	overflow-y: auto;
+	overflow-x: hidden;
+	animation: glitchMaterialize 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+	-webkit-font-smoothing: none;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+/* Scanline overlay on the panel */
+.panel::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(
+		to bottom,
+		transparent 50%,
+		rgba(255, 255, 255, var(--scanline-opacity)) 50%
+	);
+	background-size: 100% var(--space-1);
+	pointer-events: none;
+	z-index: 2;
+}
+
+/* ─── Glitch materialization keyframes ─── */
+
+/*
+ * The panel "tears in" via horizontal strips that arrive
+ * at staggered offsets, simulating a corrupted video signal.
+ * Uses clip-path polygon to reveal strips progressively.
+ */
+@keyframes glitchMaterialize {
+	0% {
+		clip-path: inset(0 100% 0 0);
+		opacity: 0;
+	}
+	8% {
+		clip-path: polygon(
+			/* strip 1 */ 20% 0%,
+			100% 0%,
+			100% 8%,
+			20% 8%,
+			/* strip 2 */ 60% 25%,
+			100% 25%,
+			100% 32%,
+			60% 32%,
+			/* strip 3 */ 10% 50%,
+			100% 50%,
+			100% 56%,
+			10% 56%,
+			/* strip 4 */ 45% 75%,
+			100% 75%,
+			100% 82%,
+			45% 82%
+		);
+		opacity: 1;
+	}
+	16% {
+		clip-path: polygon(
+			5% 0%,
+			100% 0%,
+			100% 12%,
+			5% 12%,
+			30% 20%,
+			100% 20%,
+			100% 38%,
+			30% 38%,
+			50% 44%,
+			100% 44%,
+			100% 60%,
+			50% 60%,
+			15% 66%,
+			100% 66%,
+			100% 85%,
+			15% 85%,
+			40% 90%,
+			100% 90%,
+			100% 100%,
+			40% 100%
+		);
+	}
+	28% {
+		clip-path: polygon(
+			12% 0%,
+			100% 0%,
+			100% 18%,
+			12% 18%,
+			3% 18%,
+			100% 18%,
+			100% 42%,
+			3% 42%,
+			20% 42%,
+			100% 42%,
+			100% 65%,
+			20% 65%,
+			8% 65%,
+			100% 65%,
+			100% 88%,
+			8% 88%,
+			0% 88%,
+			100% 88%,
+			100% 100%,
+			0% 100%
+		);
+	}
+	45% {
+		clip-path: polygon(
+			3% 0%,
+			100% 0%,
+			100% 30%,
+			3% 30%,
+			0% 30%,
+			100% 30%,
+			100% 55%,
+			0% 55%,
+			5% 55%,
+			100% 55%,
+			100% 78%,
+			5% 78%,
+			0% 78%,
+			100% 78%,
+			100% 100%,
+			0% 100%
+		);
+	}
+	65% {
+		clip-path: polygon(2% 0%, 100% 0%, 100% 48%, 2% 48%, 0% 48%, 100% 48%, 100% 100%, 0% 100%);
+	}
+	100% {
+		clip-path: inset(0);
+	}
+}
+
+/* RGB split edge glow during entrance */
+.panelEdge {
+	position: absolute;
+	top: 0;
+	left: -2px;
+	bottom: 0;
+	width: 4px;
+	z-index: 10;
+	animation: edgeGlitch 0.5s ease forwards;
+	pointer-events: none;
+}
+
+@keyframes edgeGlitch {
+	0% {
+		box-shadow:
+			-2px 0 8px var(--color-glitch-red),
+			2px 0 8px var(--color-glitch-teal);
+		opacity: 1;
+	}
+	30% {
+		box-shadow:
+			-3px 0 12px var(--color-glitch-teal),
+			3px 0 12px var(--color-glitch-purple);
+		opacity: 0.8;
+	}
+	60% {
+		box-shadow:
+			-1px 0 6px var(--color-glitch-yellow),
+			1px 0 6px var(--color-glitch-red);
+		opacity: 0.4;
+	}
+	100% {
+		box-shadow: none;
+		opacity: 0;
+	}
+}
+
+/* ─── Close button ─── */
+.close {
+	position: sticky;
+	top: 0;
+	display: flex;
+	justify-content: flex-end;
+	padding: var(--space-5) var(--space-5) 0;
+	z-index: 10;
+}
+
+.closeBtn {
+	background: none;
+	border: 1px solid var(--gray-5);
+	color: var(--gray-10);
+	font-family: var(--font-inconsolata), monospace;
+	font-size: var(--text-sm);
+	letter-spacing: 0.125rem;
+	padding: var(--space-1) var(--space-2);
+	cursor: pointer;
+	transition:
+		color 0.15s ease,
+		border-color 0.15s ease;
+	text-transform: uppercase;
+}
+
+.closeBtn:hover {
+	color: var(--gray-12);
+	border-color: var(--gray-8);
+}
+
+/* ─── Content area ─── */
+.content {
+	padding: var(--space-4) var(--space-7) var(--space-9);
+	position: relative;
+	z-index: 1;
+}
+
+/* ─── Drawer heading ─── */
+.heading {
+	font-size: var(--font-size-6);
+	font-weight: var(--font-weight-bold);
+	letter-spacing: var(--letter-spacing-7);
+	color: var(--gray-12);
+	margin-bottom: var(--space-2);
+	line-height: 0.9;
+}
+
+.subtext {
+	font-size: var(--font-size-1);
+	color: var(--gray-9);
+	letter-spacing: 0.125rem;
+	text-transform: uppercase;
+	margin-bottom: var(--space-7);
+}
+
+/* ─── Section blocks inside drawer ─── */
+.section {
+	margin-bottom: var(--space-7);
+}
+
+.sectionBody {
+	font-size: var(--font-size-2);
+	line-height: var(--line-height-3);
+	color: var(--gray-11);
+}
+
+.sectionBody p {
+	margin-bottom: var(--space-4);
+}
+
+/* ─── Responsive ─── */
+
+/* Tablet */
+@media (max-width: 64em) {
+	.overlay {
+		width: 58%;
+	}
+}
+
+/* Mobile */
+@media (max-width: 48em) {
+	.overlay {
+		width: 100%;
+	}
+	.panel {
+		border-left: none;
+		box-shadow: none;
+	}
+	.content {
+		padding: var(--space-4) var(--space-5) var(--space-9);
+	}
+}

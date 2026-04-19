@@ -1,6 +1,8 @@
 'use client';
 
 import { Heading, Text } from '@radix-ui/themes';
+import type { HygraphSection } from '@repo/remote-data';
+import type { ProjectIcon } from '@repo/utils/common/icon';
 import {
 	useClockGlitch,
 	useCoffeeGlitch,
@@ -9,12 +11,27 @@ import {
 	useSkillRotation,
 } from '@repo/utils/hooks/glitch-effects';
 import { useCallback, useState } from 'react';
+import { DrawerContent } from '../components/drawer-content/about-content';
+import { ContactContent } from '../components/drawer-content/contact-content';
+import { ProjectsContent } from '../components/drawer-content/projects-content';
+import { SkillsContent } from '../components/drawer-content/skills-content';
+import { DrawerShell } from '../components/drawer-shell/drawer-shell';
 import { SocialLinks } from '../components/social-links/social-links';
 import { StatGroup } from '../components/stat-group/stat-group';
 import styles from './page.module.css';
 
+type DrawerPage = 'about' | 'projects' | 'skills' | 'contact';
+
+interface DrawerData {
+	about: HygraphSection | null;
+	contact: HygraphSection | null;
+	skills: string[];
+	projects: { slug: string; title: string; description: string | null; icon: ProjectIcon }[];
+}
+
 interface HomePageProps {
 	skills: { label: string; strength: number }[];
+	drawerData: DrawerData;
 }
 
 const socialLinks = [
@@ -23,11 +40,13 @@ const socialLinks = [
 	{ label: 'LINKEDIN', href: 'https://linkedin.com/in/patjacobs', external: true },
 ];
 
-const navItems = ['about', 'projects', 'skills', 'contact'];
+const navItems: DrawerPage[] = ['about', 'projects', 'skills', 'contact'];
 
-export default function HomePage({ skills }: HomePageProps) {
-	const [activeItem, setActiveItem] = useState<string | null>(null);
-	const handleHover = useCallback((key: string) => setActiveItem(key), []);
+export default function HomePage({ skills, drawerData }: HomePageProps) {
+	const [activeDrawer, setActiveDrawer] = useState<DrawerPage | null>(null);
+
+	const openDrawer = useCallback((page: DrawerPage) => setActiveDrawer(page), []);
+	const closeDrawer = useCallback(() => setActiveDrawer(null), []);
 
 	useGlitchOnLoad('[data-glitch-value]');
 	useClockGlitch('time-value');
@@ -88,8 +107,9 @@ export default function HomePage({ skills }: HomePageProps) {
 								<li key={item}>
 									<button
 										type="button"
-										className={`${styles.navItem} ${activeItem === item ? styles.navItemActive : ''}`}
-										onMouseEnter={() => handleHover(item)}
+										className={`${styles.navItem} ${activeDrawer === item ? styles.navItemActive : ''}`}
+										onMouseEnter={() => openDrawer(item)}
+										onClick={() => openDrawer(item)}
 									>
 										<span className={styles.navCaret}>&gt;</span>
 										<Text as="span" size="1">
@@ -104,6 +124,20 @@ export default function HomePage({ skills }: HomePageProps) {
 
 				<SocialLinks links={socialLinks} />
 			</div>
+
+			{activeDrawer && (
+				<DrawerShell onClose={closeDrawer} key={activeDrawer}>
+					{activeDrawer === 'about' && <DrawerContent section={drawerData.about} />}
+					{activeDrawer === 'projects' && <ProjectsContent projects={drawerData.projects} />}
+					{activeDrawer === 'skills' && (
+						<SkillsContent
+							heading={drawerData.about?.heading?.replace(/_/g, ' ') ?? 'stuff i know'}
+							skills={drawerData.skills}
+						/>
+					)}
+					{activeDrawer === 'contact' && <ContactContent section={drawerData.contact} />}
+				</DrawerShell>
+			)}
 		</div>
 	);
 }
