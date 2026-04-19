@@ -3,55 +3,68 @@ import 'server-only';
 import type { RichTextAST } from '@repo/utils/common/content';
 
 function getEndpoint(): string {
-  const endpoint = process.env.HYGRAPH_ENDPOINT;
-  if (!endpoint) {
-    throw new Error('HYGRAPH_ENDPOINT environment variable is not set');
-  }
-  return endpoint;
+	const endpoint = process.env.HYGRAPH_ENDPOINT;
+	if (!endpoint) {
+		throw new Error('HYGRAPH_ENDPOINT environment variable is not set');
+	}
+	return endpoint;
 }
 
 async function hygraphFetch<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
-  const res = await fetch(getEndpoint(), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, variables }),
-    next: { revalidate: 3600 },
-  });
+	const res = await fetch(getEndpoint(), {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ query, variables }),
+		next: { revalidate: 3600 },
+	});
 
-  const json = await res.json();
-  if (json.errors) {
-    throw new Error(json.errors.map((e: { message: string }) => e.message).join('\n'));
-  }
-  return json.data as T;
+	const json = await res.json();
+	if (json.errors) {
+		throw new Error(json.errors.map((e: { message: string }) => e.message).join('\n'));
+	}
+	return json.data as T;
 }
 
 export interface HygraphProject {
-  id: string;
-  projectId: string;
-  title: string;
-  description: string | null;
-  overview: string | null;
-  projectType: 'Work' | 'Experiment';
-  order: number | null;
-  disabled: boolean | null;
-  techList: string[];
-  team: string[];
-  externalUrl: string | null;
-  githubRepoUrl: string | null;
-  storybookUrl: string | null;
-  linkType: 'Case_Study' | 'External' | null;
-  projectPublishDate: string | null;
-  lastDeployedOn: string | null;
-  body: { raw: RichTextAST } | null;
+	id: string;
+	projectId: string;
+	title: string;
+	subtitle: string | null;
+	description: string | null;
+	overview: string | null;
+	projectType: 'Work' | 'Experiment';
+	order: number | null;
+	disabled: boolean | null;
+	techList: string[];
+	team: string[];
+	externalUrl: string | null;
+	githubRepoUrl: string | null;
+	storybookUrl: string | null;
+	linkType: 'Case_Study' | 'External' | null;
+	projectPublishDate: string | null;
+	lastDeployedOn: string | null;
+	body: { raw: RichTextAST } | null;
 }
 
 export interface HygraphTechSkill {
-  label: string;
-  strength: number;
+	label: string;
+	strength: number;
+}
+
+export interface HygraphSection {
+	id: string;
+	sectionId: string;
+	heading: string;
+	body: { raw: RichTextAST } | null;
+}
+
+export interface HygraphSkill {
+	id: string;
+	label: string;
 }
 
 export async function getHomeProjects(): Promise<HygraphProject[]> {
-  const data = await hygraphFetch<{ projects: HygraphProject[] }>(`
+	const data = await hygraphFetch<{ projects: HygraphProject[] }>(`
     query HomeProjects {
       projects(
         where: { disabled_not: true, order_lte: 5 }
@@ -62,6 +75,7 @@ export async function getHomeProjects(): Promise<HygraphProject[]> {
         id
         projectId
         title
+        subtitle
         description
         order
         techList
@@ -72,11 +86,11 @@ export async function getHomeProjects(): Promise<HygraphProject[]> {
       }
     }
   `);
-  return data.projects;
+	return data.projects;
 }
 
 export async function getAllProjects(): Promise<HygraphProject[]> {
-  const data = await hygraphFetch<{ projects: HygraphProject[] }>(`
+	const data = await hygraphFetch<{ projects: HygraphProject[] }>(`
     query AllProjects {
       projects(
         where: { disabled_not: true, order_not: null }
@@ -100,12 +114,12 @@ export async function getAllProjects(): Promise<HygraphProject[]> {
       }
     }
   `);
-  return data.projects;
+	return data.projects;
 }
 
 export async function getProjectBySlug(slug: string): Promise<HygraphProject | null> {
-  const data = await hygraphFetch<{ projects: HygraphProject[] }>(
-    `
+	const data = await hygraphFetch<{ projects: HygraphProject[] }>(
+		`
     query ProjectBySlug($projectId: String!) {
       projects(where: { projectId: $projectId }, stage: PUBLISHED, first: 1) {
         id
@@ -130,27 +144,58 @@ export async function getProjectBySlug(slug: string): Promise<HygraphProject | n
       }
     }
   `,
-    { projectId: slug },
-  );
-  return data.projects[0] ?? null;
+		{ projectId: slug }
+	);
+	return data.projects[0] ?? null;
 }
 
 export async function getNextProject(
-  currentOrder?: number | null,
-  allProjects?: HygraphProject[],
+	currentOrder?: number | null,
+	allProjects?: HygraphProject[]
 ): Promise<HygraphProject | null> {
-  if (currentOrder == null || currentOrder === undefined || !allProjects) return null;
+	if (currentOrder == null || currentOrder === undefined || !allProjects) return null;
 
-  const sorted = allProjects.filter((p) => p.order != null).sort((a, b) => a.order! - b.order!);
-  if (sorted.length === 0) return null;
+	const sorted = allProjects.filter((p) => p.order != null).sort((a, b) => a.order! - b.order!);
+	if (sorted.length === 0) return null;
 
-  const currentIndex = sorted.findIndex((p) => p.order === currentOrder);
-  const nextIndex = (currentIndex + 1) % sorted.length;
-  return sorted[nextIndex] ?? null;
+	const currentIndex = sorted.findIndex((p) => p.order === currentOrder);
+	const nextIndex = (currentIndex + 1) % sorted.length;
+	return sorted[nextIndex] ?? null;
+}
+
+export async function getSectionById(sectionId: string): Promise<HygraphSection | null> {
+	const data = await hygraphFetch<{ sections: HygraphSection[] }>(
+		`
+    query SectionById($sectionId: String!) {
+      sections(where: { sectionId: $sectionId }, stage: PUBLISHED, first: 1) {
+        id
+        sectionId
+        heading
+        body {
+          raw
+        }
+      }
+    }
+  `,
+		{ sectionId }
+	);
+	return data.sections[0] ?? null;
+}
+
+export async function getSkills(): Promise<HygraphSkill[]> {
+	const data = await hygraphFetch<{ skills: HygraphSkill[] }>(`
+    query Skills {
+      skills(stage: PUBLISHED, first: 100) {
+        id
+        label
+      }
+    }
+  `);
+	return data.skills;
 }
 
 export async function getTechSkills(): Promise<HygraphTechSkill[]> {
-  const data = await hygraphFetch<{ techSkills: HygraphTechSkill[] }>(`
+	const data = await hygraphFetch<{ techSkills: HygraphTechSkill[] }>(`
     query TechSkills {
       techSkills(stage: PUBLISHED, first: 100) {
         label
@@ -158,5 +203,5 @@ export async function getTechSkills(): Promise<HygraphTechSkill[]> {
       }
     }
   `);
-  return data.techSkills;
+	return data.techSkills;
 }

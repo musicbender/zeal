@@ -1,9 +1,7 @@
 'use client';
 
 import { Heading, Text } from '@radix-ui/themes';
-import { DecorativeBlocks } from '@repo/ui/decorative-blocks';
-import { ProjectIconSvg } from '@repo/ui/project-icon';
-import type { ProjectIcon } from '@repo/utils/common/icon';
+import type { HygraphSection } from '@repo/remote-data';
 import {
 	useClockGlitch,
 	useCoffeeGlitch,
@@ -11,20 +9,29 @@ import {
 	useGlitchOnLoad,
 	useSkillRotation,
 } from '@repo/utils/hooks/glitch-effects';
-import Link from 'next/link';
+import { useCallback, useState } from 'react';
+import { DrawerContent } from '../components/drawer-content/about-content';
+import { ContactContent } from '../components/drawer-content/contact-content';
+import { ProjectsContent } from '../components/drawer-content/projects-content';
+import { SkillsContent } from '../components/drawer-content/skills-content';
+import { DrawerShell } from '../components/drawer-shell/drawer-shell';
 import { SocialLinks } from '../components/social-links/social-links';
 import { StatGroup } from '../components/stat-group/stat-group';
 import styles from './page.module.css';
 
-interface HomeProject {
-	slug: string;
-	name: string;
-	icon: ProjectIcon;
+type DrawerPage = 'about' | 'projects' | 'skills' | 'contact';
+
+interface DrawerData {
+	about: HygraphSection | null;
+	contact: HygraphSection | null;
+	skillsSection: HygraphSection | null;
+	skills: string[];
+	projects: { slug: string; title: string; subtitle: string | null }[];
 }
 
 interface HomePageProps {
-	projects: HomeProject[];
 	skills: { label: string; strength: number }[];
+	drawerData: DrawerData;
 }
 
 const socialLinks = [
@@ -33,7 +40,14 @@ const socialLinks = [
 	{ label: 'LINKEDIN', href: 'https://linkedin.com/in/patjacobs', external: true },
 ];
 
-export default function HomePage({ projects, skills }: HomePageProps) {
+const navItems: DrawerPage[] = ['about', 'projects', 'skills', 'contact'];
+
+export default function HomePage({ skills, drawerData }: HomePageProps) {
+	const [activeDrawer, setActiveDrawer] = useState<DrawerPage | null>(null);
+
+	const openDrawer = useCallback((page: DrawerPage) => setActiveDrawer(page), []);
+	const closeDrawer = useCallback(() => setActiveDrawer(null), []);
+
 	useGlitchOnLoad('[data-glitch-value]');
 	useClockGlitch('time-value');
 	useCoffeeGlitch('coffee-value');
@@ -79,39 +93,51 @@ export default function HomePage({ projects, skills }: HomePageProps) {
 				{/* Main content */}
 				<div className={styles.main}>
 					<div className={styles.header}>
-						<Heading as="h1" mb="8" className={styles.name}>
+						<Heading as="h1" mb={{ initial: '4', sm: '6', lg: '6' }} className={styles.name}>
 							Pat Jacobs
 						</Heading>
-						<Text as="p" size="1" weight="regular" className={styles.title}>
-							Software Engineer
+						<Text as="p" size="1" weight="bold" mb="4" className={styles.title}>
+							{'/// Software Engineer'}
 						</Text>
-						<DecorativeBlocks />
 					</div>
 
-					<div className={styles.projects}>
-						<Text as="p" size="1" color="gray" className={styles.projectsTitle}>
-							&mdash;
-						</Text>
-						<ul className={styles.projectList}>
-							{projects.map((project) => (
-								<li key={project.slug}>
-									<Link
-										href={`/projects/${project.slug}`}
-										className={styles.projectItem}
+					<nav className={styles.nav}>
+						<ul className={styles.navList}>
+							{navItems.map((item) => (
+								<li key={item}>
+									<button
+										type="button"
+										className={`${styles.navItem} ${activeDrawer === item ? styles.navItemActive : ''}`}
+										onMouseEnter={() => openDrawer(item)}
+										onClick={() => openDrawer(item)}
 									>
-										<div className={styles.projectIcon}>
-											<ProjectIconSvg icon={project.icon} />
-										</div>
-										<Text as="span" size="1">{project.name}</Text>
-									</Link>
+										<span className={styles.navCaret}>&gt;</span>
+										<Text as="span" size="1">
+											{item}
+										</Text>
+									</button>
 								</li>
 							))}
 						</ul>
-					</div>
+					</nav>
 				</div>
 
 				<SocialLinks links={socialLinks} />
 			</div>
+
+			{activeDrawer && (
+				<DrawerShell onClose={closeDrawer} key={activeDrawer}>
+					{activeDrawer === 'about' && <DrawerContent section={drawerData.about} />}
+					{activeDrawer === 'projects' && <ProjectsContent projects={drawerData.projects} />}
+					{activeDrawer === 'skills' && (
+						<SkillsContent
+							heading={drawerData.skillsSection?.heading?.replace(/_/g, ' ') ?? 'stuff i know'}
+							skills={drawerData.skills}
+						/>
+					)}
+					{activeDrawer === 'contact' && <ContactContent section={drawerData.contact} />}
+				</DrawerShell>
+			)}
 		</div>
 	);
 }

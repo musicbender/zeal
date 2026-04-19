@@ -1,11 +1,15 @@
 export {
-  getHomeProjects,
-  getAllProjects,
-  getProjectBySlug,
-  getNextProject,
-  getTechSkills,
-  type HygraphProject,
-  type HygraphTechSkill,
+	getAllProjects,
+	getHomeProjects,
+	getNextProject,
+	getProjectBySlug,
+	getSectionById,
+	getSkills,
+	getTechSkills,
+	type HygraphProject,
+	type HygraphSection,
+	type HygraphSkill,
+	type HygraphTechSkill,
 } from './hygraph';
 
 export type { RichTextAST, RichTextNode } from '@repo/utils/common/content';
