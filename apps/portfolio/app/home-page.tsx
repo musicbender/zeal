@@ -31,6 +31,7 @@ interface DrawerData {
 
 interface HomePageProps {
 	skills: { label: string; strength: number }[];
+	contactEnabled: boolean;
 	drawerData: DrawerData;
 }
 
@@ -40,9 +41,10 @@ const socialLinks = [
 	{ label: 'LINKEDIN', href: 'https://linkedin.com/in/patjacobs', external: true },
 ];
 
-const navItems: DrawerPage[] = ['about', 'projects', 'skills', 'contact'];
+const baseNavItems: DrawerPage[] = ['about', 'projects', 'skills'];
 
-export default function HomePage({ skills, drawerData }: HomePageProps) {
+export default function HomePage({ skills, contactEnabled, drawerData }: HomePageProps) {
+	const navItems = contactEnabled ? [...baseNavItems, 'contact' as DrawerPage] : baseNavItems;
 	const [activeDrawer, setActiveDrawer] = useState<DrawerPage | null>(null);
 
 	const openDrawer = useCallback((page: DrawerPage) => setActiveDrawer(page), []);
