@@ -54,7 +54,8 @@
 	margin-top: calc(-1 * var(--space-1));
 }
 
-.inputError {
+.input[data-invalid],
+.textarea[data-invalid] {
 	border-color: var(--color-glitch-red);
 }
 

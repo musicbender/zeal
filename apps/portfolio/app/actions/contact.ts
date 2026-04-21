@@ -35,15 +35,13 @@ export async function submitContactForm(
 
 	const result = contactSchema.safeParse(raw);
 
+	console.log('debug form action', { formData, raw, result });
+
 	if (!result.success) {
-		const fieldErrors = result.error.flatten().fieldErrors;
+		console.log('Validation failed', result.error);
 		return {
 			success: false,
-			errors: {
-				name: fieldErrors.name?.[0],
-				email: fieldErrors.email?.[0],
-				message: fieldErrors.message?.[0],
-			},
+			errors: result.error,
 		};
 	}
 
