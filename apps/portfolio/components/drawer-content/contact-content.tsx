@@ -4,8 +4,8 @@ import * as Form from '@radix-ui/react-form';
 import { Heading, Text } from '@radix-ui/themes';
 import type { HygraphSection } from '@repo/remote-data';
 import { renderRichTextNode } from '@repo/utils/common/content-renderer';
-import { useGlitchOnLoad } from '@repo/utils/hooks/glitch-effects';
-import { useActionState, useCallback, useState } from 'react';
+import { glitchText, useGlitchOnLoad } from '@repo/utils/hooks/glitch-effects';
+import { useActionState, useCallback, useEffect, useRef, useState } from 'react';
 import { submitContactForm, type ContactFormState } from '../../app/actions/contact';
 import styles from '../drawer-shell/drawer-shell.module.css';
 import contactStyles from './contact-content.module.css';
@@ -30,6 +30,15 @@ export function ContactContent({ section }: ContactContentProps) {
 		setServerErrors({});
 	}, []);
 
+	const successRef = useRef<HTMLSpanElement>(null);
+	useEffect(() => {
+		if (state.success && successRef.current) {
+			const el = successRef.current;
+			el.dataset.originalText = el.textContent || '';
+			glitchText(el, el.dataset.originalText, 4);
+		}
+	}, [state.success]);
+
 	const heading = section?.heading?.replace(/_/g, ' ') ?? 'contact me';
 
 	return (
@@ -51,8 +60,9 @@ export function ContactContent({ section }: ContactContentProps) {
 
 			{state.success ? (
 				<div className={contactStyles.success}>
-					<Text as="p" size="2" color="gray">
-						Message sent. I&apos;ll get back to you soon.
+					<Text as="p" size="2" className={contactStyles.successText}>
+						<span className={contactStyles.successCheck}>[&#x2713;]</span>
+						<span ref={successRef}>Message sent. I&apos;ll get back to you soon.</span>
 					</Text>
 				</div>
 			) : (
