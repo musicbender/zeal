@@ -48,6 +48,16 @@
 	letter-spacing: 0.05rem;
 }
 
+.fieldError {
+	color: var(--color-glitch-red);
+	letter-spacing: 0.05rem;
+	margin-top: calc(-1 * var(--space-1));
+}
+
+.inputError {
+	border-color: var(--color-glitch-red);
+}
+
 .submit {
 	align-self: flex-start;
 	background: none;

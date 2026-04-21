@@ -20,7 +20,8 @@
 		"POSTGRES_URL_NON_POOLING",
 		"POSTGRES_URL_NO_SSL",
 		"FLAGS",
-		"FLAGS_SECRET"
+		"FLAGS_SECRET",
+		"RESEND_API_KEY"
 	],
 	"tasks": {
 		"dev": {

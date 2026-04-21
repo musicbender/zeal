@@ -13,7 +13,7 @@ interface ContactContentProps {
 	section: HygraphSection | null;
 }
 
-const initialState: ContactFormState = { success: false, error: null };
+const initialState: ContactFormState = { success: false, errors: {} };
 
 export function ContactContent({ section }: ContactContentProps) {
 	useGlitchOnLoad('[data-drawer-glitch]');
@@ -45,7 +45,7 @@ export function ContactContent({ section }: ContactContentProps) {
 					</Text>
 				</div>
 			) : (
-				<form action={formAction} className={contactStyles.form}>
+				<form action={formAction} className={contactStyles.form} noValidate>
 					<div className={contactStyles.field}>
 						<label htmlFor="contact-name" className={contactStyles.label}>
 							name
@@ -56,8 +56,13 @@ export function ContactContent({ section }: ContactContentProps) {
 							type="text"
 							required
 							autoComplete="name"
-							className={contactStyles.input}
+							className={`${contactStyles.input} ${state.errors.name ? contactStyles.inputError : ''}`}
 						/>
+						{state.errors.name && (
+							<Text as="p" size="1" className={contactStyles.fieldError}>
+								{state.errors.name}
+							</Text>
+						)}
 					</div>
 
 					<div className={contactStyles.field}>
@@ -70,8 +75,13 @@ export function ContactContent({ section }: ContactContentProps) {
 							type="email"
 							required
 							autoComplete="email"
-							className={contactStyles.input}
+							className={`${contactStyles.input} ${state.errors.email ? contactStyles.inputError : ''}`}
 						/>
+						{state.errors.email && (
+							<Text as="p" size="1" className={contactStyles.fieldError}>
+								{state.errors.email}
+							</Text>
+						)}
 					</div>
 
 					<div className={contactStyles.field}>
@@ -83,13 +93,18 @@ export function ContactContent({ section }: ContactContentProps) {
 							name="message"
 							required
 							rows={5}
-							className={contactStyles.textarea}
+							className={`${contactStyles.textarea} ${state.errors.message ? contactStyles.inputError : ''}`}
 						/>
+						{state.errors.message && (
+							<Text as="p" size="1" className={contactStyles.fieldError}>
+								{state.errors.message}
+							</Text>
+						)}
 					</div>
 
-					{state.error && (
+					{state.errors.form && (
 						<Text as="p" size="1" className={contactStyles.error}>
-							{state.error}
+							{state.errors.form}
 						</Text>
 					)}
 

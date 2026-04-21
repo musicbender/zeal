@@ -1,45 +1,67 @@
 'use server';
 
+import { Resend } from 'resend';
+import { z } from 'zod';
+
 export interface ContactFormState {
 	success: boolean;
-	error: string | null;
+	errors: {
+		name?: string;
+		email?: string;
+		message?: string;
+		form?: string;
+	};
 }
+
+const contactSchema = z.object({
+	name: z.string().trim().min(2, 'Please enter your name.'),
+	email: z.string().trim().email('Please enter a valid email address.'),
+	message: z.string().trim().min(10, 'Message must be at least 10 characters.'),
+});
 
 function sanitize(input: string): string {
 	return input.trim().replace(/[<>]/g, '').slice(0, 5000);
-}
-
-function isValidEmail(email: string): boolean {
-	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 export async function submitContactForm(
 	_prev: ContactFormState,
 	formData: FormData
 ): Promise<ContactFormState> {
-	const name = sanitize(String(formData.get('name') ?? ''));
-	const email = sanitize(String(formData.get('email') ?? ''));
-	const message = sanitize(String(formData.get('message') ?? ''));
+	const raw = {
+		name: sanitize(String(formData.get('name') ?? '')),
+		email: sanitize(String(formData.get('email') ?? '')),
+		message: sanitize(String(formData.get('message') ?? '')),
+	};
 
-	if (!name || name.length < 2) {
-		return { success: false, error: 'Please enter your name.' };
+	const result = contactSchema.safeParse(raw);
+
+	if (!result.success) {
+		const fieldErrors = result.error.flatten().fieldErrors;
+		return {
+			success: false,
+			errors: {
+				name: fieldErrors.name?.[0],
+				email: fieldErrors.email?.[0],
+				message: fieldErrors.message?.[0],
+			},
+		};
 	}
 
-	if (!email || !isValidEmail(email)) {
-		return { success: false, error: 'Please enter a valid email address.' };
-	}
-
-	if (!message || message.length < 10) {
-		return { success: false, error: 'Message must be at least 10 characters.' };
-	}
+	const { name, email, message } = result.data;
 
 	try {
-		// TODO: Wire up email delivery (e.g. Resend, SendGrid, or mailto API)
-		// For now, log the submission on the server
-		console.log('[contact-form]', { name, email, message: message.slice(0, 100) });
+		const resend = new Resend(process.env.RESEND_API_KEY);
 
-		return { success: true, error: null };
+		await resend.emails.send({
+			from: 'Contact Form <onboarding@resend.dev>',
+			to: 'pat@patjacobs.com',
+			subject: `Portfolio contact from ${name}`,
+			replyTo: email,
+			text: `Name: ${name}\nEmail: ${email}\n\n${message}`,
+		});
+
+		return { success: true, errors: {} };
 	} catch {
-		return { success: false, error: 'Something went wrong. Please try again.' };
+		return { success: false, errors: { form: 'Something went wrong. Please try again.' } };
 	}
 }
