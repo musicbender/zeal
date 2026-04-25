@@ -57,6 +57,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Worktrees
+.worktrees
+
 # Misc
 .DS_Store
 *.pem
