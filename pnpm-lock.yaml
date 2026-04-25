@@ -102,9 +102,9 @@ importers:
       '@radix-ui/themes':
         specifier: 3.3.0
         version: 3.3.0(@types/react-dom@19.2.3)(@types/react@19.2.13)(react-dom@19.2.4)(react@19.2.4)
-      '@repo/neon-data':
+      '@repo/portfolio-data':
         specifier: workspace:*
-        version: link:../../packages/neon-data
+        version: link:../../packages/portfolio-data
       '@repo/remote-data':
         specifier: workspace:*
         version: link:../../packages/remote-data
@@ -289,7 +289,7 @@ importers:
         specifier: 5.5.4
         version: 5.5.4
 
-  packages/neon-data:
+  packages/portfolio-data:
     dependencies:
       '@repo/neon-client':
         specifier: workspace:*

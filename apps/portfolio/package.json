@@ -15,7 +15,7 @@
 	"dependencies": {
 		"@flags-sdk/vercel": "1.3.0",
 		"@radix-ui/themes": "3.3.0",
-		"@repo/neon-data": "workspace:*",
+		"@repo/portfolio-data": "workspace:*",
 		"@repo/remote-data": "workspace:*",
 		"@repo/ui": "workspace:*",
 		"@repo/utils": "workspace:*",
