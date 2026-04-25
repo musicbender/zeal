@@ -1,18 +1,18 @@
 import 'server-only';
 
-import { sql } from './client';
+import { sql } from '@repo/neon-client';
 import type { CreateRingDto, UpdateRingDto } from './dtos';
 import type { Ring } from './types';
 
 export async function getAllRings(): Promise<Ring[]> {
-  const rows = await sql()`
+	const rows = await sql()`
     SELECT * FROM rings ORDER BY created_on DESC
   `;
-  return rows as Ring[];
+	return rows as Ring[];
 }
 
 export async function createRing(dto: CreateRingDto): Promise<Ring> {
-  const rows = await sql()`
+	const rows = await sql()`
     INSERT INTO rings (
       name, description, base_material, other_materials,
       techniques, gemstones, size, weight_grams, images
@@ -30,11 +30,11 @@ export async function createRing(dto: CreateRingDto): Promise<Ring> {
     )
     RETURNING *
   `;
-  return rows[0] as Ring;
+	return rows[0] as Ring;
 }
 
 export async function updateRing(id: number, dto: UpdateRingDto): Promise<Ring | null> {
-  const rows = await sql()`
+	const rows = await sql()`
     UPDATE rings SET
       name             = COALESCE(${dto.name ?? null}, name),
       description      = COALESCE(${dto.description ?? null}, description),
@@ -48,12 +48,12 @@ export async function updateRing(id: number, dto: UpdateRingDto): Promise<Ring |
     WHERE id = ${id}
     RETURNING *
   `;
-  return (rows[0] as Ring) ?? null;
+	return (rows[0] as Ring) ?? null;
 }
 
 export async function deleteRing(id: number): Promise<boolean> {
-  const rows = await sql()`
+	const rows = await sql()`
     DELETE FROM rings WHERE id = ${id} RETURNING id
   `;
-  return rows.length > 0;
+	return rows.length > 0;
 }

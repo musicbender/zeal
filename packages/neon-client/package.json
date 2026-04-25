@@ -1,0 +1,24 @@
+{
+	"name": "@repo/neon-client",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"lint": "eslint . --max-warnings 50",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@neondatabase/serverless": "^0.10.4",
+		"server-only": "0.0.1"
+	},
+	"devDependencies": {
+		"@repo/eslint-config": "workspace:*",
+		"@repo/typescript-config": "workspace:*",
+		"@types/node": "^22.15.3",
+		"eslint": "^9.31.0",
+		"typescript": "5.5.4"
+	}
+}

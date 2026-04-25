@@ -1,25 +1,28 @@
 {
-	"name": "@repo/neon-data",
+	"name": "@repo/navi",
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
 	"exports": {
-		".": "./src/index.ts",
-		"./*": "./src/*.ts"
+		".": "./src/index.ts"
 	},
 	"scripts": {
 		"lint": "eslint . --max-warnings 50",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"register-commands": "tsx scripts/register-commands.ts"
 	},
 	"dependencies": {
-		"@neondatabase/serverless": "^0.10.4",
-		"server-only": "0.0.1"
+		"@repo/navi-data": "workspace:*"
 	},
 	"devDependencies": {
 		"@repo/eslint-config": "workspace:*",
 		"@repo/typescript-config": "workspace:*",
 		"@types/node": "^22.15.3",
 		"eslint": "^9.31.0",
-		"typescript": "5.5.4"
+		"tsx": "^4.19.4",
+		"typescript": "5.5.4",
+		"vitest": "4.0.18"
 	}
 }

@@ -96,9 +96,12 @@ importers:
       '@radix-ui/themes':
         specifier: 3.3.0
         version: 3.3.0(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@repo/neon-data':
+      '@repo/navi':
         specifier: workspace:*
-        version: link:../../packages/neon-data
+        version: link:../../packages/navi
+      '@repo/portfolio-data':
+        specifier: workspace:*
+        version: link:../../packages/portfolio-data
       '@repo/remote-data':
         specifier: workspace:*
         version: link:../../packages/remote-data
@@ -111,6 +114,9 @@ importers:
       '@vercel/toolbar':
         specifier: 0.2.2
         version: 0.2.2(next@16.2.3(@babel/core@7.29.0)(@playwright/test@1.59.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(vite@7.3.2(@types/node@22.19.17)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3))
+      discord-interactions:
+        specifier: ^4.1.0
+        version: 4.4.0
       flags:
         specifier: 4.0.6
         version: 4.0.6(next@16.2.3(@babel/core@7.29.0)(@playwright/test@1.59.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -258,11 +264,89 @@ importers:
         specifier: 5.5.4
         version: 5.5.4
 
-  packages/neon-data:
+  packages/navi:
+    dependencies:
+      '@repo/navi-data':
+        specifier: workspace:*
+        version: link:../navi-data
+    devDependencies:
+      '@repo/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.19.17
+      eslint:
+        specifier: ^9.31.0
+        version: 9.39.4
+      tsx:
+        specifier: ^4.19.4
+        version: 4.21.0
+      typescript:
+        specifier: 5.5.4
+        version: 5.5.4
+      vitest:
+        specifier: 4.0.18
+        version: 4.0.18(@types/node@22.19.17)(jsdom@26.1.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3)
+
+  packages/navi-data:
+    dependencies:
+      '@repo/neon-client':
+        specifier: workspace:*
+        version: link:../neon-client
+      server-only:
+        specifier: 0.0.1
+        version: 0.0.1
+    devDependencies:
+      '@repo/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.19.17
+      eslint:
+        specifier: ^9.31.0
+        version: 9.39.4
+      typescript:
+        specifier: 5.5.4
+        version: 5.5.4
+
+  packages/neon-client:
     dependencies:
       '@neondatabase/serverless':
         specifier: ^0.10.4
         version: 0.10.4
+      server-only:
+        specifier: 0.0.1
+        version: 0.0.1
+    devDependencies:
+      '@repo/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.19.17
+      eslint:
+        specifier: ^9.31.0
+        version: 9.39.4
+      typescript:
+        specifier: 5.5.4
+        version: 5.5.4
+
+  packages/portfolio-data:
+    dependencies:
+      '@repo/neon-client':
+        specifier: workspace:*
+        version: link:../neon-client
       server-only:
         specifier: 0.0.1
         version: 0.0.1
@@ -312,7 +396,7 @@ importers:
     devDependencies:
       prettier-plugin-organize-imports:
         specifier: ^4.3.0
-        version: 4.3.0(prettier@3.8.3)(typescript@5.5.4)
+        version: 4.3.0(prettier@3.8.3)(typescript@5.8.2)
 
   packages/typescript-config: {}
 
@@ -2622,6 +2706,10 @@ packages:
   diff@4.0.4:
     resolution: {integrity: sha512-X07nttJQkwkfKfvTPG/KSnE2OMdcUCao6+eXF3wmnIQRn2aPAHH3VxDbDOdegkd6JbPsXqShpvEOHfAT+nCNwQ==}
     engines: {node: '>=0.3.1'}
+
+  discord-interactions@4.4.0:
+    resolution: {integrity: sha512-jjJx8iwAeJcj8oEauV43fue9lNqkf38fy60aSs2+G8D1nJmDxUIrk08o3h0F3wgwuBWWJUZO+X/VgfXsxpCiJA==}
+    engines: {node: '>=18.4.0'}
 
   doctrine@2.1.0:
     resolution: {integrity: sha512-35mSku4ZXK0vfCuHEDAwt55dg2jNajHZ1odvF+8SSr82EsZY4QmXfuWso8oEd8zRhVObSN18aM0CjSdoBX7zIw==}
@@ -6639,6 +6727,8 @@ snapshots:
   detect-node-es@1.1.0: {}
 
   diff@4.0.4: {}
+
+  discord-interactions@4.4.0: {}
 
   doctrine@2.1.0:
     dependencies:
