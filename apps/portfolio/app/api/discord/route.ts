@@ -35,9 +35,14 @@ export async function POST(req: Request): Promise<Response> {
 	// APPLICATION_COMMAND
 	if (interaction.type === 2) {
 		const commandName = interaction.data?.name;
-		const handler = commandName ? commandHandlers[commandName] : undefined;
-		if (handler) {
-			return handler(interaction);
+		if (
+			typeof commandName === 'string' &&
+			Object.prototype.hasOwnProperty.call(commandHandlers, commandName)
+		) {
+			const handler = commandHandlers[commandName];
+			if (typeof handler === 'function') {
+				return handler(interaction);
+			}
 		}
 		return new Response('Unknown command', { status: 400 });
 	}
