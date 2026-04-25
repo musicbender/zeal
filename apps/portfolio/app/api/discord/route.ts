@@ -14,7 +14,11 @@ export async function POST(req: Request): Promise<Response> {
 	const body = await req.text();
 	const signature = req.headers.get('x-signature-ed25519') ?? '';
 	const timestamp = req.headers.get('x-signature-timestamp') ?? '';
-	const publicKey = process.env.DISCORD_PUBLIC_KEY ?? '';
+	const publicKey = process.env.DISCORD_PUBLIC_KEY;
+	if (!publicKey) {
+		console.error('DISCORD_PUBLIC_KEY environment variable is not set');
+		return new Response('Server misconfiguration', { status: 500 });
+	}
 
 	const isValid = await verifyKey(body, signature, timestamp, publicKey);
 	if (!isValid) {

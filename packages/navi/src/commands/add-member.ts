@@ -36,28 +36,32 @@ export async function handleAddMember(interaction: DiscordInteraction): Promise<
 		);
 	}
 
-	const existing = await getFamilyMemberByDiscordId(userId);
-	if (existing) {
-		return ephemeral(`<@${userId}> is already registered as "${existing.display_name}".`);
+	try {
+		const existing = await getFamilyMemberByDiscordId(userId);
+		if (existing) {
+			return ephemeral(`<@${userId}> is already registered as "${existing.display_name}".`);
+		}
+
+		const member = await createFamilyMember({
+			discord_user_id: userId,
+			display_name: displayName,
+			timezone,
+		});
+
+		const currentTime = new Intl.DateTimeFormat('en-US', {
+			timeZone: member.timezone,
+			hour: 'numeric',
+			minute: '2-digit',
+			hour12: true,
+		}).format(new Date());
+
+		return Response.json({
+			type: 4,
+			data: {
+				content: `Added **${member.display_name}** (<@${member.discord_user_id}>) with timezone \`${member.timezone}\`. Their current time is **${currentTime}**.`,
+			},
+		});
+	} catch {
+		return ephemeral('Something went wrong. Please try again later.');
 	}
-
-	const member = await createFamilyMember({
-		discord_user_id: userId,
-		display_name: displayName,
-		timezone,
-	});
-
-	const currentTime = new Intl.DateTimeFormat('en-US', {
-		timeZone: member.timezone,
-		hour: 'numeric',
-		minute: '2-digit',
-		hour12: true,
-	}).format(new Date());
-
-	return Response.json({
-		type: 4,
-		data: {
-			content: `Added **${member.display_name}** (<@${member.discord_user_id}>) with timezone \`${member.timezone}\`. Their current time is **${currentTime}**.`,
-		},
-	});
 }

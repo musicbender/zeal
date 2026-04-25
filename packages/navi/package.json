@@ -14,8 +14,7 @@
 		"register-commands": "tsx scripts/register-commands.ts"
 	},
 	"dependencies": {
-		"@repo/navi-data": "workspace:*",
-		"discord-interactions": "^4.1.0"
+		"@repo/navi-data": "workspace:*"
 	},
 	"devDependencies": {
 		"@repo/eslint-config": "workspace:*",

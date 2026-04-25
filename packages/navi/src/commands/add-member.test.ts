@@ -95,4 +95,21 @@ describe('handleAddMember', () => {
 		expect(body.data.content).toContain('already registered');
 		expect(createFamilyMember).not.toHaveBeenCalled();
 	});
+
+	it('returns ephemeral error when database throws', async () => {
+		vi.mocked(getFamilyMemberByDiscordId).mockRejectedValueOnce(new Error('DB connection failed'));
+
+		const response = await handleAddMember(
+			makeInteraction([
+				{ name: 'user', type: 6, value: '12345' },
+				{ name: 'name', type: 3, value: 'Pat' },
+				{ name: 'timezone', type: 3, value: 'America/New_York' },
+			])
+		);
+		const body = await response.json();
+
+		expect(body.type).toBe(4);
+		expect(body.data.flags).toBe(64);
+		expect(body.data.content).toContain('Something went wrong');
+	});
 });

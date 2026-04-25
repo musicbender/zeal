@@ -275,9 +275,6 @@ importers:
       '@repo/navi-data':
         specifier: workspace:*
         version: link:../navi-data
-      discord-interactions:
-        specifier: ^4.1.0
-        version: 4.4.0
     devDependencies:
       '@repo/eslint-config':
         specifier: workspace:*

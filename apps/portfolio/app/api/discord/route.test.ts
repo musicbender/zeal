@@ -62,9 +62,12 @@ describe('POST /api/discord', () => {
 		);
 
 		const interaction = { type: 2, data: { name: 'timezone' } };
-		await POST(makeRequest(interaction));
+		const res = await POST(makeRequest(interaction));
 
 		expect(handleTimezone).toHaveBeenCalledWith(interaction);
+		expect(res.status).toBe(200);
+		const body = await res.json();
+		expect(body.type).toBe(4);
 	});
 
 	it('dispatches add-member command', async () => {
@@ -74,15 +77,25 @@ describe('POST /api/discord', () => {
 		);
 
 		const interaction = { type: 2, data: { name: 'add-member' } };
-		await POST(makeRequest(interaction));
+		const res = await POST(makeRequest(interaction));
 
 		expect(handleAddMember).toHaveBeenCalledWith(interaction);
+		expect(res.status).toBe(200);
+		const body = await res.json();
+		expect(body.type).toBe(4);
 	});
 
 	it('returns 400 for unknown command', async () => {
 		vi.mocked(verifyKey).mockResolvedValueOnce(true);
 
 		const res = await POST(makeRequest({ type: 2, data: { name: 'unknown' } }));
+		expect(res.status).toBe(400);
+	});
+
+	it('returns 400 for unsupported interaction type', async () => {
+		vi.mocked(verifyKey).mockResolvedValueOnce(true);
+
+		const res = await POST(makeRequest({ type: 99 }));
 		expect(res.status).toBe(400);
 	});
 });
