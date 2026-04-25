@@ -3,13 +3,6 @@ import { verifyKey } from 'discord-interactions';
 
 type Interaction = { type: number; data?: { name: string } };
 
-type Handler = (interaction: Interaction) => Promise<Response>;
-
-const commandHandlers: Record<string, Handler> = {
-	timezone: handleTimezone as Handler,
-	'add-member': handleAddMember as Handler,
-};
-
 export async function POST(req: Request): Promise<Response> {
 	const body = await req.text();
 	const signature = req.headers.get('x-signature-ed25519') ?? '';
@@ -35,14 +28,11 @@ export async function POST(req: Request): Promise<Response> {
 	// APPLICATION_COMMAND
 	if (interaction.type === 2) {
 		const commandName = interaction.data?.name;
-		if (
-			typeof commandName === 'string' &&
-			Object.prototype.hasOwnProperty.call(commandHandlers, commandName)
-		) {
-			const handler = commandHandlers[commandName];
-			if (typeof handler === 'function') {
-				return handler(interaction);
-			}
+		if (commandName === 'timezone') {
+			return handleTimezone(interaction as Interaction);
+		}
+		if (commandName === 'add-member') {
+			return handleAddMember(interaction as Interaction);
 		}
 		return new Response('Unknown command', { status: 400 });
 	}
