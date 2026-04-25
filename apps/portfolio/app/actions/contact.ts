@@ -51,7 +51,7 @@ export async function submitContactForm(
 		const resend = new Resend(process.env.RESEND_API_KEY);
 
 		await resend.emails.send({
-			from: 'Contact Form <onboarding@resend.dev>',
+			from: 'Contact Form <onboarding@patjacobs.com>',
 			to: 'pat@patjacobs.com',
 			subject: `Portfolio contact from ${name}`,
 			replyTo: email,

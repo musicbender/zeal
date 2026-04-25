@@ -36,7 +36,7 @@ interface HomePageProps {
 }
 
 const socialLinks = [
-	{ label: 'EMAIL', href: 'mailto:pat@patjacobs.dev' },
+	{ label: 'EMAIL', href: 'mailto:pat@patjacobs.com' },
 	{ label: 'GITHUB', href: 'https://github.com/musicbender', external: true },
 	{ label: 'LINKEDIN', href: 'https://linkedin.com/in/patjacobs', external: true },
 ];
