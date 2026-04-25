@@ -1,18 +1,17 @@
 {
-	"name": "@repo/neon-data",
+	"name": "@repo/neon-client",
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
 	"exports": {
-		".": "./src/index.ts",
-		"./*": "./src/*.ts"
+		".": "./src/index.ts"
 	},
 	"scripts": {
 		"lint": "eslint . --max-warnings 50",
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@repo/neon-client": "workspace:*",
+		"@neondatabase/serverless": "^0.10.4",
 		"server-only": "0.0.1"
 	},
 	"devDependencies": {
