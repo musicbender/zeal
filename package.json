@@ -14,7 +14,8 @@
 		"test:e2e": "turbo run test:e2e",
 		"lint": "turbo run lint",
 		"format": "prettier --write \"**/*.{ts,tsx,md}\"",
-		"prepare": "husky"
+		"prepare": "husky",
+		"pull-env": "bash scripts/pull-env.sh"
 	},
 	"devDependencies": {
 		"@repo/eslint-config": "workspace:*",
