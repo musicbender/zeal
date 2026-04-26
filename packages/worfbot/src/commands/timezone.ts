@@ -1,25 +1,30 @@
-import type { FamilyMember } from '@repo/worfbot-data';
 import { getAllFamilyMembers } from '@repo/worfbot-data';
 import type { DiscordEmbed, DiscordInteraction } from '../discord/types';
 
-function formatTimeForTimezone(timezone: string): string {
-	return new Intl.DateTimeFormat('en-US', {
+function getLocalTimeInfo(timezone: string): { display: string; sortKey: number } {
+	const now = new Date();
+
+	const display = new Intl.DateTimeFormat('en-US', {
 		timeZone: timezone,
+		weekday: 'short',
 		hour: 'numeric',
 		minute: '2-digit',
-		weekday: 'short',
 		hour12: true,
-	}).format(new Date());
-}
+	}).format(now);
 
-function groupByTimezone(members: FamilyMember[]): Map<string, FamilyMember[]> {
-	const groups = new Map<string, FamilyMember[]>();
-	for (const member of members) {
-		const group = groups.get(member.timezone) ?? [];
-		group.push(member);
-		groups.set(member.timezone, group);
-	}
-	return groups;
+	const parts = new Intl.DateTimeFormat('en-US', {
+		timeZone: timezone,
+		day: 'numeric',
+		hour: '2-digit',
+		minute: '2-digit',
+		hourCycle: 'h23',
+	}).formatToParts(now);
+
+	const day = parseInt(parts.find((p) => p.type === 'day')?.value ?? '0');
+	const hour = parseInt(parts.find((p) => p.type === 'hour')?.value ?? '0');
+	const minute = parseInt(parts.find((p) => p.type === 'minute')?.value ?? '0');
+
+	return { display, sortKey: day * 1440 + hour * 60 + minute };
 }
 
 export async function handleTimezone(_interaction: DiscordInteraction): Promise<Response> {
@@ -34,25 +39,30 @@ export async function handleTimezone(_interaction: DiscordInteraction): Promise<
 		});
 	}
 
-	const groups = groupByTimezone(members);
-	const fields: DiscordEmbed['fields'] = [];
-
-	for (const [timezone, group] of groups) {
-		const time = formatTimeForTimezone(timezone);
-		const names = group.map((m) => m.display_name).join(', ');
-		fields.push({
-			name: `${timezone} \u2014 ${time}`,
-			value: names,
-			inline: false,
-		});
+	const groups = new Map<string, { names: string[]; sortKey: number }>();
+	for (const member of members) {
+		const { display, sortKey } = getLocalTimeInfo(member.timezone);
+		const group = groups.get(display) ?? { names: [], sortKey };
+		group.names.push(member.display_name);
+		groups.set(display, group);
 	}
+
+	const fields: DiscordEmbed['fields'] = [...groups.entries()]
+		.sort(([, a], [, b]) => a.sortKey - b.sortKey)
+		.map(([time, { names }]) => ({
+			name: time,
+			value: names.join(', '),
+			inline: false,
+		}));
 
 	return Response.json({
 		type: 4,
 		data: {
 			embeds: [
 				{
-					title: '\uD83C\uDF0D Family Timezones',
+					title: 'Time Check',
+					description:
+						'A warrior must know at all times whether his allies are sleeping or prepared for battle.',
 					fields,
 					color: 0x5865f2,
 				},
