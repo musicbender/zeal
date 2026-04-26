@@ -1,5 +1,5 @@
-import type { FamilyMember } from '@repo/navi-data';
-import { getAllFamilyMembers } from '@repo/navi-data';
+import type { FamilyMember } from '@repo/worfbot-data';
+import { getAllFamilyMembers } from '@repo/worfbot-data';
 import type { DiscordEmbed, DiscordInteraction } from '../discord/types';
 
 function formatTimeForTimezone(timezone: string): string {

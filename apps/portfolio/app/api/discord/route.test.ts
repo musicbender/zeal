@@ -5,12 +5,12 @@ vi.mock('discord-interactions', () => ({
 	verifyKey: vi.fn(),
 }));
 
-vi.mock('@repo/navi', () => ({
+vi.mock('@repo/worfbot', () => ({
 	handleTimezone: vi.fn(),
 	handleAddMember: vi.fn(),
 }));
 
-import { handleAddMember, handleTimezone } from '@repo/navi';
+import { handleAddMember, handleTimezone } from '@repo/worfbot';
 import { verifyKey } from 'discord-interactions';
 import { POST } from './route';
 
