@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@repo/navi-data', () => ({
+vi.mock('@repo/worfbot-data', () => ({
 	getAllFamilyMembers: vi.fn(),
 }));
 
-import { getAllFamilyMembers } from '@repo/navi-data';
+import { getAllFamilyMembers } from '@repo/worfbot-data';
 import type { DiscordInteraction } from '../discord/types';
 import { handleTimezone } from './timezone';
 

@@ -1,4 +1,4 @@
-import { createFamilyMember, getFamilyMemberByDiscordId } from '@repo/navi-data';
+import { createFamilyMember, getFamilyMemberByDiscordId } from '@repo/worfbot-data';
 import type { DiscordInteraction } from '../discord/types';
 
 function getOptionValue(interaction: DiscordInteraction, name: string): string | undefined {
