@@ -23,7 +23,8 @@
 		"FLAGS_SECRET",
 		"DISCORD_APP_ID",
 		"DISCORD_BOT_TOKEN",
-		"DISCORD_PUBLIC_KEY"
+		"DISCORD_PUBLIC_KEY",
+		"CRON_SECRET"
 	],
 	"tasks": {
 		"dev": {
