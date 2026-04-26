@@ -1,5 +1,5 @@
 {
-	"name": "@repo/navi",
+	"name": "@repo/worfbot",
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
@@ -14,7 +14,7 @@
 		"register-commands": "tsx --env-file=../../.env.local scripts/register-commands.ts"
 	},
 	"dependencies": {
-		"@repo/navi-data": "workspace:*"
+		"@repo/worfbot-data": "workspace:*"
 	},
 	"devDependencies": {
 		"@repo/eslint-config": "workspace:*",

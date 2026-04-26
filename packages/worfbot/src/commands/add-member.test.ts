@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@repo/navi-data', () => ({
+vi.mock('@repo/worfbot-data', () => ({
 	getFamilyMemberByDiscordId: vi.fn(),
 	createFamilyMember: vi.fn(),
 }));
 
-import { createFamilyMember, getFamilyMemberByDiscordId } from '@repo/navi-data';
+import { createFamilyMember, getFamilyMemberByDiscordId } from '@repo/worfbot-data';
 import type { DiscordInteraction } from '../discord/types';
 import { handleAddMember } from './add-member';
 

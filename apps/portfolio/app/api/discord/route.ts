@@ -1,4 +1,4 @@
-import { handleAddMember, handleTimezone } from '@repo/navi';
+import { handleAddMember, handleTimezone } from '@repo/worfbot';
 import { verifyKey } from 'discord-interactions';
 
 type Interaction = { type: number; data?: { name: string } };
