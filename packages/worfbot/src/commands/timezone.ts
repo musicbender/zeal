@@ -41,7 +41,7 @@ export async function handleTimezone(_interaction: DiscordInteraction): Promise<
 		const time = formatTimeForTimezone(timezone);
 		const names = group.map((m) => m.display_name).join(', ');
 		fields.push({
-			name: `${timezone} \u2014 ${time}`,
+			name: `${timezone} — ${time}`,
 			value: names,
 			inline: false,
 		});
@@ -52,7 +52,9 @@ export async function handleTimezone(_interaction: DiscordInteraction): Promise<
 		data: {
 			embeds: [
 				{
-					title: '\uD83C\uDF0D Family Timezones',
+					title: '🌍 Family Timezones',
+					description:
+						'A warrior must know at all times whether his allies are sleeping or prepared for battle.',
 					fields,
 					color: 0x5865f2,
 				},
