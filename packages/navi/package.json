@@ -11,7 +11,7 @@
 		"typecheck": "tsc --noEmit",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"register-commands": "tsx scripts/register-commands.ts"
+		"register-commands": "tsx --env-file=../../.env.local scripts/register-commands.ts"
 	},
 	"dependencies": {
 		"@repo/navi-data": "workspace:*"
