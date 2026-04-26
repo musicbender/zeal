@@ -1,4 +1,4 @@
-import { handleAddMember, handleTimezone } from '@repo/worfbot';
+import { handleAddMember, handleQuote, handleTimezone } from '@repo/worfbot';
 import { verifyKey } from 'discord-interactions';
 
 type Interaction = { type: number; data?: { name: string } };
@@ -33,6 +33,9 @@ export async function POST(req: Request): Promise<Response> {
 		}
 		if (commandName === 'add-member') {
 			return handleAddMember(interaction as Interaction);
+		}
+		if (commandName === 'quote') {
+			return handleQuote(interaction as Interaction);
 		}
 		return new Response('Unknown command', { status: 400 });
 	}
