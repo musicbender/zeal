@@ -22,9 +22,11 @@ export async function GET(req: Request): Promise<Response> {
 		return new Response('Unauthorized', { status: 401 });
 	}
 
+	const force = new URL(req.url).searchParams.get('force') === 'true';
+
 	// Cron fires at both 22:00 and 23:00 UTC to cover PST and PDT.
-	// Only proceed when it's actually 3 PM in Los Angeles.
-	if (getLAHour() !== 15) {
+	// Only proceed when it's actually 3 PM in Los Angeles (or force=true for testing).
+	if (!force && getLAHour() !== 15) {
 		return Response.json({ skipped: true });
 	}
 
