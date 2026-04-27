@@ -1,5 +1,6 @@
 import { getAllFamilyMembers } from '@repo/worfbot-data';
 import type { DiscordEmbed, DiscordInteraction } from '../discord/types';
+import { createEmbed } from '../theme';
 
 function getLocalTimeInfo(timezone: string): { display: string; sortKey: number } {
 	const now = new Date();
@@ -55,18 +56,15 @@ export async function handleTimezone(_interaction: DiscordInteraction): Promise<
 			inline: false,
 		}));
 
+	const embed = createEmbed('default')
+		.setTitle('Time Check')
+		.setDescription(
+			'A warrior must know at all times whether his allies are sleeping or prepared for battle.'
+		)
+		.addFields(fields ?? []);
+
 	return Response.json({
 		type: 4,
-		data: {
-			embeds: [
-				{
-					title: 'Time Check',
-					description:
-						'A warrior must know at all times whether his allies are sleeping or prepared for battle.',
-					fields,
-					color: 0x5865f2,
-				},
-			],
-		},
+		data: { embeds: [embed.toJSON()] },
 	});
 }

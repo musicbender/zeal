@@ -71,7 +71,8 @@ describe('GET /api/cron/video-chat', () => {
 		expect(url).toContain(CHANNEL_ID);
 		const sent = JSON.parse(init.body as string);
 		expect(sent.content).toContain('@everyone');
-		expect(sent.content).toContain('https://meet.google.com/rra-mtmz-khi');
+		expect(sent.embeds).toHaveLength(1);
+		expect(sent.embeds[0].description).toContain('https://meet.google.com/rra-mtmz-khi');
 	});
 
 	it('posts when force=true regardless of current hour', async () => {
@@ -81,8 +82,8 @@ describe('GET /api/cron/video-chat', () => {
 		expect(res.status).toBe(200);
 		expect(body.ok).toBe(true);
 		expect(mockFetch).toHaveBeenCalledOnce();
-  });
-  
+	});
+
 	it('returns 500 with Discord error when API call fails', async () => {
 		vi.setSystemTime(AT_3PM_PDT);
 		mockFetch.mockResolvedValueOnce(

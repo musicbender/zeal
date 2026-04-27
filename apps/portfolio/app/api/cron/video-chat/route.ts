@@ -1,8 +1,7 @@
+import { createEmbed } from '@repo/worfbot/theme';
+
 const CHANNEL_ID = '798427261971202049';
 const MEET_LINK = 'https://meet.google.com/rra-mtmz-khi';
-const MESSAGE =
-	`@everyone — The hour of the family council is upon us. ` +
-	`Warriors do not linger. They assemble. Join the war room without delay: ${MEET_LINK}`;
 
 function getLAHour(): number {
 	const parts = new Intl.DateTimeFormat('en-US', {
@@ -38,8 +37,16 @@ export async function GET(req: Request): Promise<Response> {
 			'Content-Type': 'application/json',
 		},
 		body: JSON.stringify({
-			content: MESSAGE,
+			content: '@everyone',
 			allowed_mentions: { parse: ['everyone'] },
+			embeds: [
+				createEmbed('announcement')
+					.setTitle('⚔️ Family Council')
+					.setDescription(
+						`The hour of the family council is upon us. Warriors do not linger. They assemble.\n\n[Join the war room](${MEET_LINK})`
+					)
+					.toJSON(),
+			],
 		}),
 	});
 
