@@ -73,6 +73,19 @@ describe('GET /api/cron/video-chat', () => {
 		expect(sent.content).toContain('https://meet.google.com/rra-mtmz-khi');
 	});
 
+	it('returns 500 with Discord error when API call fails', async () => {
+		vi.setSystemTime(AT_3PM_PDT);
+		mockFetch.mockResolvedValueOnce(
+			new Response('{"code":50013,"message":"Missing Permissions"}', { status: 403 })
+		);
+
+		const res = await GET(makeRequest(CRON_SECRET));
+		const body = await res.json();
+		expect(res.status).toBe(500);
+		expect(body.status).toBe(403);
+		expect(body.error).toContain('Missing Permissions');
+	});
+
 	it('posts with correct Discord auth header', async () => {
 		vi.setSystemTime(AT_3PM_PDT);
 		await GET(makeRequest(CRON_SECRET));
