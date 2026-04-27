@@ -4,7 +4,8 @@
 	"private": true,
 	"type": "module",
 	"exports": {
-		".": "./src/index.ts"
+		".": "./src/index.ts",
+		"./theme": "./src/theme.ts"
 	},
 	"scripts": {
 		"lint": "eslint . --max-warnings 50",
@@ -14,7 +15,8 @@
 		"register-commands": "tsx --env-file=../../.env.local scripts/register-commands.ts"
 	},
 	"dependencies": {
-		"@repo/worfbot-data": "workspace:*"
+		"@repo/worfbot-data": "workspace:*",
+		"discord.js": "14.26.3"
 	},
 	"devDependencies": {
 		"@repo/eslint-config": "workspace:*",

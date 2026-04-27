@@ -1,8 +1,7 @@
+import { createEmbed } from '@repo/worfbot/theme';
+
 const CHANNEL_ID = '798427261971202049';
 const MEET_LINK = 'https://meet.google.com/rra-mtmz-khi';
-const MESSAGE =
-	`@everyone — The hour of the family council is upon us. ` +
-	`Warriors do not linger. They assemble. Join the war room without delay: ${MEET_LINK}`;
 
 function getLAHour(): number {
 	const parts = new Intl.DateTimeFormat('en-US', {
@@ -22,24 +21,40 @@ export async function GET(req: Request): Promise<Response> {
 		return new Response('Unauthorized', { status: 401 });
 	}
 
+	const force = new URL(req.url).searchParams.get('force') === 'true';
+
 	// Cron fires at both 22:00 and 23:00 UTC to cover PST and PDT.
-	// Only proceed when it's actually 3 PM in Los Angeles.
-	if (getLAHour() !== 15) {
+	// Only proceed when it's actually 3 PM in Los Angeles (or force=true for testing).
+	if (!force && getLAHour() !== 15) {
 		return Response.json({ skipped: true });
 	}
 
 	const token = process.env.DISCORD_BOT_TOKEN;
-	await fetch(`https://discord.com/api/v10/channels/${CHANNEL_ID}/messages`, {
+	const discordRes = await fetch(`https://discord.com/api/v10/channels/${CHANNEL_ID}/messages`, {
 		method: 'POST',
 		headers: {
 			Authorization: `Bot ${token}`,
 			'Content-Type': 'application/json',
 		},
 		body: JSON.stringify({
-			content: MESSAGE,
+			content: '@everyone',
 			allowed_mentions: { parse: ['everyone'] },
+			embeds: [
+				createEmbed('announcement')
+					.setTitle('⚔️ Family Council')
+					.setDescription(
+						`The hour of the family council is upon us. Warriors do not linger. They assemble.\n\n[Join the war room](${MEET_LINK})`
+					)
+					.toJSON(),
+			],
 		}),
 	});
+
+	if (!discordRes.ok) {
+		const error = await discordRes.text();
+		console.error(`Discord API error ${discordRes.status}: ${error}`);
+		return Response.json({ error, status: discordRes.status }, { status: 500 });
+	}
 
 	return Response.json({ ok: true });
 }

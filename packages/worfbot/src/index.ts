@@ -3,3 +3,4 @@ export { commands } from './commands/definitions';
 export { handleQuote } from './commands/quote';
 export { handleTimezone } from './commands/timezone';
 export { default as worfQuotes } from './quotes.json';
+export { colors, createEmbed, theme } from './theme';
