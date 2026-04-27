@@ -9,8 +9,9 @@ import { GET } from './route';
 const CRON_SECRET = 'test-cron-secret';
 const CHANNEL_ID = '798427261971202049';
 
-function makeRequest(secret?: string): Request {
-	return new Request('http://localhost/api/cron/video-chat', {
+function makeRequest(secret?: string, force = false): Request {
+	const url = `http://localhost/api/cron/video-chat${force ? '?force=true' : ''}`;
+	return new Request(url, {
 		headers: secret ? { authorization: `Bearer ${secret}` } : {},
 	});
 }
@@ -73,6 +74,15 @@ describe('GET /api/cron/video-chat', () => {
 		expect(sent.content).toContain('https://meet.google.com/rra-mtmz-khi');
 	});
 
+	it('posts when force=true regardless of current hour', async () => {
+		vi.setSystemTime(AT_2PM_PDT); // wrong time, but force bypasses the check
+		const res = await GET(makeRequest(CRON_SECRET, true));
+		const body = await res.json();
+		expect(res.status).toBe(200);
+		expect(body.ok).toBe(true);
+		expect(mockFetch).toHaveBeenCalledOnce();
+  });
+  
 	it('returns 500 with Discord error when API call fails', async () => {
 		vi.setSystemTime(AT_3PM_PDT);
 		mockFetch.mockResolvedValueOnce(
