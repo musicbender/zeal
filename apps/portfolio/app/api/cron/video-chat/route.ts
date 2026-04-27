@@ -31,7 +31,7 @@ export async function GET(req: Request): Promise<Response> {
 	}
 
 	const token = process.env.DISCORD_BOT_TOKEN;
-	await fetch(`https://discord.com/api/v10/channels/${CHANNEL_ID}/messages`, {
+	const discordRes = await fetch(`https://discord.com/api/v10/channels/${CHANNEL_ID}/messages`, {
 		method: 'POST',
 		headers: {
 			Authorization: `Bot ${token}`,
@@ -42,6 +42,12 @@ export async function GET(req: Request): Promise<Response> {
 			allowed_mentions: { parse: ['everyone'] },
 		}),
 	});
+
+	if (!discordRes.ok) {
+		const error = await discordRes.text();
+		console.error(`Discord API error ${discordRes.status}: ${error}`);
+		return Response.json({ error, status: discordRes.status }, { status: 500 });
+	}
 
 	return Response.json({ ok: true });
 }
