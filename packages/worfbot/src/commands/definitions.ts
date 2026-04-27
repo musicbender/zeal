@@ -4,6 +4,10 @@ export const commands = [
 		description: 'Show current local times for all family members',
 	},
 	{
+		name: 'quote',
+		description: 'Receive wisdom from Worf',
+	},
+	{
 		name: 'add-member',
 		description: 'Add a family member with their timezone',
 		options: [

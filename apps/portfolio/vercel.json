@@ -1,0 +1,12 @@
+{
+	"crons": [
+		{
+			"path": "/api/cron/video-chat",
+			"schedule": "0 22 * * 0"
+		},
+		{
+			"path": "/api/cron/video-chat",
+			"schedule": "0 23 * * 0"
+		}
+	]
+}
