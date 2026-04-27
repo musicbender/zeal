@@ -14,7 +14,8 @@
 		"register-commands": "tsx --env-file=../../.env.local scripts/register-commands.ts"
 	},
 	"dependencies": {
-		"@repo/worfbot-data": "workspace:*"
+		"@repo/worfbot-data": "workspace:*",
+		"discord.js": "14.26.3"
 	},
 	"devDependencies": {
 		"@repo/eslint-config": "workspace:*",
