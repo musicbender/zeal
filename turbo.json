@@ -45,6 +45,10 @@
 		},
 		"register-commands": {
 			"cache": false
+		},
+		"start": {
+			"cache": false,
+			"persistent": true
 		}
 	}
 }
