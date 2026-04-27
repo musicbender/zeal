@@ -12,8 +12,8 @@ export const colors = {
 
 export const theme = {
 	embed: {
-		/** Default embed color — neutral iron-steel gray for standard responses. */
-		default: colors.ironSteel,
+		/** Default embed color — klingon gold as the primary Worfbot identity color. */
+		default: colors.klingonGold,
 		/** Announcement embed color — klingon gold for high-visibility broadcasts. */
 		announcement: colors.klingonGold,
 		/** Alert embed color — blood crimson for warnings and errors. */

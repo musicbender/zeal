@@ -13,14 +13,15 @@ const mockInteraction: DiscordInteraction = {
 };
 
 describe('handleQuote', () => {
-	it('returns a message containing a quote from the list', async () => {
+	it('returns an embed containing a quote from the list', async () => {
 		const response = await handleQuote(mockInteraction);
 		const body = await response.json();
 
 		expect(body.type).toBe(4);
-		const content: string = body.data.content;
+		expect(body.data.embeds).toHaveLength(1);
+		const description: string = body.data.embeds[0].description;
 		const isKnownQuote = ['Honor is everything.', 'Today is a good day to die.'].some((q) =>
-			content.includes(q)
+			description.includes(q)
 		);
 		expect(isKnownQuote).toBe(true);
 	});
@@ -34,8 +35,8 @@ describe('handleQuote', () => {
 		const body1 = await res1.json();
 		const body2 = await res2.json();
 
-		expect(body1.data.content).toContain('Honor is everything.');
-		expect(body2.data.content).toContain('Today is a good day to die.');
+		expect(body1.data.embeds[0].description).toContain('Honor is everything.');
+		expect(body2.data.embeds[0].description).toContain('Today is a good day to die.');
 
 		vi.restoreAllMocks();
 	});
