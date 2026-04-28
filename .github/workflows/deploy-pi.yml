@@ -1,0 +1,102 @@
+name: Deploy to Raspberry Pi
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    name: Detect affected Pi apps
+    runs-on: ubuntu-latest
+    outputs:
+      gaspar: ${{ steps.parse.outputs.gaspar }}
+      worfbot-gateway: ${{ steps.parse.outputs.worfbot-gateway }}
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Detect affected packages
+        id: parse
+        run: |
+          AFFECTED=$(pnpm turbo run build --affected --dry-run=json 2>/dev/null)
+          GASPAR=$(echo "$AFFECTED" | jq -r 'if ((.packages // []) | map(select(. == "gaspar")) | length) > 0 then "true" else "false" end')
+          WORFBOT=$(echo "$AFFECTED" | jq -r 'if ((.packages // []) | map(select(. == "worfbot-gateway")) | length) > 0 then "true" else "false" end')
+          echo "gaspar=$GASPAR" >> "$GITHUB_OUTPUT"
+          echo "worfbot-gateway=$WORFBOT" >> "$GITHUB_OUTPUT"
+
+  deploy-gaspar:
+    name: Deploy gaspar
+    needs: detect
+    if: needs.detect.outputs.gaspar == 'true'
+    runs-on: [self-hosted, pi]
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm turbo run build --filter=gaspar
+
+      - name: Write secrets file
+        run: printf 'DATABASE_URL=%s\n' "$DATABASE_URL" | sudo tee /etc/gaspar/env > /dev/null
+
+      - run: sudo systemctl restart gaspar
+
+  deploy-worfbot-gateway:
+    name: Deploy worfbot-gateway
+    needs: detect
+    if: needs.detect.outputs.worfbot-gateway == 'true'
+    runs-on: [self-hosted, pi]
+    env:
+      DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+      DISCORD_APP_ID: ${{ secrets.DISCORD_APP_ID }}
+      DISCORD_PUBLIC_KEY: ${{ secrets.DISCORD_PUBLIC_KEY }}
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm turbo run build --filter=worfbot-gateway
+
+      - name: Write secrets file
+        run: |
+          printf 'DISCORD_BOT_TOKEN=%s\nDISCORD_APP_ID=%s\nDISCORD_PUBLIC_KEY=%s\n' \
+            "$DISCORD_BOT_TOKEN" "$DISCORD_APP_ID" "$DISCORD_PUBLIC_KEY" \
+            | sudo tee /etc/worfbot-gateway/env > /dev/null
+
+      - run: sudo systemctl restart worfbot-gateway
