@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 User=pi
-WorkingDirectory=/home/pi/actions-runner/_work/zeal/zeal/apps/worfbot-gateway
+WorkingDirectory=/home/magus/apps/actions-runner/_work/zeal/zeal/apps/worfbot-gateway
 ExecStart=/usr/bin/node dist/main.js
 EnvironmentFile=/etc/worfbot-gateway/env
 Restart=on-failure
