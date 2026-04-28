@@ -45,6 +45,7 @@ jobs:
     needs: detect
     if: needs.detect.outputs.gaspar == 'true'
     runs-on: [self-hosted, magus]
+    environment: pi-production
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
@@ -73,6 +74,7 @@ jobs:
     needs: detect
     if: needs.detect.outputs.worfbot-gateway == 'true'
     runs-on: [self-hosted, magus]
+    environment: pi-production
     env:
       DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
       DISCORD_APP_ID: ${{ secrets.DISCORD_APP_ID }}
