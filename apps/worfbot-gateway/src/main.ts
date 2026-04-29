@@ -21,7 +21,7 @@ function todayString(): string {
 }
 
 client.on(Events.ClientReady, () => {
-	console.log(`Worfbot Gateway ready — logged in as ${client.user?.tag}`);
+	console.log(`Yay! Worfbot Gateway ready — logged in as ${client.user?.tag}`);
 });
 
 client.on(Events.MessageCreate, async (message) => {
