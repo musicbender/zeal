@@ -5,7 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "tsx --watch src/main.ts",
-		"build": "tsc",
+		"build": "tsup",
 		"start": "node dist/main.js",
 		"start:prod": "node dist/main.js",
 		"typecheck": "tsc --noEmit",
@@ -31,6 +31,7 @@
 		"eslint": "^9.31.0",
 		"prettier-plugin-organize-imports": "^4.3.0",
 		"prisma": "^5.0.0",
+		"tsup": "^8.5.1",
 		"tsx": "^4.7.0",
 		"typescript": "5.5.4",
 		"vitest": "^4.0.18"
