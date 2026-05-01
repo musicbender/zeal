@@ -35,7 +35,7 @@
 			"dependsOn": ["^build"],
 			"outputs": [".next/**", "!.next/cache/**", "dist/**"]
 		},
-		"prisma:generate": {},
+		"prisma:generate": { "cache": false },
 		"prisma:migrate": {},
 		"typecheck": {},
 		"lint": {},
