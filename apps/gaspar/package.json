@@ -16,8 +16,8 @@
 		"prisma:migrate": "prisma migrate deploy"
 	},
 	"dependencies": {
-		"@fastify/cors": "^8.4.2",
-		"@fastify/helmet": "^11.1.1",
+		"@fastify/cors": "^11.2.0",
+		"@fastify/helmet": "^13.0.2",
 		"@prisma/client": "^5.0.0",
 		"@repo/gaspar-data": "workspace:*",
 		"@repo/types": "workspace:*",

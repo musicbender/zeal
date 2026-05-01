@@ -1,5 +1,7 @@
 import { findMatchingQuote } from '@repo/worfbot';
 import { Client, Events, GatewayIntentBits } from 'discord.js';
+import 'dotenv/config';
+import { createServer } from 'node:http';
 
 // MESSAGE_CONTENT is a privileged intent.
 // Enable it in Discord Developer Portal:
@@ -42,3 +44,16 @@ client.on(Events.MessageCreate, async (message) => {
 const token = process.env.DISCORD_BOT_TOKEN;
 if (!token) throw new Error('DISCORD_BOT_TOKEN is required');
 client.login(token);
+
+const healthPort = process.env.HEALTH_PORT ? parseInt(process.env.HEALTH_PORT) : 3001;
+createServer((req, res) => {
+	if (req.url === '/health' && req.method === 'GET') {
+		res.writeHead(200, { 'Content-Type': 'application/json' });
+		res.end(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString() }));
+	} else {
+		res.writeHead(404);
+		res.end();
+	}
+}).listen(healthPort, '0.0.0.0', () => {
+	console.log(`Health check listening on port ${healthPort}`);
+});

@@ -48,6 +48,7 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter gaspar prisma:generate
       - run: pnpm turbo typecheck --affected
 
   test:
@@ -69,4 +70,5 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter gaspar prisma:generate
       - run: pnpm turbo test --affected
