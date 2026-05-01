@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@prisma/client/extension', () => {
+vi.mock('@prisma/client', () => {
 	return {
 		PrismaClient: class {
 			sensor = {};

@@ -69,4 +69,5 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run prisma:generate --filter=gaspar
       - run: pnpm turbo test --affected
