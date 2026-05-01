@@ -4,9 +4,9 @@ After=network.target
 
 [Service]
 Type=simple
-User=pi
+User=magus
 WorkingDirectory=/home/magus/apps/actions-runner/_work/zeal/zeal/apps/worfbot-gateway
-ExecStart=/usr/bin/node dist/main.js
+ExecStart=/usr/local/bin/node dist/main.js
 EnvironmentFile=/etc/worfbot-gateway/env
 Restart=on-failure
 RestartSec=5
