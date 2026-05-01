@@ -64,6 +64,8 @@ jobs:
 
       - run: pnpm turbo run build --filter=gaspar
 
+      - run: pnpm --filter gaspar prisma:generate
+
       - name: Write secrets file
         run: printf 'DATABASE_URL=%s\n' "$DATABASE_URL" | sudo tee /etc/gaspar/env > /dev/null
 
