@@ -1,15 +1,14 @@
 import { MagusStatsGrid } from '@/components/magus-stats-grid/magus-stats-grid';
 import { ServiceCard } from '@/components/service-card/service-card';
+import { getApiBaseUrl } from '@/lib/config';
 import { SERVICE_REGISTRY } from '@/lib/services';
 import type { MagusStats, ServiceHealth } from '@repo/magus-data';
 
 import styles from './page.module.css';
 
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3002';
-
-async function getMagusStats(): Promise<MagusStats | null> {
+async function getMagusStats(baseUrl: string): Promise<MagusStats | null> {
 	try {
-		const res = await fetch(`${BASE_URL}/api/magus-stats`, { next: { revalidate: 0 } });
+		const res = await fetch(`${baseUrl}/api/magus-stats`, { next: { revalidate: 0 } });
 		if (!res.ok) return null;
 		return res.json() as Promise<MagusStats>;
 	} catch {
@@ -17,9 +16,9 @@ async function getMagusStats(): Promise<MagusStats | null> {
 	}
 }
 
-async function getServiceHealth(name: string): Promise<ServiceHealth | null> {
+async function getServiceHealth(baseUrl: string, name: string): Promise<ServiceHealth | null> {
 	try {
-		const res = await fetch(`${BASE_URL}/api/services/${name}`, { next: { revalidate: 0 } });
+		const res = await fetch(`${baseUrl}/api/services/${name}`, { next: { revalidate: 0 } });
 		if (!res.ok) return null;
 		return res.json() as Promise<ServiceHealth>;
 	} catch {
@@ -28,10 +27,16 @@ async function getServiceHealth(name: string): Promise<ServiceHealth | null> {
 }
 
 export default async function HomePage() {
-	const [stats, ...serviceHealths] = await Promise.all([
-		getMagusStats(),
-		...SERVICE_REGISTRY.map((s) => getServiceHealth(s.name)),
+	const baseUrl = getApiBaseUrl();
+	const results = await Promise.allSettled([
+		getMagusStats(baseUrl),
+		...SERVICE_REGISTRY.map((s) => getServiceHealth(baseUrl, s.name)),
 	]);
+
+	const stats = results[0].status === 'fulfilled' ? (results[0].value as MagusStats | null) : null;
+	const serviceHealths = results
+		.slice(1)
+		.map((r) => (r.status === 'fulfilled' ? (r.value as ServiceHealth | null) : null));
 
 	return (
 		<div>
