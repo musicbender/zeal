@@ -12,10 +12,10 @@ interface UptimeBarProps {
 }
 
 const STATUS_COLOR: Record<ServiceStatus, string> = {
-	healthy: styles.blockHealthy ?? '',
-	degraded: styles.blockDegraded ?? '',
-	down: styles.blockDown ?? '',
-	unknown: styles.blockUnknown ?? '',
+	healthy: styles.blockHealthy as string,
+	degraded: styles.blockDegraded as string,
+	down: styles.blockDown as string,
+	unknown: styles.blockUnknown as string,
 };
 
 function formatTimestamp(ts: string): string {
@@ -28,11 +28,12 @@ export function UptimeBar({ checks }: UptimeBarProps) {
 
 	return (
 		<div className={styles.bar}>
-			{visible.map((check, i) => (
+			{visible.map((check) => (
 				<div
-					key={i}
+					key={`${check.timestamp}-${check.status}`}
 					className={`${styles.block} ${STATUS_COLOR[check.status]}`}
 					title={`${formatTimestamp(check.timestamp)} — ${check.status}`}
+					aria-label={`${formatTimestamp(check.timestamp)}: ${check.status}`}
 				/>
 			))}
 			{visible.length === 0 && <div className={`${styles.block} ${styles.blockUnknown}`} />}

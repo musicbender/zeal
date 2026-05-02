@@ -2,23 +2,13 @@ import { Card, Flex, Heading, Link, Text } from '@radix-ui/themes';
 import type { ServiceConfig, ServiceHealth } from '@repo/magus-data';
 
 import { StatusBadge } from '@/components/status-badge/status-badge';
+import { formatUptime } from '@/lib/format';
 
 import styles from './service-card.module.css';
 
 interface ServiceCardProps {
 	service: ServiceConfig;
 	health: ServiceHealth | null;
-}
-
-function formatUptime(seconds: number): string {
-	const days = Math.floor(seconds / 86400);
-	const hours = Math.floor((seconds % 86400) / 3600);
-	const minutes = Math.floor((seconds % 3600) / 60);
-	const parts: string[] = [];
-	if (days > 0) parts.push(`${days}d`);
-	if (hours > 0) parts.push(`${hours}h`);
-	parts.push(`${minutes}m`);
-	return parts.join(' ');
 }
 
 export function ServiceCard({ service, health }: ServiceCardProps) {
@@ -46,10 +36,18 @@ export function ServiceCard({ service, health }: ServiceCardProps) {
 				)}
 
 				<Flex gap="3" mt="1">
-					<Link href={`/services/${service.name}`} size="2">
+					<Link
+						href={`/services/${service.name}`}
+						size="2"
+						aria-label={`Details for ${service.displayName}`}
+					>
 						Details
 					</Link>
-					<Link href={`/logs/${service.name}`} size="2">
+					<Link
+						href={`/logs/${service.name}`}
+						size="2"
+						aria-label={`Logs for ${service.displayName}`}
+					>
 						Logs
 					</Link>
 				</Flex>

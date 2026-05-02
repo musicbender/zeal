@@ -24,7 +24,11 @@ export function Sidebar() {
 				<Separator size="4" />
 
 				<Flex direction="column" gap="1">
-					<Link href="/" className={navClass('/')}>
+					<Link
+						href="/"
+						className={navClass('/')}
+						aria-current={pathname === '/' ? 'page' : undefined}
+					>
 						Home
 					</Link>
 				</Flex>
@@ -40,6 +44,7 @@ export function Sidebar() {
 							key={service.name}
 							href={`/services/${service.name}`}
 							className={navClass(`/services/${service.name}`)}
+							aria-current={pathname === `/services/${service.name}` ? 'page' : undefined}
 						>
 							{service.displayName}
 						</Link>
@@ -57,6 +62,7 @@ export function Sidebar() {
 							key={service.name}
 							href={`/logs/${service.name}`}
 							className={navClass(`/logs/${service.name}`)}
+							aria-current={pathname === `/logs/${service.name}` ? 'page' : undefined}
 						>
 							{service.displayName}
 						</Link>

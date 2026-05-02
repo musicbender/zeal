@@ -93,12 +93,13 @@ export function LogViewer({ initialLogs, service }: LogViewerProps) {
 				<Flex align="center" gap="3">
 					<Flex align="center" gap="2">
 						<Switch
+							id="auto-refresh"
+							aria-label="Auto-refresh logs"
 							checked={autoRefresh}
 							onCheckedChange={setAutoRefresh}
 							size="1"
-							id="auto-refresh"
 						/>
-						<Text as="label" htmlFor="auto-refresh" size="2" color="gray">
+						<Text size="2" color="gray">
 							Auto-refresh
 						</Text>
 					</Flex>
@@ -115,8 +116,11 @@ export function LogViewer({ initialLogs, service }: LogViewerProps) {
 							No log entries.
 						</Text>
 					) : (
-						filtered.map((entry, i) => (
-							<div key={i} className={styles.logRow}>
+						filtered.map((entry) => (
+							<div
+								key={`${entry.timestamp}-${entry.level}-${entry.message.slice(0, 20)}`}
+								className={styles.logRow}
+							>
 								<Text size="1" color="gray" className={styles.timestamp}>
 									{formatTime(entry.timestamp)}
 								</Text>

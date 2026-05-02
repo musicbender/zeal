@@ -1,21 +1,12 @@
 import { Card, Flex, Progress, Text } from '@radix-ui/themes';
 import type { MagusStats } from '@repo/magus-data';
 
+import { formatUptime } from '@/lib/format';
+
 import styles from './magus-stats-grid.module.css';
 
 interface MagusStatsGridProps {
 	stats: MagusStats;
-}
-
-function formatUptime(seconds: number): string {
-	const days = Math.floor(seconds / 86400);
-	const hours = Math.floor((seconds % 86400) / 3600);
-	const minutes = Math.floor((seconds % 3600) / 60);
-	const parts: string[] = [];
-	if (days > 0) parts.push(`${days}d`);
-	if (hours > 0) parts.push(`${hours}h`);
-	parts.push(`${minutes}m`);
-	return parts.join(' ');
 }
 
 function progressColor(pct: number): 'green' | 'yellow' | 'red' {
@@ -46,6 +37,7 @@ function StatCard({ label, value, percent }: StatCardProps) {
 						color={progressColor(percent)}
 						size="1"
 						className={styles.progress}
+						aria-label={`${label} usage: ${Math.round(percent)}%`}
 					/>
 				)}
 			</Flex>
