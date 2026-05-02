@@ -81,16 +81,25 @@ After=network.target
 
 [Service]
 Type=simple
-User=pi
-WorkingDirectory=/home/pi/zeal/apps/fiendlord-keep-ui
+User=magus
+WorkingDirectory=/home/magus/apps/actions-runner/_work/zeal/zeal/apps/fiendlord-keep-ui
+EnvironmentFile=/etc/fiendlord-keep/env
 Environment=NODE_ENV=production
-Environment=API_BASE_URL=http://localhost:3002
+Environment=PORT=3002
+Environment=HOSTNAME=0.0.0.0
 ExecStart=/usr/bin/node .next/standalone/server.js
 Restart=on-failure
 RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
+```
+
+Create the env file directory before first deploy:
+
+```bash
+sudo mkdir -p /etc/fiendlord-keep
+sudo touch /etc/fiendlord-keep/env
 ```
 
 Enable and start the service:
