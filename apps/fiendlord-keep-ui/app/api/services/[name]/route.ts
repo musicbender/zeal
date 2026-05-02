@@ -1,9 +1,12 @@
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 
 import type { ServiceHealth } from '@repo/magus-data';
 import { NextResponse } from 'next/server';
 
 import { getServiceByName } from '@/lib/services';
+
+const execFileAsync = promisify(execFile);
 
 async function checkHttpHealth(port: number, isHomebridge: boolean): Promise<ServiceHealth> {
 	const controller = new AbortController();
@@ -44,32 +47,22 @@ async function checkHttpHealth(port: number, isHomebridge: boolean): Promise<Ser
 	}
 }
 
-function checkSystemdHealth(systemdUnit: string): ServiceHealth {
+async function checkSystemdHealth(systemdUnit: string): Promise<ServiceHealth> {
 	try {
-		const output = execSync(
-			`systemctl list-units --state=active --no-legend '${systemdUnit}.*' 2>/dev/null`,
-			{
-				encoding: 'utf8',
-			}
-		).trim();
-
-		const isActive = output.length > 0;
-
-		if (isActive) {
-			return { status: 'healthy', checkedAt: new Date().toISOString() };
-		}
-
+		const { stdout } = await execFileAsync('systemctl', [
+			'list-units',
+			'--state=active',
+			'--no-legend',
+			`${systemdUnit}.*`,
+		]);
+		const isActive = stdout.trim().length > 0;
 		return {
-			status: 'down',
-			message: 'systemd unit is not active',
+			status: isActive ? 'healthy' : 'down',
+			message: isActive ? undefined : 'systemd unit is not active',
 			checkedAt: new Date().toISOString(),
 		};
 	} catch {
-		return {
-			status: 'unknown',
-			message: 'Could not query systemd',
-			checkedAt: new Date().toISOString(),
-		};
+		return { status: 'down', message: 'systemd check failed', checkedAt: new Date().toISOString() };
 	}
 }
 
@@ -86,8 +79,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ nam
 	try {
 		if (!serviceConfig.port) {
 			// No HTTP endpoint — use systemd check (e.g. github-runner)
-			health = checkSystemdHealth(serviceConfig.systemdUnit);
+			health = await checkSystemdHealth(serviceConfig.systemdUnit);
 		} else {
+			// homebridge-config-ui-x requires bearer token authentication
 			const isHomebridge = serviceConfig.name === 'homebridge';
 			health = await checkHttpHealth(serviceConfig.port, isHomebridge);
 		}
