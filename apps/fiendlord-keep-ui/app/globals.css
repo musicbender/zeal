@@ -1,0 +1,21 @@
+@import '@radix-ui/themes/styles.css';
+
+:root {
+	--sidebar-width: 220px;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+.app-shell {
+	display: flex;
+	min-height: 100vh;
+}
+
+.main-content {
+	flex: 1;
+	margin-left: var(--sidebar-width);
+	padding: 2rem;
+	overflow-y: auto;
+}

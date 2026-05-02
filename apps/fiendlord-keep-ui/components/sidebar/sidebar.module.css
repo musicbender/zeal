@@ -1,0 +1,50 @@
+.sidebar {
+	position: fixed;
+	left: 0;
+	top: 0;
+	height: 100vh;
+	width: var(--sidebar-width, 220px);
+	background-color: var(--gray-2);
+	border-right: 1px solid var(--gray-4);
+	padding: var(--space-4);
+	overflow-y: auto;
+	z-index: 100;
+}
+
+.appName {
+	letter-spacing: 0.08em;
+	color: var(--teal-11);
+	padding: var(--space-1) 0;
+}
+
+.sectionHeader {
+	letter-spacing: 0.06em;
+	padding: var(--space-1) var(--space-2);
+	margin-bottom: var(--space-1);
+}
+
+.navLink {
+	display: block;
+	padding: var(--space-1) var(--space-2);
+	border-radius: var(--radius-2);
+	color: var(--gray-11);
+	text-decoration: none;
+	font-size: var(--font-size-2);
+	transition:
+		background-color 0.15s ease,
+		color 0.15s ease;
+}
+
+.navLink:hover {
+	background-color: var(--gray-4);
+	color: var(--gray-12);
+}
+
+.active {
+	background-color: var(--teal-3);
+	color: var(--teal-11);
+}
+
+.active:hover {
+	background-color: var(--teal-4);
+}
