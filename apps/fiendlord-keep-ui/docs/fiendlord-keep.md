@@ -87,7 +87,7 @@ EnvironmentFile=/etc/fiendlord-keep/env
 Environment=NODE_ENV=production
 Environment=PORT=3002
 Environment=HOSTNAME=0.0.0.0
-ExecStart=/usr/bin/node .next/standalone/server.js
+ExecStart=/home/magus/apps/actions-runner/_work/zeal/zeal/node_modules/.bin/next start
 Restart=on-failure
 RestartSec=5
 
