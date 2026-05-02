@@ -1,0 +1,50 @@
+.container {
+	width: 100%;
+}
+
+.scrollArea {
+	height: 500px;
+	border: 1px solid var(--gray-4);
+	border-radius: var(--radius-3);
+}
+
+.logList {
+	padding: var(--space-2);
+}
+
+.logRow {
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-2);
+	padding: var(--space-1) var(--space-2);
+	border-radius: var(--radius-1);
+}
+
+.logRow:nth-child(even) {
+	background-color: var(--gray-2);
+}
+
+.timestamp {
+	font-family: var(--font-mono, monospace);
+	flex-shrink: 0;
+	width: 7ch;
+}
+
+.levelBadge {
+	flex-shrink: 0;
+	width: 5.5ch;
+	text-align: center;
+	justify-content: center;
+}
+
+.message {
+	font-family: var(--font-mono, monospace);
+	word-break: break-word;
+	white-space: pre-wrap;
+}
+
+.empty {
+	padding: var(--space-4);
+	text-align: center;
+	display: block;
+}
