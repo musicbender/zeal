@@ -46,17 +46,22 @@ async function checkHttpHealth(port: number, isHomebridge: boolean): Promise<Ser
 
 function checkSystemdHealth(systemdUnit: string): ServiceHealth {
 	try {
-		const output = execSync(`systemctl is-active ${systemdUnit}.* 2>/dev/null || echo inactive`, {
-			encoding: 'utf8',
-		}).trim();
+		const output = execSync(
+			`systemctl list-units --state=active --no-legend '${systemdUnit}.*' 2>/dev/null`,
+			{
+				encoding: 'utf8',
+			}
+		).trim();
 
-		if (output === 'active') {
+		const isActive = output.length > 0;
+
+		if (isActive) {
 			return { status: 'healthy', checkedAt: new Date().toISOString() };
 		}
 
 		return {
 			status: 'down',
-			message: `systemd unit is ${output}`,
+			message: 'systemd unit is not active',
 			checkedAt: new Date().toISOString(),
 		};
 	} catch {
