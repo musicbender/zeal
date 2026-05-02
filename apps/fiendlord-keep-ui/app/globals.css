@@ -1,0 +1,9 @@
+@import '@radix-ui/themes/styles.css';
+
+:root {
+	--sidebar-width: 220px;
+}
+
+* {
+	box-sizing: border-box;
+}
