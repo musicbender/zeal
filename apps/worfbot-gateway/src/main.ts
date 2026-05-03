@@ -37,10 +37,12 @@ client.on(Events.MessageCreate, async (message) => {
 
 	const today = todayString();
 	const skipRateLimit = process.env.SKIP_RATE_LIMIT === 'true';
+
 	if (!skipRateLimit) {
 		if (repliedToday.get(message.author.id) === today) return;
 		repliedToday.set(message.author.id, today);
 	}
+
 	await message.reply(quote);
 });
 

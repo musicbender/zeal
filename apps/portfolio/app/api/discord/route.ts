@@ -40,6 +40,8 @@ export async function POST(req: Request): Promise<Response> {
 		if (commandName === 'quote') {
 			return handleQuote(interaction as Interaction);
 		}
+
+		log.warn({ commandName }, 'Unknown discord command.');
 		return new Response('Unknown command', { status: 400 });
 	}
 

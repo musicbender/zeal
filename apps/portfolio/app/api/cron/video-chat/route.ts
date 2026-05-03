@@ -30,6 +30,7 @@ export async function GET(req: Request): Promise<Response> {
 	// Cron fires at both 22:00 and 23:00 UTC to cover PST and PDT.
 	// Only proceed when it's actually 3 PM in Los Angeles (or force=true for testing).
 	if (!force && getLAHour() !== 15) {
+		log.info('Cron skipped due to not being 3pm PST');
 		return Response.json({ skipped: true });
 	}
 
