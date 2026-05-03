@@ -130,7 +130,10 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm turbo run build --filter=fiendlord-keep-ui
+      - run: pnpm --filter fiendlord-keep-ui build
+
+      - name: Verify build output
+        run: test -f apps/fiendlord-keep-ui/.next/BUILD_ID || (echo "ERROR: .next/BUILD_ID missing after build" && exit 1)
 
       - name: Write secrets file
         run: |
