@@ -133,7 +133,11 @@ jobs:
       - run: pnpm --filter fiendlord-keep-ui build
 
       - name: Verify build output
-        run: test -f apps/fiendlord-keep-ui/.next/BUILD_ID || (echo "ERROR: .next/BUILD_ID missing after build" && exit 1)
+        run: |
+          if [ ! -f apps/fiendlord-keep-ui/.next/BUILD_ID ]; then
+            echo "ERROR: .next/BUILD_ID missing after build"
+            exit 1
+          fi
 
       - name: Write secrets file
         run: |
