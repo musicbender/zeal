@@ -1,5 +1,9 @@
 'use server';
 
+import { initLogger } from '@repo/logger/server';
+
+const log = initLogger('contact-form');
+
 export interface ContactFormState {
 	success: boolean;
 	error: string | null;
@@ -36,7 +40,7 @@ export async function submitContactForm(
 	try {
 		// TODO: Wire up email delivery (e.g. Resend, SendGrid, or mailto API)
 		// For now, log the submission on the server
-		console.log('[contact-form]', { name, email, message: message.slice(0, 100) });
+		log.info({ name, email, message: message.slice(0, 100) }, 'Contact form submitted');
 
 		return { success: true, error: null };
 	} catch {
