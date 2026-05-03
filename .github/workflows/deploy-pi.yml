@@ -3,6 +3,20 @@ name: Deploy to Raspberry Pi
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      gaspar:
+        description: Deploy gaspar
+        type: boolean
+        default: false
+      worfbot-gateway:
+        description: Deploy worfbot-gateway
+        type: boolean
+        default: false
+      fiendlord-keep-ui:
+        description: Deploy fiendlord-keep-ui
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -35,13 +49,19 @@ jobs:
       - name: Detect affected packages
         id: parse
         run: |
-          AFFECTED=$(pnpm turbo run build --affected --dry-run=json 2>/dev/null)
-          GASPAR=$(echo "$AFFECTED" | jq -r 'if ((.packages // []) | map(select(. == "gaspar")) | length) > 0 then "true" else "false" end')
-          WORFBOT=$(echo "$AFFECTED" | jq -r 'if ((.packages // []) | map(select(. == "worfbot-gateway")) | length) > 0 then "true" else "false" end')
-          FIENDLORD=$(echo "$AFFECTED" | jq -r 'if ((.packages // []) | map(select(. == "fiendlord-keep-ui")) | length) > 0 then "true" else "false" end')
-          echo "gaspar=$GASPAR" >> "$GITHUB_OUTPUT"
-          echo "worfbot-gateway=$WORFBOT" >> "$GITHUB_OUTPUT"
-          echo "fiendlord-keep-ui=$FIENDLORD" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "gaspar=${{ inputs.gaspar }}" >> "$GITHUB_OUTPUT"
+            echo "worfbot-gateway=${{ inputs['worfbot-gateway'] }}" >> "$GITHUB_OUTPUT"
+            echo "fiendlord-keep-ui=${{ inputs['fiendlord-keep-ui'] }}" >> "$GITHUB_OUTPUT"
+          else
+            AFFECTED=$(pnpm turbo run build --affected --dry-run=json 2>/dev/null)
+            GASPAR=$(echo "$AFFECTED" | jq -r 'if ((.packages // []) | map(select(. == "gaspar")) | length) > 0 then "true" else "false" end')
+            WORFBOT=$(echo "$AFFECTED" | jq -r 'if ((.packages // []) | map(select(. == "worfbot-gateway")) | length) > 0 then "true" else "false" end')
+            FIENDLORD=$(echo "$AFFECTED" | jq -r 'if ((.packages // []) | map(select(. == "fiendlord-keep-ui")) | length) > 0 then "true" else "false" end')
+            echo "gaspar=$GASPAR" >> "$GITHUB_OUTPUT"
+            echo "worfbot-gateway=$WORFBOT" >> "$GITHUB_OUTPUT"
+            echo "fiendlord-keep-ui=$FIENDLORD" >> "$GITHUB_OUTPUT"
+          fi
 
   deploy-gaspar:
     name: Deploy gaspar
