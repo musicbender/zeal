@@ -27,4 +27,20 @@ describe('client logger', () => {
 		expect(() => logger.info('test message')).not.toThrow();
 		expect(() => logger.info({ foo: 'bar' }, 'with object')).not.toThrow();
 	});
+
+	it('initLogger returns a RepoLogger-compatible object', async () => {
+		const { initLogger } = await import('../client.js');
+		const log = initLogger('TestComponent');
+		expect(typeof log.info).toBe('function');
+	});
+
+	it('initLogger returns the same instance for the same name (cache)', async () => {
+		const { initLogger } = await import('../client.js');
+		expect(initLogger('SameComponent')).toBe(initLogger('SameComponent'));
+	});
+
+	it('initLogger returns different instances for different names', async () => {
+		const { initLogger } = await import('../client.js');
+		expect(initLogger('CompA')).not.toBe(initLogger('CompB'));
+	});
 });

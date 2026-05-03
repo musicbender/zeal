@@ -27,4 +27,20 @@ describe('server logger', () => {
 		const child = logger.child({ service: 'gaspar' });
 		expect(typeof child.info).toBe('function');
 	});
+
+	it('initLogger returns a RepoLogger-compatible object', async () => {
+		const { initLogger } = await import('../server.js');
+		const log = initLogger('TestModule');
+		expect(typeof log.info).toBe('function');
+	});
+
+	it('initLogger returns the same instance for the same name (cache)', async () => {
+		const { initLogger } = await import('../server.js');
+		expect(initLogger('SameModule')).toBe(initLogger('SameModule'));
+	});
+
+	it('initLogger returns different instances for different names', async () => {
+		const { initLogger } = await import('../server.js');
+		expect(initLogger('ModuleA')).not.toBe(initLogger('ModuleB'));
+	});
 });

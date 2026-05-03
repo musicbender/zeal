@@ -27,3 +27,12 @@ if (!(globalThis as Record<string, unknown>)[key]) {
 }
 
 export const logger: RepoLogger = (globalThis as Record<string, unknown>)[key] as RepoLogger;
+
+const childCache = new Map<string, RepoLogger>();
+
+// Call at module level (top of file) to get a named child logger.
+// All log lines from the child will include a `name` field.
+export function initLogger(name: string): RepoLogger {
+	if (!childCache.has(name)) childCache.set(name, logger.child({ name }));
+	return childCache.get(name)!;
+}
