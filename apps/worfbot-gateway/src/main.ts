@@ -1,7 +1,10 @@
+import { initLogger } from '@repo/logger/server';
 import { findMatchingQuote } from '@repo/worfbot';
 import { Client, Events, GatewayIntentBits } from 'discord.js';
 import 'dotenv/config';
 import { createServer } from 'node:http';
+
+const log = initLogger('worfbot-gateway');
 
 // MESSAGE_CONTENT is a privileged intent.
 // Enable it in Discord Developer Portal:
@@ -23,7 +26,7 @@ function todayString(): string {
 }
 
 client.on(Events.ClientReady, () => {
-	console.log(`Yay! Worfbot Gateway ready — logged in as ${client.user?.tag}`);
+	log.info({ tag: client.user?.tag }, 'Worfbot Gateway ready');
 });
 
 client.on(Events.MessageCreate, async (message) => {
@@ -34,10 +37,12 @@ client.on(Events.MessageCreate, async (message) => {
 
 	const today = todayString();
 	const skipRateLimit = process.env.SKIP_RATE_LIMIT === 'true';
+
 	if (!skipRateLimit) {
 		if (repliedToday.get(message.author.id) === today) return;
 		repliedToday.set(message.author.id, today);
 	}
+
 	await message.reply(quote);
 });
 
@@ -55,5 +60,5 @@ createServer((req, res) => {
 		res.end();
 	}
 }).listen(healthPort, '0.0.0.0', () => {
-	console.log(`Health check listening on port ${healthPort}`);
+	log.info({ port: healthPort }, 'Health check listening');
 });

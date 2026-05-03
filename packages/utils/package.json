@@ -5,6 +5,7 @@
 	"type": "module",
 	"exports": {
 		"./common/content-renderer": "./src/common/content-renderer.tsx",
+		"./common/is-server": "./src/common/is-server.ts",
 		"./*": "./src/*.ts"
 	},
 	"scripts": {

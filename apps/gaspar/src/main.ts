@@ -1,5 +1,6 @@
 import fastifyCors from '@fastify/cors';
 import fastifyHelmet from '@fastify/helmet';
+import { logger } from '@repo/logger/server';
 import 'dotenv/config';
 import fastify from 'fastify';
 import { registerAppRoutes } from './app.routes';
@@ -10,7 +11,7 @@ import { registerSensorRoutes } from './sensors/sensors.routes';
 import { SensorService } from './sensors/sensors.service';
 
 async function bootstrap() {
-	const server = fastify({ logger: true });
+	const server = fastify({ logger: false });
 
 	// Initialize Prisma
 	const prismaService = new PrismaService();
@@ -32,13 +33,13 @@ async function bootstrap() {
 	// Start server
 	const port = process.env.PORT || 3000;
 	await server.listen({ port: Number(port), host: '0.0.0.0' });
-	console.log(`Yay! Server running on http://localhost:${port}`);
+	logger.info({ port }, 'Server running');
 
 	// Graceful shutdown
 	const signals = ['SIGTERM', 'SIGINT'];
 	signals.forEach((signal) => {
 		process.on(signal, async () => {
-			console.log(`Received ${signal}, shutting down gracefully...`);
+			logger.info({ signal }, 'Received signal, shutting down gracefully');
 			await server.close();
 			await prismaService.$disconnect();
 			process.exit(0);
@@ -47,6 +48,6 @@ async function bootstrap() {
 }
 
 void bootstrap().catch((err) => {
-	console.error('Failed to start server:', err);
+	logger.error({ err }, 'Failed to start server');
 	process.exit(1);
 });

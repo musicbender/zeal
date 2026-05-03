@@ -1,8 +1,11 @@
 import { LogViewer } from '@/components/log-viewer/log-viewer';
 import { getApiBaseUrl } from '@/lib/config';
 import { getServiceByName } from '@/lib/services';
+import { initLogger } from '@repo/logger/server';
 import type { LogEntry } from '@repo/magus-data';
 import { notFound } from 'next/navigation';
+
+const log = initLogger('page/logs');
 
 export default async function LogsPage({ params }: { params: Promise<{ service: string }> }) {
 	const { service: serviceName } = await params;
@@ -17,8 +20,8 @@ export default async function LogsPage({ params }: { params: Promise<{ service: 
 			next: { revalidate: 0 },
 		});
 		if (res.ok) initialLogs = (await res.json()) as LogEntry[];
-	} catch {
-		// logs unavailable
+	} catch (err) {
+		log.warn({ serviceName, err }, 'Failed to fetch initial logs');
 	}
 
 	return (

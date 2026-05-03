@@ -1,5 +1,8 @@
+import { initLogger } from '@repo/logger/server';
 import { handleAddMember, handleQuote, handleTimezone } from '@repo/worfbot';
 import { verifyKey } from 'discord-interactions';
+
+const log = initLogger('api/discord');
 
 type Interaction = { type: number; data?: { name: string } };
 
@@ -9,7 +12,7 @@ export async function POST(req: Request): Promise<Response> {
 	const timestamp = req.headers.get('x-signature-timestamp') ?? '';
 	const publicKey = process.env.DISCORD_PUBLIC_KEY;
 	if (!publicKey) {
-		console.error('DISCORD_PUBLIC_KEY environment variable is not set');
+		log.error('DISCORD_PUBLIC_KEY environment variable is not set');
 		return new Response('Server misconfiguration', { status: 500 });
 	}
 
@@ -37,6 +40,8 @@ export async function POST(req: Request): Promise<Response> {
 		if (commandName === 'quote') {
 			return handleQuote(interaction as Interaction);
 		}
+
+		log.warn({ commandName }, 'Unknown discord command.');
 		return new Response('Unknown command', { status: 400 });
 	}
 

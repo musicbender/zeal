@@ -1,0 +1,28 @@
+{
+	"name": "@repo/logger",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts",
+		"./server": "./src/server.ts",
+		"./client": "./src/client.ts",
+		"./common": "./src/common.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run",
+		"test:watch": "vitest"
+	},
+	"dependencies": {
+		"@repo/utils": "workspace:*",
+		"pino": "^9.7.0",
+		"pino-pretty": "^13.0.0"
+	},
+	"devDependencies": {
+		"@repo/typescript-config": "workspace:*",
+		"@types/node": "^22.15.3",
+		"typescript": "5.8.2",
+		"vitest": "4.0.18"
+	}
+}
