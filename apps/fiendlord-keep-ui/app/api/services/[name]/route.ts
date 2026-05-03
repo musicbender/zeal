@@ -1,8 +1,11 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 
+import { initLogger } from '@repo/logger/server';
 import type { ServiceHealth } from '@repo/magus-data';
 import { NextResponse } from 'next/server';
+
+const log = initLogger('api/services');
 
 import { getServiceByName } from '@/lib/services';
 
@@ -37,6 +40,7 @@ async function checkHttpHealth(port: number, isHomebridge: boolean): Promise<Ser
 		};
 	} catch (err) {
 		const message = err instanceof Error ? err.message : 'Unknown error';
+		log.warn({ port, err }, 'HTTP health check failed');
 		return {
 			status: 'down',
 			message,
@@ -61,7 +65,8 @@ async function checkSystemdHealth(systemdUnit: string): Promise<ServiceHealth> {
 			message: isActive ? undefined : 'systemd unit is not active',
 			checkedAt: new Date().toISOString(),
 		};
-	} catch {
+	} catch (err) {
+		log.warn({ systemdUnit, err }, 'systemd health check failed');
 		return { status: 'down', message: 'systemd check failed', checkedAt: new Date().toISOString() };
 	}
 }
@@ -87,6 +92,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ nam
 		}
 	} catch (err) {
 		const message = err instanceof Error ? err.message : 'Unknown error';
+		log.error({ name, err }, 'Unexpected error during health check');
 		health = {
 			status: 'unknown',
 			message,

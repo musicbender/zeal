@@ -1,7 +1,10 @@
 import { cpuTemperature, currentLoad, fsSize, mem, time } from 'systeminformation';
 
+import { initLogger } from '@repo/logger/server';
 import type { MagusStats } from '@repo/magus-data';
 import { NextResponse } from 'next/server';
+
+const log = initLogger('api/magus-stats');
 
 export async function GET() {
 	try {
@@ -22,7 +25,8 @@ export async function GET() {
 		};
 
 		return NextResponse.json(stats);
-	} catch {
+	} catch (err) {
+		log.error({ err }, 'Failed to read system stats');
 		return NextResponse.json({ error: 'Failed to read system stats' }, { status: 500 });
 	}
 }

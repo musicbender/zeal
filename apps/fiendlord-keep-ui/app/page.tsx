@@ -2,7 +2,10 @@ import { MagusStatsGrid } from '@/components/magus-stats-grid/magus-stats-grid';
 import { ServiceCard } from '@/components/service-card/service-card';
 import { getApiBaseUrl } from '@/lib/config';
 import { SERVICE_REGISTRY } from '@/lib/services';
+import { initLogger } from '@repo/logger/server';
 import type { MagusStats, ServiceHealth } from '@repo/magus-data';
+
+const log = initLogger('page/home');
 
 import styles from './page.module.css';
 
@@ -11,7 +14,8 @@ async function getMagusStats(baseUrl: string): Promise<MagusStats | null> {
 		const res = await fetch(`${baseUrl}/api/magus-stats`, { next: { revalidate: 0 } });
 		if (!res.ok) return null;
 		return res.json() as Promise<MagusStats>;
-	} catch {
+	} catch (err) {
+		log.warn({ err }, 'Failed to fetch magus stats');
 		return null;
 	}
 }
@@ -21,7 +25,8 @@ async function getServiceHealth(baseUrl: string, name: string): Promise<ServiceH
 		const res = await fetch(`${baseUrl}/api/services/${name}`, { next: { revalidate: 0 } });
 		if (!res.ok) return null;
 		return res.json() as Promise<ServiceHealth>;
-	} catch {
+	} catch (err) {
+		log.warn({ name, err }, 'Failed to fetch service health');
 		return null;
 	}
 }
