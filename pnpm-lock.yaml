@@ -120,6 +120,9 @@ importers:
       '@repo/gaspar-data':
         specifier: workspace:*
         version: link:../../packages/gaspar-data
+      '@repo/logger':
+        specifier: workspace:*
+        version: link:../../packages/logger
       '@repo/types':
         specifier: workspace:*
         version: link:../../packages/types
