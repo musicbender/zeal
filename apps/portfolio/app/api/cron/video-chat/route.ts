@@ -1,4 +1,7 @@
+import { initLogger } from '@repo/logger/server';
 import { createEmbed } from '@repo/worfbot/theme';
+
+const log = initLogger('cron/video-chat');
 
 const CHANNEL_ID = '798427261971202049';
 const MEET_LINK = 'https://meet.google.com/rra-mtmz-khi';
@@ -14,6 +17,7 @@ function getLAHour(): number {
 }
 
 export async function GET(req: Request): Promise<Response> {
+	log.info('Cron triggered');
 	const secret = process.env.CRON_SECRET;
 	const auth = req.headers.get('authorization');
 
@@ -26,6 +30,7 @@ export async function GET(req: Request): Promise<Response> {
 	// Cron fires at both 22:00 and 23:00 UTC to cover PST and PDT.
 	// Only proceed when it's actually 3 PM in Los Angeles (or force=true for testing).
 	if (!force && getLAHour() !== 15) {
+		log.info('Cron skipped due to not being 3pm PST');
 		return Response.json({ skipped: true });
 	}
 
@@ -52,9 +57,10 @@ export async function GET(req: Request): Promise<Response> {
 
 	if (!discordRes.ok) {
 		const error = await discordRes.text();
-		console.error(`Discord API error ${discordRes.status}: ${error}`);
+		log.error({ status: discordRes.status, error }, 'Discord API error');
 		return Response.json({ error, status: discordRes.status }, { status: 500 });
 	}
 
+	log.info({ channelId: CHANNEL_ID }, 'Video chat announcement sent');
 	return Response.json({ ok: true });
 }

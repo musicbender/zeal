@@ -48,6 +48,11 @@ jobs:
 
       - name: Detect affected packages
         id: parse
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_GASPAR: ${{ inputs.gaspar }}
+          INPUT_WORFBOT: ${{ inputs['worfbot-gateway'] }}
+          INPUT_FIENDLORD: ${{ inputs['fiendlord-keep-ui'] }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "gaspar=${{ inputs.gaspar }}" >> "$GITHUB_OUTPUT"

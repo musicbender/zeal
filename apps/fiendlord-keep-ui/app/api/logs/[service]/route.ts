@@ -1,8 +1,11 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 
+import { initLogger } from '@repo/logger/server';
 import type { LogEntry } from '@repo/magus-data';
 import { NextResponse } from 'next/server';
+
+const log = initLogger('api/logs');
 
 import { getServiceByName } from '@/lib/services';
 
@@ -82,8 +85,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ serv
 					service: serviceConfig.name,
 				} satisfies LogEntry;
 			});
-	} catch {
+	} catch (err) {
 		// journalctl unavailable (not on Pi) or service not found — return empty
+		log.debug({ service: serviceConfig.name, err }, 'journalctl unavailable');
 		entries = [];
 	}
 
