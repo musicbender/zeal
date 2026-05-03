@@ -22,5 +22,6 @@ export default defineConfig({
 	outDir: 'dist',
 	clean: true,
 	noExternal: [/^@repo\//],
+	external: ['pino', 'pino-pretty'],
 	esbuildPlugins: [serverOnlyStub],
 });
