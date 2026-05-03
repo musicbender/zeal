@@ -48,11 +48,16 @@ jobs:
 
       - name: Detect affected packages
         id: parse
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_GASPAR: ${{ inputs.gaspar }}
+          INPUT_WORFBOT: ${{ inputs['worfbot-gateway'] }}
+          INPUT_FIENDLORD: ${{ inputs['fiendlord-keep-ui'] }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "gaspar=${{ inputs.gaspar }}" >> "$GITHUB_OUTPUT"
-            echo "worfbot-gateway=${{ inputs['worfbot-gateway'] }}" >> "$GITHUB_OUTPUT"
-            echo "fiendlord-keep-ui=${{ inputs['fiendlord-keep-ui'] }}" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "gaspar=$INPUT_GASPAR" >> "$GITHUB_OUTPUT"
+            echo "worfbot-gateway=$INPUT_WORFBOT" >> "$GITHUB_OUTPUT"
+            echo "fiendlord-keep-ui=$INPUT_FIENDLORD" >> "$GITHUB_OUTPUT"
           else
             AFFECTED=$(pnpm turbo run build --affected --dry-run=json 2>/dev/null)
             GASPAR=$(echo "$AFFECTED" | jq -r 'if ((.packages // []) | map(select(. == "gaspar")) | length) > 0 then "true" else "false" end')
