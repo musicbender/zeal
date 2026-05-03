@@ -1,0 +1,36 @@
+.bar {
+	display: flex;
+	flex-direction: row;
+	gap: 2px;
+	overflow: hidden;
+	align-items: center;
+}
+
+.block {
+	width: 8px;
+	height: 28px;
+	border-radius: 2px;
+	flex-shrink: 0;
+	cursor: default;
+	transition: opacity 0.15s ease;
+}
+
+.block:hover {
+	opacity: 0.8;
+}
+
+.blockHealthy {
+	background-color: var(--green-9);
+}
+
+.blockDegraded {
+	background-color: var(--yellow-9);
+}
+
+.blockDown {
+	background-color: var(--red-9);
+}
+
+.blockUnknown {
+	background-color: var(--gray-6);
+}

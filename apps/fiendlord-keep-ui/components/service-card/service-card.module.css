@@ -1,0 +1,11 @@
+.card {
+	padding: var(--space-4);
+}
+
+.message {
+	font-style: italic;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 100%;
+}

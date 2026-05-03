@@ -1,0 +1,30 @@
+.grid {
+	display: grid;
+	grid-template-columns: repeat(5, 1fr);
+	gap: var(--space-3);
+}
+
+.statCard {
+	padding: var(--space-3);
+}
+
+.label {
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.progress {
+	margin-top: var(--space-1);
+}
+
+@media (max-width: 768px) {
+	.grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+}
+
+@media (max-width: 480px) {
+	.grid {
+		grid-template-columns: 1fr;
+	}
+}
