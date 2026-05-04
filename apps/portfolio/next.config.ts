@@ -2,7 +2,7 @@ import createWithVercelToolbar from '@vercel/toolbar/plugins/next';
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-	serverExternalPackages: ['discord.js'],
+	serverExternalPackages: ['discord.js', 'pino', 'pino-pretty'],
 	images: {
 		remotePatterns: [
 			{

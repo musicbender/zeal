@@ -94,6 +94,13 @@ jobs:
 
       - run: pnpm --filter gaspar prisma:generate
 
+      - name: Stage to stable deploy directory
+        run: |
+          pnpm --filter=gaspar deploy --prod /tmp/gaspar-deploy
+          cp -r apps/gaspar/dist /tmp/gaspar-deploy/
+          sudo mkdir -p /home/magus/apps/gaspar
+          sudo rsync -a --delete /tmp/gaspar-deploy/ /home/magus/apps/gaspar/
+
       - name: Write secrets file
         run: printf 'DATABASE_URL=%s\n' "$DATABASE_URL" | sudo tee /etc/gaspar/env > /dev/null
 
@@ -124,6 +131,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm turbo run build --filter=worfbot-gateway
+
+      - name: Stage to stable deploy directory
+        run: |
+          pnpm --filter=worfbot-gateway deploy --prod /tmp/worfbot-gateway-deploy
+          cp -r apps/worfbot-gateway/dist /tmp/worfbot-gateway-deploy/
+          sudo mkdir -p /home/magus/apps/worfbot-gateway
+          sudo rsync -a --delete /tmp/worfbot-gateway-deploy/ /home/magus/apps/worfbot-gateway/
 
       - name: Write secrets file
         run: |
@@ -159,10 +173,17 @@ jobs:
 
       - name: Verify build output
         run: |
-          if [ ! -f apps/fiendlord-keep-ui/.next/BUILD_ID ]; then
-            echo "ERROR: .next/BUILD_ID missing after build"
+          if [ ! -f apps/fiendlord-keep-ui/.next/standalone/server.js ]; then
+            echo "ERROR: .next/standalone/server.js missing after build"
             exit 1
           fi
+
+      - name: Stage to stable deploy directory
+        run: |
+          sudo mkdir -p /home/magus/apps/fiendlord-keep
+          sudo rsync -a --delete apps/fiendlord-keep-ui/.next/standalone/ /home/magus/apps/fiendlord-keep/
+          sudo rsync -a --delete apps/fiendlord-keep-ui/.next/static/ /home/magus/apps/fiendlord-keep/.next/static/
+          sudo rsync -a --delete apps/fiendlord-keep-ui/public/ /home/magus/apps/fiendlord-keep/public/
 
       - name: Write secrets file
         run: |
