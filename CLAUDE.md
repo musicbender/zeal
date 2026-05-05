@@ -54,7 +54,7 @@ gaspar → @repo/gaspar-data, @repo/types
 
 ### Database
 
-Prisma v5 with SQLite. Schema at `apps/gaspar/prisma/schema.prisma`. The `Sensor` model has: id (UUID), name, type, isActive, activeSince, room, createdAt, updatedAt. `DATABASE_URL` is set in root `.env`.
+Prisma v5 with neon postgres. Schema at `apps/gaspar/prisma/schema.prisma`. The `Sensor` model has: id (UUID), name, type, isActive, activeSince, room, createdAt, updatedAt. `DATABASE_URL` is set in root `.env`.
 
 ### API Endpoints (gaspar)
 

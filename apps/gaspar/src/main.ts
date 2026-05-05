@@ -15,7 +15,6 @@ async function bootstrap() {
 
 	// Initialize Prisma
 	const prismaService = new PrismaService();
-	await prismaService.$connect();
 
 	// Register plugins
 	await server.register(fastifyHelmet);

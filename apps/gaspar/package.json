@@ -18,6 +18,8 @@
 	"dependencies": {
 		"@fastify/cors": "^11.2.0",
 		"@fastify/helmet": "^13.0.2",
+		"@neondatabase/serverless": "^0.10.4",
+		"@prisma/adapter-neon": "^5.22.0",
 		"@prisma/client": "^5.0.0",
 		"@repo/gaspar-data": "workspace:*",
 		"@repo/logger": "workspace:*",

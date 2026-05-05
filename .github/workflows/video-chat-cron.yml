@@ -1,0 +1,29 @@
+name: Video Chat Cron
+
+on:
+  schedule:
+    - cron: '0 22 * * 0' # 3pm PDT (summer, UTC-7)
+    - cron: '0 23 * * 0' # 3pm PST (winter, UTC-8)
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Skip the 3pm hour check and send immediately'
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  trigger:
+    name: Trigger video chat announcement
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call cron endpoint
+        run: |
+          url="https://patjacobs.com/api/cron/video-chat"
+          if [ "${{ inputs.force }}" = "true" ]; then
+            url="${url}?force=true"
+          fi
+          curl -f -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "$url"
