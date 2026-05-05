@@ -96,7 +96,7 @@ jobs:
 
       - name: Stage to stable deploy directory
         run: |
-          pnpm --filter=gaspar deploy --prod /tmp/gaspar-deploy
+          pnpm --filter=gaspar deploy --prod --legacy /tmp/gaspar-deploy
           cp -r apps/gaspar/dist /tmp/gaspar-deploy/
           sudo mkdir -p /home/magus/apps/gaspar
           sudo rsync -a --delete /tmp/gaspar-deploy/ /home/magus/apps/gaspar/
@@ -134,7 +134,7 @@ jobs:
 
       - name: Stage to stable deploy directory
         run: |
-          pnpm --filter=worfbot-gateway deploy --prod /tmp/worfbot-gateway-deploy
+          pnpm --filter=worfbot-gateway deploy --prod --legacy /tmp/worfbot-gateway-deploy
           cp -r apps/worfbot-gateway/dist /tmp/worfbot-gateway-deploy/
           sudo mkdir -p /home/magus/apps/worfbot-gateway
           sudo rsync -a --delete /tmp/worfbot-gateway-deploy/ /home/magus/apps/worfbot-gateway/
