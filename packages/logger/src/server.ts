@@ -7,17 +7,19 @@ function createServerLogger(): RepoLogger {
 	const isVercel = !!process.env.VERCEL;
 	const level = process.env.LOG_LEVEL ?? (process.env.NODE_ENV !== 'production' ? 'debug' : 'info');
 
-	const transport = !isVercel
-		? {
-				target: 'pino-pretty',
-				options: {
-					colorize: true,
-					translateTime: 'SYS:yyyy-mm-dd HH:MM:ss',
-					ignore: 'pid,hostname',
-					singleLine: false,
-				},
-			}
-		: undefined;
+	const isDev = process.env.NODE_ENV !== 'production';
+	const transport =
+		isDev && !isVercel
+			? {
+					target: 'pino-pretty',
+					options: {
+						colorize: true,
+						translateTime: 'SYS:yyyy-mm-dd HH:MM:ss',
+						ignore: 'pid,hostname',
+						singleLine: false,
+					},
+				}
+			: undefined;
 
 	return pino({ level, transport }) as unknown as RepoLogger;
 }
