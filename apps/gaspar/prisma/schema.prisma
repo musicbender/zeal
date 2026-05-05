@@ -4,16 +4,19 @@ datasource db {
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 model Sensor {
-  id        String   @id @default(uuid())
-  name      String
-  type     String
-  isActive  Boolean
+  id          String    @id @default(uuid())
+  name        String
+  type        String
+  isActive    Boolean
   activeSince DateTime?
-  room      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  room        String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("sensor")
 }
