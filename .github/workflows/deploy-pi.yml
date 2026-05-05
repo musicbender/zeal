@@ -96,6 +96,7 @@ jobs:
 
       - name: Stage to stable deploy directory
         run: |
+          rm -rf /tmp/gaspar-deploy
           pnpm --filter=gaspar deploy --prod --legacy /tmp/gaspar-deploy
           cp -r apps/gaspar/dist /tmp/gaspar-deploy/
           sudo mkdir -p /home/magus/apps/gaspar
@@ -134,6 +135,7 @@ jobs:
 
       - name: Stage to stable deploy directory
         run: |
+          rm -rf /tmp/worfbot-gateway-deploy
           pnpm --filter=worfbot-gateway deploy --prod --legacy /tmp/worfbot-gateway-deploy
           cp -r apps/worfbot-gateway/dist /tmp/worfbot-gateway-deploy/
           sudo mkdir -p /home/magus/apps/worfbot-gateway
@@ -170,6 +172,14 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm --filter fiendlord-keep-ui build
+
+      - name: Debug build output
+        if: always()
+        run: |
+          echo "=== .next top-level ==="
+          ls -la apps/fiendlord-keep-ui/.next/ 2>/dev/null || echo "No .next directory"
+          echo "=== .next/standalone ==="
+          ls -la apps/fiendlord-keep-ui/.next/standalone/ 2>/dev/null || echo "No standalone directory"
 
       - name: Verify build output
         run: |
