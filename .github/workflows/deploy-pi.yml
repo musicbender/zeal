@@ -173,25 +173,18 @@ jobs:
 
       - run: pnpm --filter fiendlord-keep-ui build
 
-      - name: Debug build output
-        if: always()
-        run: |
-          echo "=== .next top-level ==="
-          ls -la apps/fiendlord-keep-ui/.next/ 2>/dev/null || echo "No .next directory"
-          echo "=== .next/standalone ==="
-          ls -la apps/fiendlord-keep-ui/.next/standalone/ 2>/dev/null || echo "No standalone directory"
-
       - name: Verify build output
         run: |
-          if [ ! -f apps/fiendlord-keep-ui/.next/standalone/server.js ]; then
-            echo "ERROR: .next/standalone/server.js missing after build"
+          if [ ! -f apps/fiendlord-keep-ui/.next/standalone/apps/fiendlord-keep-ui/server.js ]; then
+            echo "ERROR: .next/standalone/apps/fiendlord-keep-ui/server.js missing after build"
             exit 1
           fi
 
       - name: Stage to stable deploy directory
         run: |
           sudo mkdir -p /home/magus/apps/fiendlord-keep
-          sudo rsync -a --delete apps/fiendlord-keep-ui/.next/standalone/ /home/magus/apps/fiendlord-keep/
+          sudo rsync -a --delete apps/fiendlord-keep-ui/.next/standalone/apps/fiendlord-keep-ui/ /home/magus/apps/fiendlord-keep/
+          sudo rsync -a --delete apps/fiendlord-keep-ui/.next/standalone/node_modules/ /home/magus/apps/fiendlord-keep/node_modules/
           sudo rsync -a --delete apps/fiendlord-keep-ui/.next/static/ /home/magus/apps/fiendlord-keep/.next/static/
           sudo rsync -a --delete apps/fiendlord-keep-ui/public/ /home/magus/apps/fiendlord-keep/public/
 
