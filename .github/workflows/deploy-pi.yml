@@ -96,7 +96,8 @@ jobs:
 
       - name: Stage to stable deploy directory
         run: |
-          pnpm --filter=gaspar deploy --prod /tmp/gaspar-deploy
+          rm -rf /tmp/gaspar-deploy
+          pnpm --filter=gaspar deploy --prod --legacy /tmp/gaspar-deploy
           cp -r apps/gaspar/dist /tmp/gaspar-deploy/
           sudo mkdir -p /home/magus/apps/gaspar
           sudo rsync -a --delete /tmp/gaspar-deploy/ /home/magus/apps/gaspar/
@@ -134,7 +135,8 @@ jobs:
 
       - name: Stage to stable deploy directory
         run: |
-          pnpm --filter=worfbot-gateway deploy --prod /tmp/worfbot-gateway-deploy
+          rm -rf /tmp/worfbot-gateway-deploy
+          pnpm --filter=worfbot-gateway deploy --prod --legacy /tmp/worfbot-gateway-deploy
           cp -r apps/worfbot-gateway/dist /tmp/worfbot-gateway-deploy/
           sudo mkdir -p /home/magus/apps/worfbot-gateway
           sudo rsync -a --delete /tmp/worfbot-gateway-deploy/ /home/magus/apps/worfbot-gateway/
@@ -173,15 +175,16 @@ jobs:
 
       - name: Verify build output
         run: |
-          if [ ! -f apps/fiendlord-keep-ui/.next/standalone/server.js ]; then
-            echo "ERROR: .next/standalone/server.js missing after build"
+          if [ ! -f apps/fiendlord-keep-ui/.next/standalone/apps/fiendlord-keep-ui/server.js ]; then
+            echo "ERROR: .next/standalone/apps/fiendlord-keep-ui/server.js missing after build"
             exit 1
           fi
 
       - name: Stage to stable deploy directory
         run: |
           sudo mkdir -p /home/magus/apps/fiendlord-keep
-          sudo rsync -a --delete apps/fiendlord-keep-ui/.next/standalone/ /home/magus/apps/fiendlord-keep/
+          sudo rsync -a --delete apps/fiendlord-keep-ui/.next/standalone/apps/fiendlord-keep-ui/ /home/magus/apps/fiendlord-keep/
+          sudo rsync -a --delete apps/fiendlord-keep-ui/.next/standalone/node_modules/ /home/magus/apps/fiendlord-keep/node_modules/
           sudo rsync -a --delete apps/fiendlord-keep-ui/.next/static/ /home/magus/apps/fiendlord-keep/.next/static/
           sudo rsync -a --delete apps/fiendlord-keep-ui/public/ /home/magus/apps/fiendlord-keep/public/
 
