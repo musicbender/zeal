@@ -183,10 +183,9 @@ jobs:
       - name: Stage to stable deploy directory
         run: |
           sudo mkdir -p /home/magus/apps/fiendlord-keep
-          sudo rsync -a --delete apps/fiendlord-keep-ui/.next/standalone/apps/fiendlord-keep-ui/ /home/magus/apps/fiendlord-keep/
-          sudo rsync -a --delete apps/fiendlord-keep-ui/.next/standalone/node_modules/ /home/magus/apps/fiendlord-keep/node_modules/
-          sudo rsync -a --delete apps/fiendlord-keep-ui/.next/static/ /home/magus/apps/fiendlord-keep/.next/static/
-          [ -d apps/fiendlord-keep-ui/public ] && sudo rsync -a --delete apps/fiendlord-keep-ui/public/ /home/magus/apps/fiendlord-keep/public/ || true
+          sudo rsync -a --delete apps/fiendlord-keep-ui/.next/standalone/ /home/magus/apps/fiendlord-keep/
+          sudo rsync -a --delete apps/fiendlord-keep-ui/.next/static/ /home/magus/apps/fiendlord-keep/apps/fiendlord-keep-ui/.next/static/
+          [ -d apps/fiendlord-keep-ui/public ] && sudo rsync -a --delete apps/fiendlord-keep-ui/public/ /home/magus/apps/fiendlord-keep/apps/fiendlord-keep-ui/public/ || true
 
       - name: Write secrets file
         run: |
