@@ -20,7 +20,7 @@ jobs:
     steps:
       - name: Call cron endpoint
         run: |
-          url="https://patjacobs.com/api/cron/video-chat"
+          url="https://www.patjacobs.com/api/cron/video-chat"
           if [ "${{ inputs.force }}" = "true" ]; then
             url="${url}?force=true"
           fi
