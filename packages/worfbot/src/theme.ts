@@ -74,8 +74,8 @@ export const theme = {
 	embed: {
 		/** Default embed color — klingon gold as the primary Worfbot identity color. */
 		default: colors.klingonGold,
-		/** Announcement embed color — klingon gold for high-visibility broadcasts. */
-		announcement: colors.klingonGold,
+		/** Announcement embed color — iron steel to avoid clashing with Discord's @everyone mention highlight. */
+		announcement: colors.ironSteel,
 		/** Alert embed color — blood crimson for warnings and errors. */
 		alert: colors.bloodCrimson,
 		/** Success embed color — battle bronze for confirmations and victories. */
