@@ -71,9 +71,8 @@ describe('GET /api/cron/video-chat', () => {
 		expect(url).toContain(CHANNEL_ID);
 		const sent = JSON.parse(init.body as string);
 		expect(sent.content).toContain('@everyone');
-		expect(sent.content).toContain('https://meet.google.com/rra-mtmz-khi');
 		expect(sent.embeds).toHaveLength(1);
-		expect(sent.embeds[0].title).toContain('Family Council');
+		expect(sent.embeds[0].description).toContain('https://meet.google.com/rra-mtmz-khi');
 	});
 
 	it('posts when force=true regardless of current hour', async () => {

@@ -42,13 +42,13 @@ export async function GET(req: Request): Promise<Response> {
 			'Content-Type': 'application/json',
 		},
 		body: JSON.stringify({
-			content: `@everyone ${MEET_LINK}`,
+			content: '@everyone',
 			allowed_mentions: { parse: ['everyone'] },
 			embeds: [
 				createEmbed('announcement')
 					.setTitle('⚔️ Family Council')
 					.setDescription(
-						'The hour of the family council is upon us. Warriors do not linger. They assemble.'
+						`The hour of the family council is upon us. Warriors do not linger. They assemble.\n\n[Join the war room](${MEET_LINK})`
 					)
 					.toJSON(),
 			],
