@@ -1,16 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('./quotes.json', () => ({
+vi.mock('../quotes.json', () => ({
 	default: Array.from({ length: 20 }, (_, i) => `quote-${i}`),
 }));
 
-vi.mock('./keyword-triggers.json', () => ({
-	default: {
-		triggers: [{ keyword: 'procrastinate', quoteIndex: 19 }],
-	},
+vi.mock('./triggers', () => ({
+	triggers: [{ keywords: ['procrastinate'], quoteIndex: 19 }],
 }));
 
-import { findMatchingQuote } from './keyword-matcher';
+import { findMatchingQuote } from './index';
 
 describe('findMatchingQuote', () => {
 	it('returns the mapped quote when keyword matches', () => {
