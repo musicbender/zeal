@@ -38,6 +38,11 @@ export class ChargePoint {
   private _region: string;
   private _userId: number | null = null;
 
+  /** The current session token. Save this after login to avoid re-authenticating. */
+  get coulombToken(): string | null {
+    return this._coulombToken;
+  }
+
   private constructor(username: string, globalConfig: GlobalConfiguration, region: string) {
     this._username = username;
     this.globalConfig = globalConfig;
