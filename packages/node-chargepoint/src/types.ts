@@ -357,18 +357,31 @@ export interface MapStation {
 }
 
 export interface MapFilter {
+  // Parking
   disabledParking?: boolean;
+  vanAccessible?: boolean;
+  // Networks
   networkChargepoint?: boolean;
   networkEvgo?: boolean;
-  connectorL2?: boolean;
-  connectorCombo?: boolean;
-  connectorChademo?: boolean;
-  connectorTesla?: boolean;
+  networkBlink?: boolean;
+  networkFlo?: boolean;
+  networkIonna?: boolean;
+  networkEvconnect?: boolean;
+  networkEvgateway?: boolean;
+  networkBchydro?: boolean;
+  networkGreenlots?: boolean;
+  networkMercedes?: boolean;
+  networkCircuitelectric?: boolean;
+  // Connectors
   connectorL1?: boolean;
+  connectorL2?: boolean;
   connectorL2Nema1450?: boolean;
   connectorL2Tesla?: boolean;
-  statusAvailable?: boolean;
+  connectorTesla?: boolean;
+  connectorCombo?: boolean;
+  connectorChademo?: boolean;
   dcFastCharging?: boolean;
+  // Status / pricing
+  statusAvailable?: boolean;
   priceFree?: boolean;
-  vanAccessible?: boolean;
 }
