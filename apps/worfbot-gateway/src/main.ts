@@ -21,6 +21,8 @@ const client = new Client({
 // Resets on process restart — acceptable for a single Railway instance.
 const repliedToday = new Map<string, string>(); // userId → YYYY-MM-DD
 
+const bypassChannelIds = new Set(['1498170413711233024']);
+
 function todayString(): string {
 	return new Date().toISOString().slice(0, 10);
 }
@@ -36,7 +38,8 @@ client.on(Events.MessageCreate, async (message) => {
 	if (!quote) return;
 
 	const today = todayString();
-	const skipRateLimit = process.env.SKIP_RATE_LIMIT === 'true';
+	const skipRateLimit =
+		process.env.SKIP_RATE_LIMIT === 'true' || bypassChannelIds.has(message.channelId);
 
 	if (!skipRateLimit) {
 		if (repliedToday.get(message.author.id) === today) return;
