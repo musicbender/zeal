@@ -1,0 +1,19 @@
+{
+  "serialNumber": "CHPXXX123456",
+  "macAddress": "AA:BB:CC:DD:EE:FF",
+  "stationNickname": "Home Charger",
+  "streetAddress": "123 Main St",
+  "hasUtilityInfo": false,
+  "utility": null,
+  "indicatorLightEcoMode": false,
+  "flashlightReset": false,
+  "worksWithNest": false,
+  "isPairedWithNest": false,
+  "isInstalledByInstaller": false,
+  "ledBrightness": {
+    "level": 3,
+    "inProgress": false,
+    "supportedLevels": [0, 1, 2, 3, 4, 5],
+    "isEnabled": true
+  }
+}

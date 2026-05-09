@@ -1,0 +1,6 @@
+{
+  "chargers": [
+    { "chargerId": 12345 },
+    { "chargerId": 67890 }
+  ]
+}

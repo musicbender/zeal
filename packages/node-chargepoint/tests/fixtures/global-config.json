@@ -1,0 +1,41 @@
+{
+  "region": "NA",
+  "defaultCountry": {
+    "id": 1,
+    "name": "United States",
+    "code": "US",
+    "callingCode": 1,
+    "phoneFormat": "xxx-xxx-xxxx",
+    "zoomBounds": {
+      "neLon": -65.0,
+      "neLat": 50.0,
+      "swLon": -125.0,
+      "swLat": 24.0
+    }
+  },
+  "supportedCountries": [],
+  "currency": {
+    "code": "USD",
+    "name": "US Dollar",
+    "cardCost": 0.0,
+    "symbol": "$",
+    "initialDeposit": 25.0,
+    "replenishmentThreshold": 10.0,
+    "maxDecimalPlaces": 2
+  },
+  "supportedCurrencies": [],
+  "endPoints": {
+    "accountsEndpoint": { "value": "https://account.chargepoint.com" },
+    "internalApiGatewayEndpoint": { "value": "https://cpapi.chargepoint.com" },
+    "mapcacheEndpoint": { "value": "https://mc.chargepoint.com/map-prod" },
+    "pandaWebsocketEndpoint": { "value": "wss://panda.chargepoint.com" },
+    "paymentJavaEndpoint": { "value": "https://payment.chargepoint.com" },
+    "paymentPhpEndpoint": { "value": "https://payment.chargepoint.com/php" },
+    "portalDomainEndpoint": { "value": "https://mc.chargepoint.com" },
+    "portalSubdomain": "mc",
+    "ssoEndpoint": { "value": "https://sso.chargepoint.com" },
+    "webservicesEndpoint": { "value": "https://webservices.chargepoint.com" },
+    "websocketEndpoint": { "value": "wss://ws.chargepoint.com" },
+    "hcpoHcmEndpoint": { "value": "https://hcpoprodhcm.chargepoint.com" }
+  }
+}

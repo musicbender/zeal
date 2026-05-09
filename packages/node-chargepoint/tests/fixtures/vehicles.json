@@ -1,0 +1,14 @@
+{
+  "vehicles": [
+    {
+      "make": "Tesla",
+      "model": "Model 3",
+      "year": 2022,
+      "primaryVehicle": true,
+      "color": "White",
+      "imageUrl": "https://example.com/model3.jpg",
+      "chargingSpeed": 11.5,
+      "dcChargingSpeed": 250.0
+    }
+  ]
+}

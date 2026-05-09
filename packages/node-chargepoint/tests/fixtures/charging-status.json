@@ -1,0 +1,17 @@
+{
+  "user_status": {
+    "charging_status": {
+      "session_id": 1,
+      "start_time": 1609459200000,
+      "current_charging": "CHARGING",
+      "stations": [
+        {
+          "id": 1,
+          "name": "ChargePoint Station",
+          "lat": 37.7749,
+          "lon": -122.4194
+        }
+      ]
+    }
+  }
+}

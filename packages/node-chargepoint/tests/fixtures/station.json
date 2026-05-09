@@ -1,0 +1,55 @@
+{
+  "deviceId": 9001,
+  "name": ["Main Street Charging", "Bay Area Network"],
+  "address": {
+    "address1": "500 Main St",
+    "city": "San Francisco",
+    "state": "CA"
+  },
+  "description": "Public charging station",
+  "modelNumber": "CT4000",
+  "network": {
+    "name": "ChargePoint",
+    "displayName": "ChargePoint",
+    "logoUrl": "https://example.com/logo.png"
+  },
+  "portsInfo": {
+    "totalCount": 2,
+    "availableCount": 1,
+    "ports": [
+      {
+        "outletNumber": 1,
+        "status": "AVAILABLE",
+        "statusV2": "AVAILABLE",
+        "displayLevel": 2,
+        "level": 2,
+        "parkingAccessibility": "STANDARD",
+        "powerRange": { "unit": "kW", "max": 7.2 },
+        "connectorList": [
+          {
+            "status": "AVAILABLE",
+            "statusV2": "AVAILABLE",
+            "displayPlugType": "J1772",
+            "plugType": "J1772"
+          }
+        ]
+      }
+    ]
+  },
+  "stationStatus": "AVAILABLE",
+  "stationStatusV2": "AVAILABLE",
+  "latitude": 37.7749,
+  "longitude": -122.4194,
+  "hostName": "Main Street Parking",
+  "openCloseStatus": "OPEN",
+  "maxPower": { "unit": "kW", "max": 7.2 },
+  "accessRestriction": "OPEN",
+  "parkingAccessibility": "STANDARD",
+  "stopChargeSupported": true,
+  "remoteStartCharge": true,
+  "sharedPower": false,
+  "reducedPower": false,
+  "stationPrice": null,
+  "deviceSoftwareVersion": "5.1.0",
+  "lastChargedDate": "2024-06-01T12:00:00Z"
+}

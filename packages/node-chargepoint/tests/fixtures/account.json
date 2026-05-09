@@ -1,0 +1,19 @@
+{
+  "user": {
+    "userId": 1234567890,
+    "email": "test@example.com",
+    "username": "testuser",
+    "fullName": "Test User",
+    "givenName": "Test",
+    "familyName": "User",
+    "phone": "555-555-1234",
+    "phoneCountryId": 1,
+    "evatarUrl": "https://example.com/avatar.jpg"
+  },
+  "accountBalance": {
+    "accountNumber": "9876543210",
+    "accountState": "ACTIVE",
+    "amount": 25.0,
+    "currency": "USD"
+  }
+}
