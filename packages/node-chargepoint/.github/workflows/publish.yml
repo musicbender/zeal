@@ -85,7 +85,9 @@ jobs:
 
       - name: Publish to npm
         if: steps.bump.outputs.type != 'none'
-        run: pnpm publish --no-git-checks --provenance
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" >> ~/.npmrc
+          pnpm publish --no-git-checks --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
