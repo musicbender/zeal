@@ -1,13 +1,13 @@
 import type { ChargePoint } from './client.js';
 import { APIError, CommunicationError } from './exceptions.js';
-import type { ChargingSessionUpdate, PowerUtility, VehicleInfo } from './types.js';
+import type { ChargingSessionUpdate, PowerUtility, StartSessionOptions, VehicleInfo } from './types.js';
 
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 type RawObj = Record<string, unknown>;
 
-export async function sendCommand(
+async function sendCommand(
   client: ChargePoint,
   action: 'start' | 'stop',
   deviceId: number,
@@ -223,16 +223,20 @@ export class ChargingSession {
     );
   }
 
-  static async start(deviceId: number, client: ChargePoint): Promise<ChargingSession> {
+  static async start(
+    deviceId: number,
+    client: ChargePoint,
+    options?: StartSessionOptions,
+  ): Promise<ChargingSession> {
     await sendCommand(client, 'start', deviceId);
 
     // The start ack confirms the cloud received the command, but the session
     // may take a moment to appear in the status API (same async IoT pattern
     // as amperage/LED changes). Poll until it shows up.
-    const deadline = Date.now() + 15_000;
+    const deadline = Date.now() + (options?.pollTimeoutMs ?? 15_000);
     let status = await client.getUserChargingStatus();
     while (!status && Date.now() < deadline) {
-      await sleep(2000);
+      await sleep(options?.pollIntervalMs ?? 2_000);
       status = await client.getUserChargingStatus();
     }
 

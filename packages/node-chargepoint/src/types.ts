@@ -164,11 +164,18 @@ export interface HomeChargerConfiguration {
   ledBrightness: LEDBrightness;
 }
 
+export type TimeString = `${number}:${number}`;
+
 export interface ChargeScheduleWindow {
-  startTime: string;
-  endTime: string;
+  startTime: TimeString;
+  endTime: TimeString;
   startWeekday?: string;
   endWeekday?: string;
+}
+
+export interface StartSessionOptions {
+  pollTimeoutMs?: number;
+  pollIntervalMs?: number;
 }
 
 export interface ChargeSchedule {

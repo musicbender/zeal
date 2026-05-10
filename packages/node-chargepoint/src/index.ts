@@ -1,6 +1,7 @@
 export { ChargePoint } from './client.js';
 export type { ChargePointOptions } from './client.js';
 export { ChargingSession } from './session.js';
+export { NODE_CHARGEPOINT_VERSION } from './constants.js';
 
 export {
   APIError,
@@ -32,6 +33,7 @@ export type {
   MaxPower,
   PowerUtility,
   PowerUtilityPlan,
+  StartSessionOptions,
   Station,
   StationAddress,
   StationConnector,
@@ -44,6 +46,7 @@ export type {
   StationPricingFee,
   StationTax,
   StationTouEntry,
+  TimeString,
   User,
   UserChargingStatus,
   VehicleInfo,

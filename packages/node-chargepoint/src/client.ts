@@ -1,5 +1,5 @@
 import { USER_AGENT } from './constants.js';
-import { CommunicationError, DatadomeCaptcha, InvalidSession, LoginError } from './exceptions.js';
+import { APIError, CommunicationError, DatadomeCaptcha, InvalidSession, LoginError } from './exceptions.js';
 import { fetchGlobalConfig } from './global-config.js';
 import { ChargingSession } from './session.js';
 import type {
@@ -12,6 +12,7 @@ import type {
   HomeChargerTechnicalInfo,
   MapFilter,
   MapStation,
+  StartSessionOptions,
   Station,
   StationInfo,
   UserChargingStatus,
@@ -23,6 +24,10 @@ type RawObj = Record<string, unknown>;
 export interface ChargePointOptions {
   coulombToken?: string;
   region?: string;
+  /** Request timeout in milliseconds. Applied via AbortSignal.timeout(). */
+  timeout?: number;
+  /** Optional debug callback. Called with request/response info — never with header values. */
+  debug?: (msg: string) => void;
 }
 
 function parseMsTimestamp(v: unknown): Date {
@@ -37,6 +42,8 @@ export class ChargePoint {
   private _coulombToken: string | null = null;
   private _region: string;
   private _userId: number | null = null;
+  private _timeout: number | undefined;
+  private _debug: ((msg: string) => void) | undefined;
 
   /** The current session token. Save this after login to avoid re-authenticating. */
   get coulombToken(): string | null {
@@ -58,11 +65,18 @@ export class ChargePoint {
       client._setToken(options.coulombToken, region);
     }
 
+    client._timeout = options.timeout;
+    client._debug = options.debug;
+
     return client;
   }
 
   private _setToken(token: string, region: string): void {
-    this._coulombToken = decodeURIComponent(token);
+    try {
+      this._coulombToken = decodeURIComponent(token);
+    } catch {
+      throw new APIError('Malformed coulomb_sess token: invalid percent-encoding');
+    }
     this._region = region;
   }
 
@@ -82,7 +96,12 @@ export class ChargePoint {
       headers.set('cp-region', this._region);
     }
 
-    const response = await fetch(url, { ...init, method, headers });
+    this._debug?.(`${method} ${url}`);
+
+    const signal = this._timeout !== undefined ? AbortSignal.timeout(this._timeout) : undefined;
+    const response = await fetch(url, { ...init, method, headers, signal });
+
+    this._debug?.(`${response.status} ${url}`);
 
     // Refresh coulomb_sess from Set-Cookie response header
     const setCookies: string[] =
@@ -94,7 +113,11 @@ export class ChargePoint {
     for (const cookie of setCookies) {
       const match = /^coulomb_sess=([^;]+)/.exec(cookie);
       if (match) {
-        this._coulombToken = decodeURIComponent(match[1] ?? '');
+        try {
+          this._coulombToken = decodeURIComponent(match[1] ?? '');
+        } catch {
+          throw new CommunicationError(response.status, 'Malformed coulomb_sess cookie: invalid percent-encoding');
+        }
         break;
       }
     }
@@ -471,8 +494,8 @@ export class ChargePoint {
     return session;
   }
 
-  async startChargingSession(deviceId: number): Promise<ChargingSession> {
-    return ChargingSession.start(deviceId, this);
+  async startChargingSession(deviceId: number, options?: StartSessionOptions): Promise<ChargingSession> {
+    return ChargingSession.start(deviceId, this, options);
   }
 
   // ---------------------------------------------------------------------------

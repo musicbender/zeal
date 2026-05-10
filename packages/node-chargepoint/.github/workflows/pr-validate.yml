@@ -67,6 +67,24 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
 
+  audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    if: github.event.action != 'labeled' && github.event.action != 'unlabeled'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level=high
+
   validate-labels:
     name: Version Label
     runs-on: ubuntu-latest

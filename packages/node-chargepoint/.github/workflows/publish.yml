@@ -12,7 +12,7 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    if: "!startsWith(github.event.head_commit.message, 'chore: release')"
+    if: "!startsWith(github.event.head_commit.message, 'chore: release') && !startsWith(github.event.head_commit.message, 'docs: update CHANGELOG')"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -95,3 +95,18 @@ jobs:
             --generate-notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update CHANGELOG
+        if: steps.bump.outputs.type != 'none'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.new_version }}"
+          NOTES=$(gh release view "v${NEW_VERSION}" --json body --jq .body)
+          DATE=$(date +%Y-%m-%d)
+          HEADER="## [v${NEW_VERSION}](https://github.com/musicbender/node-chargepoint/releases/tag/v${NEW_VERSION}) — ${DATE}"
+          { printf '%s\n\n%s\n\n---\n\n' "${HEADER}" "${NOTES}"; tail -n +5 CHANGELOG.md; } > CHANGELOG.tmp
+          mv CHANGELOG.tmp CHANGELOG.md
+          git add CHANGELOG.md
+          git commit -m "docs: update CHANGELOG for v${NEW_VERSION}"
+          git push origin main
