@@ -1,7 +1,7 @@
 import { USER_AGENT } from './constants.js';
 import { CommunicationError, DatadomeCaptcha, InvalidSession, LoginError } from './exceptions.js';
 import { fetchGlobalConfig } from './global-config.js';
-import { ChargingSession, sendCommand } from './session.js';
+import { ChargingSession } from './session.js';
 import type {
   Account,
   ElectricVehicle,

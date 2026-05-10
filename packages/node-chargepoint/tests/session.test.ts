@@ -4,7 +4,7 @@ import { server } from './setup.js';
 import { ChargePoint } from '../src/client.js';
 import { ChargingSession } from '../src/session.js';
 import { CommunicationError } from '../src/exceptions.js';
-import { TEST_TOKEN, TEST_SESSION_ID, TEST_ACK_ID } from './handlers.js';
+import { TEST_TOKEN, TEST_SESSION_ID } from './handlers.js';
 
 async function authenticatedClient(): Promise<ChargePoint> {
   return ChargePoint.create('testuser', { coulombToken: TEST_TOKEN });
