@@ -1,6 +1,15 @@
-# Changelog
+## [v0.4.0](https://github.com/musicbender/node-chargepoint/releases/tag/v0.4.0) — 2026-05-10
 
-All notable changes are documented here. This file is updated automatically on each release.
+<!-- Release notes generated using configuration in .github/release.yml at v0.4.0 -->
+
+## What's Changed
+### New Features
+* Harden public API, add SECURITY.md, CHANGELOG automation, and CI audit by @musicbender in https://github.com/musicbender/node-chargepoint/pull/21
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.3.5...v0.4.0
+
+---
 
 ---
 
