@@ -185,7 +185,7 @@ describe('getHomeChargerSchedule()', () => {
     const client = await authenticatedClient();
     const schedule = await client.getHomeChargerSchedule(TEST_CHARGER_ID);
     expect(schedule.scheduleEnabled).toBe(true);
-    expect(schedule.userSchedule.weekdays.startTime).toBe('22:00');
+    expect(schedule.userSchedule?.weekdays.startTime).toBe('22:00');
   });
 });
 

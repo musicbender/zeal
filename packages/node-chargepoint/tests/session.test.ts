@@ -131,7 +131,7 @@ describe('ChargingSession.start()', () => {
     const client = await authenticatedClient();
     const { APIError } = await import('../src/exceptions.js');
     await expect(ChargingSession.start(9001, client)).rejects.toThrow(APIError);
-  });
+  }, 20_000);
 });
 
 describe('sendCommand() polling', () => {

@@ -6,6 +6,23 @@ let client: ChargePoint;
 let chargerId: number;
 
 const MUTATIONS_ENABLED = process.env['E2E_MUTATIONS'] === 'true';
+const DEBUG = process.env['E2E_DEBUG'] === 'true';
+
+/** Poll a getter until predicate is true or the timeout elapses. */
+async function pollUntil<T>(
+  getter: () => Promise<T>,
+  predicate: (v: T) => boolean,
+  timeoutMs = 10_000,
+  intervalMs = 1_500,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  let last = await getter();
+  while (!predicate(last) && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, intervalMs));
+    last = await getter();
+  }
+  return last;
+}
 
 beforeAll(async () => {
   const ctx = await createAuthenticatedClient();
@@ -15,7 +32,7 @@ beforeAll(async () => {
   }
   chargerId = ctx.chargerId;
 
-  if (process.env['E2E_DEBUG'] === 'true') {
+  if (DEBUG) {
     const ep = client.globalConfig.endpoints;
     const account = await client.getAccount();
     const uid = account.user.userId;
@@ -109,7 +126,7 @@ describe.skipIf(!MUTATIONS_ENABLED)('setHomeChargerSchedule() + disableHomeCharg
 
       const changed = await client.getHomeChargerSchedule(chargerId);
       expect(changed.scheduleEnabled).toBe(true);
-      expect(changed.defaultSchedule.weekdays.startTime).toBe(testStart);
+      expect(changed.userSchedule?.weekdays.startTime).toBe(testStart);
     } finally {
       await client.setHomeChargerSchedule(
         chargerId,
@@ -138,7 +155,11 @@ describe.skipIf(!MUTATIONS_ENABLED)('setAmperageLimit() [MUTATION]', () => {
 
     try {
       await client.setAmperageLimit(chargerId, testLimit);
-      const after = await client.getHomeChargerStatus(chargerId);
+      // The charger applies changes asynchronously; poll until confirmed or timeout.
+      const after = await pollUntil(
+        () => client.getHomeChargerStatus(chargerId),
+        (s) => s.amperageLimit === testLimit,
+      );
       expect(after.amperageLimit).toBe(testLimit);
     } finally {
       await client.setAmperageLimit(chargerId, original);
@@ -159,7 +180,11 @@ describe.skipIf(!MUTATIONS_ENABLED)('setLedBrightness() [MUTATION]', () => {
 
     try {
       await client.setLedBrightness(chargerId, testLevel);
-      const after = await client.getHomeChargerConfig(chargerId);
+      // The charger applies changes asynchronously; poll until confirmed or timeout.
+      const after = await pollUntil(
+        () => client.getHomeChargerConfig(chargerId),
+        (c) => c.ledBrightness.level === testLevel,
+      );
       expect(after.ledBrightness.level).toBe(testLevel);
     } finally {
       await client.setLedBrightness(chargerId, original);

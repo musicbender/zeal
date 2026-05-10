@@ -225,9 +225,17 @@ export class ChargingSession {
 
   static async start(deviceId: number, client: ChargePoint): Promise<ChargingSession> {
     await sendCommand(client, 'start', deviceId);
-    // The sessionId returned by the start endpoint is not the real session ID;
-    // fetch it from the status API instead.
-    const status = await client.getUserChargingStatus();
+
+    // The start ack confirms the cloud received the command, but the session
+    // may take a moment to appear in the status API (same async IoT pattern
+    // as amperage/LED changes). Poll until it shows up.
+    const deadline = Date.now() + 15_000;
+    let status = await client.getUserChargingStatus();
+    while (!status && Date.now() < deadline) {
+      await sleep(2000);
+      status = await client.getUserChargingStatus();
+    }
+
     if (!status) {
       throw new APIError('No active charging session found after start command.');
     }

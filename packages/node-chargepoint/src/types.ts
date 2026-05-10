@@ -182,8 +182,8 @@ export interface HomeChargerSchedule {
   hasUtilityInfo: boolean;
   basedOnUtility: PowerUtility | null;
   defaultSchedule: ChargeSchedule;
-  userSchedule: ChargeSchedule;
-  utilitySchedule: ChargeSchedule | null;
+  userSchedule?: ChargeSchedule;
+  utilitySchedule?: ChargeSchedule | null;
 }
 
 // ---------------------------------------------------------------------------

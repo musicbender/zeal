@@ -62,7 +62,7 @@ export class ChargePoint {
   }
 
   private _setToken(token: string, region: string): void {
-    this._coulombToken = token;
+    this._coulombToken = decodeURIComponent(token);
     this._region = region;
   }
 
@@ -94,7 +94,7 @@ export class ChargePoint {
     for (const cookie of setCookies) {
       const match = /^coulomb_sess=([^;]+)/.exec(cookie);
       if (match) {
-        this._coulombToken = match[1] ?? null;
+        this._coulombToken = decodeURIComponent(match[1] ?? '');
         break;
       }
     }
@@ -117,6 +117,14 @@ export class ChargePoint {
     }
 
     return response;
+  }
+
+  private async _errorBody(response: Response): Promise<string> {
+    try {
+      return await response.clone().text();
+    } catch {
+      return '';
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -380,8 +388,7 @@ export class ChargePoint {
     const url = `${this.globalConfig.endpoints.hcpoHcmEndpoint}/api/v1/schedule/charger/${chargerId}/schedule`;
     const response = await this._request('PUT', url, {
       body: JSON.stringify({
-        scheduleEnabled: true,
-        userSchedule: {
+        schedule: {
           weekdays: { startTime: weekdayStart, endTime: weekdayEnd },
           weekends: { startTime: weekendStart, endTime: weekendEnd },
         },
@@ -390,7 +397,8 @@ export class ChargePoint {
     });
 
     if (!response.ok) {
-      throw new CommunicationError(response.status, 'Failed to set home charger schedule.');
+      const body = await this._errorBody(response);
+      throw new CommunicationError(response.status, `Failed to set home charger schedule. HTTP ${response.status}: ${body}`);
     }
 
     return (await response.json()) as HomeChargerSchedule;
@@ -399,7 +407,7 @@ export class ChargePoint {
   async disableHomeChargerSchedule(chargerId: number): Promise<void> {
     const url = `${this.globalConfig.endpoints.hcpoHcmEndpoint}/api/v1/schedule/charger/${chargerId}/schedule`;
     const response = await this._request('PUT', url, {
-      body: JSON.stringify({ scheduleEnabled: false }),
+      body: JSON.stringify({}),
       headers: { 'Content-Type': 'application/json' },
     });
 
@@ -413,12 +421,13 @@ export class ChargePoint {
   async setAmperageLimit(chargerId: number, amperageLimit: number): Promise<void> {
     const url = `${this.globalConfig.endpoints.hcpoHcmEndpoint}/api/v1/configuration/chargers/${chargerId}/charge-amperage-limit`;
     const response = await this._request('PUT', url, {
-      body: JSON.stringify({ amperageLimit }),
+      body: JSON.stringify({ chargeAmperageLimit: amperageLimit }),
       headers: { 'Content-Type': 'application/json' },
     });
 
     if (!response.ok) {
-      throw new CommunicationError(response.status, 'Failed to set amperage limit.');
+      const body = await this._errorBody(response);
+      throw new CommunicationError(response.status, `Failed to set amperage limit. HTTP ${response.status}: ${body}`);
     }
 
     await response.text();
@@ -427,12 +436,13 @@ export class ChargePoint {
   async setLedBrightness(chargerId: number, level: number): Promise<void> {
     const url = `${this.globalConfig.endpoints.hcpoHcmEndpoint}/api/v1/configuration/chargers/${chargerId}/led-brightness`;
     const response = await this._request('PUT', url, {
-      body: JSON.stringify({ level }),
+      body: JSON.stringify({ ledBrightnessLevel: level }),
       headers: { 'Content-Type': 'application/json' },
     });
 
     if (!response.ok) {
-      throw new CommunicationError(response.status, 'Failed to set LED brightness.');
+      const body = await this._errorBody(response);
+      throw new CommunicationError(response.status, `Failed to set LED brightness. HTTP ${response.status}: ${body}`);
     }
 
     await response.text();
