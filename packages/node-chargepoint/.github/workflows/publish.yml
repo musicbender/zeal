@@ -1,0 +1,98 @@
+name: Publish
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+          registry-url: 'https://registry.npmjs.org'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Get version bump from merged PR
+        id: bump
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pulls } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+            });
+            const pr = pulls.find(p => p.merged_at);
+            if (!pr) {
+              console.log('No merged PR found — skipping publish (direct push to main)');
+              core.setOutput('type', 'none');
+              return;
+            }
+            const labels = pr.labels.map(l => l.name);
+            let bump = 'none';
+            if (labels.includes('skip-release')) bump = 'none';
+            else if (labels.includes('bump:major')) bump = 'major';
+            else if (labels.includes('bump:minor')) bump = 'minor';
+            else if (labels.includes('bump:patch')) bump = 'patch';
+            core.setOutput('type', bump);
+            console.log(`PR #${pr.number} "${pr.title}": bump = ${bump}`);
+
+      - name: Configure git
+        if: steps.bump.outputs.type != 'none'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version
+        if: steps.bump.outputs.type != 'none'
+        id: version
+        run: |
+          BUMP="${{ steps.bump.outputs.type }}"
+          MAJOR=$(jq -r '.version | split(".")[0]' package.json)
+
+          # Pre-v1: major bumps become minor (stay on 0.x.y until 1.0.0 is intentional)
+          if [ "$MAJOR" = "0" ] && [ "$BUMP" = "major" ]; then
+            echo "Pre-v1: treating major as minor"
+            BUMP="minor"
+          fi
+
+          npm version "$BUMP" --no-git-tag-version
+          NEW_VERSION=$(jq -r '.version' package.json)
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
+          git add package.json
+          git commit -m "chore: release v${NEW_VERSION} [skip ci]"
+          git tag "v${NEW_VERSION}"
+          git push origin main --follow-tags
+
+      - name: Publish to npm
+        if: steps.bump.outputs.type != 'none'
+        run: pnpm publish --no-git-checks --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        if: steps.bump.outputs.type != 'none'
+        run: |
+          gh release create "v${{ steps.version.outputs.new_version }}" \
+            --title "v${{ steps.version.outputs.new_version }}" \
+            --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
