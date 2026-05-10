@@ -1,14 +1,60 @@
-import { DISCOVERY_API } from './constants.js';
+import https from 'node:https';
+import { DISCOVERY_API, USER_AGENT } from './constants.js';
 import { CommunicationError } from './exceptions.js';
 import type { APIEndpoints, GlobalConfiguration } from './types.js';
 
 type RawValue = Record<string, unknown>;
 
+// Node 24's built-in fetch automatically adds `Sec-Fetch-Mode: cors`, which
+// causes the ChargePoint discovery endpoint to return HTTP 500. Using node:https
+// directly avoids that header. Default import (not named) is required so that
+// MSW's runtime patch of https.request is visible at call time in unit tests.
+async function postJson(url: string, body: string): Promise<{ status: number; data: RawValue }> {
+  return new Promise((resolve, reject) => {
+    const bodyBuf = Buffer.from(body, 'utf-8');
+    const req = https.request(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': bodyBuf.byteLength,
+          'User-Agent': USER_AGENT,
+        },
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        res.on('end', () => {
+          const statusCode = res.statusCode ?? 0;
+          if (statusCode < 200 || statusCode >= 300) {
+            reject(new CommunicationError(statusCode, 'Failed to fetch global configuration.'));
+            return;
+          }
+          try {
+            resolve({ status: statusCode, data: JSON.parse(Buffer.concat(chunks).toString('utf-8')) as RawValue });
+          } catch {
+            reject(new CommunicationError(statusCode, 'Failed to parse global configuration response.'));
+          }
+        });
+      },
+    );
+    req.on('error', (err: Error) => {
+      reject(new CommunicationError(0, `Failed to reach ChargePoint discovery API: ${err.message}`));
+    });
+    req.write(bodyBuf);
+    req.end();
+  });
+}
+
 function endpointStr(v: unknown): string {
-  if (v !== null && typeof v === 'object' && 'value' in v) {
-    return String((v as RawValue).value ?? '');
-  }
-  return typeof v === 'string' ? v : '';
+  const raw =
+    v !== null && typeof v === 'object' && 'value' in v
+      ? String((v as RawValue).value ?? '')
+      : typeof v === 'string'
+        ? v
+        : '';
+  return raw.replace(/\/+$/, ''); // strip trailing slashes so callers can always do `${url}/path`
 }
 
 function parseEndpoints(raw: RawValue): APIEndpoints {
@@ -38,22 +84,8 @@ function parseEndpoints(raw: RawValue): APIEndpoints {
 }
 
 export async function fetchGlobalConfig(region = 'NA'): Promise<GlobalConfiguration> {
-  let response: Response;
-  try {
-    response = await fetch(DISCOVERY_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ regionCode: region }),
-    });
-  } catch (err) {
-    throw new CommunicationError(0, `Failed to reach ChargePoint discovery API: ${String(err)}`);
-  }
+  const { data } = await postJson(DISCOVERY_API, JSON.stringify({ regionCode: region }));
 
-  if (!response.ok) {
-    throw new CommunicationError(response.status, 'Failed to fetch global configuration.');
-  }
-
-  const data = (await response.json()) as RawValue;
   // The API may return the config directly or nested under "globalConfiguration"
   const raw = (typeof data.globalConfiguration === 'object' && data.globalConfiguration !== null
     ? data.globalConfiguration

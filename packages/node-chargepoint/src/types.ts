@@ -71,8 +71,10 @@ export interface User {
 export interface AccountBalance {
   accountNumber: string;
   accountState: string;
-  amount: number;
-  currency: string;
+  balance: {
+    currency: string;
+    amount: string;
+  };
 }
 
 export interface Account {

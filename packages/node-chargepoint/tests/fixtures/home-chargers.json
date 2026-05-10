@@ -1,6 +1,7 @@
 {
-  "chargers": [
-    { "chargerId": 12345 },
-    { "chargerId": 67890 }
-  ]
+  "data": [
+    { "id": "12345", "label": null, "protocolIdentifier": null, "coordinates": null, "location": null },
+    { "id": "67890", "label": null, "protocolIdentifier": null, "coordinates": null, "location": null }
+  ],
+  "pagination": { "nextCursor": "none" }
 }

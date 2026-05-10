@@ -79,7 +79,7 @@ describe('getAccount()', () => {
     const account = await client.getAccount();
     expect(account.user.userId).toBe(1234567890);
     expect(account.user.email).toBe('test@example.com');
-    expect(account.accountBalance.currency).toBe('USD');
+    expect(account.accountBalance.balance.currency).toBe('USD');
   });
 
   it('throws InvalidSession on 401', async () => {
@@ -294,7 +294,7 @@ describe('_request() error handling', () => {
     server.use(
       http.get('https://account.chargepoint.com/v1/driver/profile/user', () =>
         HttpResponse.json(
-          { user: { userId: 1234567890, email: 'test@example.com', username: 'testuser', fullName: 'Test User', givenName: 'Test', familyName: 'User', phone: '', phoneCountryId: 1, evatarUrl: '' }, accountBalance: { accountNumber: '', accountState: 'ACTIVE', amount: 0, currency: 'USD' } },
+          { user: { userId: 1234567890, email: 'test@example.com', username: 'testuser', fullName: 'Test User', givenName: 'Test', familyName: 'User', phone: '', phoneCountryId: 1, evatarUrl: '' }, accountBalance: { accountNumber: '', accountState: 'ACTIVE', balance: { currency: 'USD', amount: '0.00' } } },
           {
             headers: {
               'Set-Cookie': `coulomb_sess=${newToken}; Domain=.chargepoint.com; Path=/; Max-Age=7200`,

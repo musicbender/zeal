@@ -256,14 +256,21 @@ export class ChargePoint {
     const response = await this._request('GET', url);
 
     if (!response.ok) {
-      throw new CommunicationError(response.status, 'Failed to get home chargers.');
+      let body: unknown;
+      try { body = await response.json(); } catch { /* ignore */ }
+      throw new CommunicationError(response.status, 'Failed to get home chargers.', body);
     }
 
     const data = (await response.json()) as RawObj;
-    const chargers = Array.isArray(data.chargers) ? (data.chargers as RawObj[]) : [];
-    return chargers.map((c) => {
-      // API may use chargerId (camelCase) or charger_id (snake_case)
-      const id = c.chargerId ?? c.charger_id;
+    // API returns { data: [...] }; older shape used { chargers: [...] }
+    const arr = Array.isArray(data.data)
+      ? (data.data as RawObj[])
+      : Array.isArray(data.chargers)
+        ? (data.chargers as RawObj[])
+        : [];
+    return arr.map((c) => {
+      // API uses "id" (string); older shape used chargerId / charger_id (number)
+      const id = c.id ?? c.chargerId ?? c.charger_id;
       return typeof id === 'number' ? id : Number(id);
     });
   }
@@ -277,7 +284,24 @@ export class ChargePoint {
       throw new CommunicationError(response.status, 'Failed to get home charger status.');
     }
 
-    return (await response.json()) as HomeChargerStatus;
+    const data = (await response.json()) as RawObj;
+    // Real API nests amperage info under chargeAmperageSettings; fall back to flat fields for older shapes
+    const amp = (data.chargeAmperageSettings ?? {}) as RawObj;
+    return {
+      chargerId, // not echoed by the API; inject from parameter
+      brand: String(data.brand ?? ''),
+      model: String(data.model ?? ''),
+      macAddress: String(data.macAddress ?? ''),
+      chargingStatus: String(data.chargingStatus ?? ''),
+      isPluggedIn: Boolean(data.isPluggedIn),
+      isConnected: Boolean(data.isConnected),
+      isReminderEnabled: Boolean(data.isReminderEnabled),
+      plugInReminderTime: String(data.plugInReminderTime ?? ''),
+      hasUtilityInfo: Boolean(data.hasUtilityInfo),
+      isDuringScheduledTime: Boolean(data.isDuringScheduledTime),
+      amperageLimit: Number(amp.chargeLimit ?? data.amperageLimit ?? 0),
+      possibleAmperageLimits: ((amp.possibleChargeLimit ?? data.possibleAmperageLimits ?? []) as number[]).map(Number),
+    };
   }
 
   async getHomeChargerTechnicalInfo(chargerId: number): Promise<HomeChargerTechnicalInfo> {
@@ -301,7 +325,38 @@ export class ChargePoint {
       throw new CommunicationError(response.status, 'Failed to get home charger configuration.');
     }
 
-    return (await response.json()) as HomeChargerConfiguration;
+    const data = (await response.json()) as RawObj;
+    // Real API wraps all fields under "settings"; fall back to flat shape for older responses
+    const s = (data.settings ?? data) as RawObj;
+    // LED brightness: real API uses settings.led.brightness with string-typed level/supportedLevels
+    const rawLed = ((s.led as RawObj | undefined)?.brightness ?? s.ledBrightness ?? {}) as RawObj;
+    const level =
+      typeof rawLed.level === 'string'
+        ? Number(rawLed.level)
+        : Number(rawLed.level ?? rawLed.currentBrightnessSettings ?? 0);
+    const supportedLevels = Array.isArray(rawLed.supportedLevels)
+      ? (rawLed.supportedLevels as (string | number)[]).map(Number)
+      : [];
+    return {
+      serialNumber: String(s.serialNumber ?? ''),
+      macAddress: String(s.macAddress ?? ''),
+      stationNickname: String(s.stationNickname ?? ''),
+      streetAddress: String(s.streetAddress ?? ''),
+      hasUtilityInfo: Boolean(s.hasUtilityInfo),
+      utility: (s.utility ?? null) as HomeChargerConfiguration['utility'],
+      // API may return boolean true/false or string "ON"/"OFF"
+      indicatorLightEcoMode: s.indicatorLightEcoMode === true || s.indicatorLightEcoMode === 'ON',
+      flashlightReset: Boolean(s.flashlightReset),
+      worksWithNest: Boolean(s.worksWithNest),
+      isPairedWithNest: Boolean(s.isPairedWithNest),
+      isInstalledByInstaller: Boolean(s.isInstalledByInstaller),
+      ledBrightness: {
+        level,
+        inProgress: Boolean(rawLed.inProgress),
+        supportedLevels,
+        isEnabled: rawLed.isEnabled !== false,
+      },
+    };
   }
 
   async getHomeChargerSchedule(chargerId: number): Promise<HomeChargerSchedule> {
