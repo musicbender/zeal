@@ -15,6 +15,10 @@ export class PrismaService {
 		return this.prismaClient.sensor;
 	}
 
+	get chargingEvent() {
+		return this.prismaClient.chargingEvent;
+	}
+
 	async $disconnect(): Promise<void> {
 		await this.prismaClient.$disconnect();
 	}
