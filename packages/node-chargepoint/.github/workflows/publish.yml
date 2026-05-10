@@ -86,8 +86,6 @@ jobs:
       - name: Publish to npm
         if: steps.bump.outputs.type != 'none'
         run: npm publish --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
         if: steps.bump.outputs.type != 'none'
