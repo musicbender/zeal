@@ -52,13 +52,13 @@ Follows the existing gaspar pattern: one service class, one routes file, registe
 
 `SunkeepService` holds one of five states:
 
-| State      | Meaning                                                                 |
-| ---------- | ----------------------------------------------------------------------- |
-| `DISABLED` | Automation off — no polling, no API calls                               |
-| `IDLE`     | Enabled, polling, car not plugged in                                    |
-| `WAITING`  | Car plugged in, insufficient excess solar (< 1.92 kW) or battery < 100% |
-| `CHARGING` | Active session in progress, amps adjusting every 10 min                 |
-| `ERROR`    | A recoverable error occurred — logged, retried next poll cycle          |
+| State      | Meaning                                                               |
+| ---------- | --------------------------------------------------------------------- |
+| `DISABLED` | Automation off — no polling, no API calls                             |
+| `IDLE`     | Enabled, polling, car not plugged in                                  |
+| `WAITING`  | Car plugged in, insufficient excess solar (< 1.5 kW) or battery < 95% |
+| `CHARGING` | Active session in progress, amps adjusting every 10 min               |
+| `ERROR`    | A recoverable error occurred — logged, retried next poll cycle        |
 
 ---
 
@@ -83,8 +83,8 @@ Follows the existing gaspar pattern: one service class, one routes file, registe
 5. excess_kw = solar_kw - load_kw
    target_amps = clamp(floor(excess_kw * 1000 / 240), 8, 32)
 
-   - excess_kw < 1.92 AND state == CHARGING → stop session (reason: solar_dropped), update ChargingEvent, state = WAITING, exit
-   - excess_kw < 1.92 → state = WAITING, exit
+   - excess_kw < 1.5 AND state == CHARGING → stop session (reason: solar_dropped), update ChargingEvent, state = WAITING, exit
+   - excess_kw < 1.5 → state = WAITING, exit
 
 6. state == IDLE or WAITING:
    - setAmperageLimit(target_amps)
@@ -107,6 +107,7 @@ target_amps = clamp(floor(excessKw * 1000 / 240), 8, 32)
 - Voltage: 240V (US Level 2 standard)
 - Minimum: 8A (~1.92 kW) — ChargePoint home charger minimum
 - Maximum: 32A (~7.68 kW) — ChargePoint home charger maximum
+- Start/stop threshold: 1.5 kW — note that at 1.5–1.92 kW of excess, the charger runs at minimum 8A which slightly exceeds the available excess; the small deficit (~0.4 kW) is accepted as a deliberate trade-off to start charging earlier
 - `possibleAmperageLimits` from the ChargePoint API is used to snap to valid values if the charger reports a non-contiguous set
 - **SOE threshold:** The Powerwall reports SOE as a float that may hover at 99.7–99.9% when physically full. `battery_pct >= 95` is used as the "battery full" threshold to avoid the automation being permanently blocked by minor SOE fluctuations. This is configurable via `POWERWALL_SOE_THRESHOLD` env var (default: 95).
 
@@ -116,7 +117,7 @@ target_amps = clamp(floor(excessKw * 1000 / 240), 8, 32)
 
 | Reason             | Trigger                                                              |
 | ------------------ | -------------------------------------------------------------------- |
-| `solar_dropped`    | Excess kW fell below 1.92 kW during active session                   |
+| `solar_dropped`    | Excess kW fell below 1.5 kW during active session                    |
 | `night_safety`     | `solar_kw == 0` detected during active session                       |
 | `battery_depleted` | Powerwall SOE dropped below 95% (configurable) during active session |
 | `unplugged`        | `isPluggedIn` became false during active session                     |
