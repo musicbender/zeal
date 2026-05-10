@@ -1,0 +1,759 @@
+{
+  "info": {
+    "name": "ChargePoint API",
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "description": "Complete API collection for the node-chargepoint library.\n\n## Quick Start\n\n1. Run **Setup > Fetch Global Config** to populate all endpoint variables automatically.\n2. Set your `username` and `password` collection variables.\n3. Run **Authentication > Login with Password** — your session token is saved automatically.\n4. Run **Account > Get Account** to populate `userId`.\n5. You're ready to use any other request.\n\n## Authentication\n\nAll authenticated requests send:\n- `cookie: coulomb_sess={{coulombToken}}`\n- `cp-session-type: CP_SESSION_TOKEN`\n- `cp-session-token: {{coulombToken}}`\n- `cp-region: {{region}}`\n\nThese are injected by the collection-level pre-request script automatically once `coulombToken` is set.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "discoveryEndpoint",
+      "value": "https://discovery.chargepoint.com/discovery/v3/globalconfig",
+      "description": "ChargePoint discovery API — do not change"
+    },
+    {
+      "key": "region",
+      "value": "NA",
+      "description": "Region code. NA for North America, EU for Europe"
+    },
+    {
+      "key": "username",
+      "value": "",
+      "description": "Your ChargePoint account email address"
+    },
+    {
+      "key": "password",
+      "value": "",
+      "description": "Your ChargePoint account password",
+      "type": "secret"
+    },
+    {
+      "key": "coulombToken",
+      "value": "",
+      "description": "Session token — set automatically by Login requests"
+    },
+    {
+      "key": "ssoEndpoint",
+      "value": "",
+      "description": "SSO base URL — populated by Fetch Global Config"
+    },
+    {
+      "key": "portalDomainEndpoint",
+      "value": "",
+      "description": "Portal base URL — populated by Fetch Global Config"
+    },
+    {
+      "key": "accountsEndpoint",
+      "value": "",
+      "description": "Accounts API base URL — populated by Fetch Global Config"
+    },
+    {
+      "key": "mapcacheEndpoint",
+      "value": "",
+      "description": "Mapcache API base URL — populated by Fetch Global Config"
+    },
+    {
+      "key": "hcpoHcmEndpoint",
+      "value": "",
+      "description": "Home charger management base URL — populated by Fetch Global Config"
+    },
+    {
+      "key": "internalApiGatewayEndpoint",
+      "value": "",
+      "description": "Internal API gateway base URL — populated by Fetch Global Config"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "description": "Your numeric ChargePoint user ID — set automatically by Get Account"
+    },
+    {
+      "key": "chargerId",
+      "value": "",
+      "description": "Home charger device ID — find via Get Home Chargers"
+    },
+    {
+      "key": "deviceId",
+      "value": "",
+      "description": "Public charging station device ID"
+    },
+    {
+      "key": "sessionId",
+      "value": "",
+      "description": "Active charging session ID"
+    },
+    {
+      "key": "ackId",
+      "value": "",
+      "description": "Acknowledgement ID from start/stop command — set automatically"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Inject ChargePoint auth headers whenever a session token exists.",
+          "// The login and SSO requests work without a token, so skipping them is safe.",
+          "const token = pm.collectionVariables.get('coulombToken');",
+          "if (token) {",
+          "    pm.request.headers.upsert({ key: 'cookie', value: `coulomb_sess=${token}` });",
+          "    pm.request.headers.upsert({ key: 'cp-session-type', value: 'CP_SESSION_TOKEN' });",
+          "    pm.request.headers.upsert({ key: 'cp-session-token', value: token });",
+          "    pm.request.headers.upsert({ key: 'cp-region', value: pm.collectionVariables.get('region') || 'NA' });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Setup",
+      "description": "Run these requests first to configure endpoint variables.",
+      "item": [
+        {
+          "name": "Fetch Global Config",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{discoveryEndpoint}}",
+              "host": ["{{discoveryEndpoint}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"regionCode\": \"{{region}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Fetches the ChargePoint global configuration and populates all base endpoint variables. Run this before any other request."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Global config fetched', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "const raw = json.globalConfiguration ?? json;",
+                  "const eps = raw.endPoints ?? raw.endpoints ?? {};",
+                  "",
+                  "function endpointStr(v) {",
+                  "    const raw = (v !== null && typeof v === 'object' && 'value' in v) ? String(v.value ?? '') : (typeof v === 'string' ? v : '');",
+                  "    return raw.replace(/\\/+$/, '');",
+                  "}",
+                  "",
+                  "const keys = {",
+                  "    ssoEndpoint:                ['ssoEndpoint', 'sso_endpoint'],",
+                  "    portalDomainEndpoint:       ['portalDomainEndpoint', 'portal_domain_endpoint'],",
+                  "    accountsEndpoint:           ['accountsEndpoint', 'accounts_endpoint'],",
+                  "    mapcacheEndpoint:           ['mapcacheEndpoint', 'mapcache_endpoint'],",
+                  "    hcpoHcmEndpoint:            ['hcpoHcmEndpoint', 'hcpo_hcm_endpoint'],",
+                  "    internalApiGatewayEndpoint: ['internalApiGatewayEndpoint', 'internal_api_gateway_endpoint']",
+                  "};",
+                  "",
+                  "Object.entries(keys).forEach(([varName, [camel, snake]]) => {",
+                  "    const val = endpointStr(eps[camel] ?? eps[snake] ?? '');",
+                  "    if (val) {",
+                  "        pm.collectionVariables.set(varName, val);",
+                  "        console.log(`Set ${varName} = ${val}`);",
+                  "    }",
+                  "});",
+                  "",
+                  "console.log('All endpoint variables populated.');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Authentication",
+      "description": "Login, SSO, and logout endpoints.",
+      "item": [
+        {
+          "name": "Login with Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{ssoEndpoint}}/v1/user/login",
+              "host": ["{{ssoEndpoint}}"],
+              "path": ["v1", "user", "login"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_name\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Authenticates with username and password. On success the response sets a `coulomb_sess` cookie which is extracted and saved to the `coulombToken` collection variable automatically.\n\n**Throws:** `LoginError` (HTTP 4xx)"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login succeeded', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "// Extract coulomb_sess from Set-Cookie and save it",
+                  "const setCookie = pm.response.headers.get('set-cookie') || '';",
+                  "const match = setCookie.match(/coulomb_sess=([^;]+)/);",
+                  "if (match) {",
+                  "    const token = decodeURIComponent(match[1]);",
+                  "    pm.collectionVariables.set('coulombToken', token);",
+                  "    console.log('Session token saved.');",
+                  "} else {",
+                  "    console.warn('No coulomb_sess cookie found in response.');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login with SSO Session",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "cookie", "value": "auth-session={{ssoJwt}}", "description": "Set ssoJwt variable to your SSO JWT" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{portalDomainEndpoint}}/index.php/nghelper/getSession",
+              "host": ["{{portalDomainEndpoint}}"],
+              "path": ["index.php", "nghelper", "getSession"]
+            },
+            "description": "Exchanges an SSO JWT (OAuth token from a third-party login flow) for a `coulomb_sess` session cookie. Set the `ssoJwt` variable to your SSO JWT before running.\n\n**Throws:** `LoginError` (HTTP 4xx)"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('SSO login succeeded', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const setCookie = pm.response.headers.get('set-cookie') || '';",
+                  "const match = setCookie.match(/coulomb_sess=([^;]+)/);",
+                  "if (match) {",
+                  "    const token = decodeURIComponent(match[1]);",
+                  "    pm.collectionVariables.set('coulombToken', token);",
+                  "    console.log('Session token saved.');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{ssoEndpoint}}/v1/user/logout",
+              "host": ["{{ssoEndpoint}}"],
+              "path": ["v1", "user", "logout"]
+            },
+            "description": "Ends the current session. Clears the `coulombToken` collection variable on success."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Logout succeeded', function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "pm.collectionVariables.set('coulombToken', '');",
+                  "console.log('Session token cleared.');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Account",
+      "description": "User profile, vehicles, and current charging status.",
+      "item": [
+        {
+          "name": "Get Account",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{accountsEndpoint}}/v1/driver/profile/user",
+              "host": ["{{accountsEndpoint}}"],
+              "path": ["v1", "driver", "profile", "user"]
+            },
+            "description": "Returns the authenticated user's profile and account balance. Also saves `userId` to the collection variable.\n\n**Returns:** `Account` — `{ user: User, accountBalance: AccountBalance }`"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Got account', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "if (json.user && json.user.userId) {",
+                  "    pm.collectionVariables.set('userId', String(json.user.userId));",
+                  "    console.log('userId saved:', json.user.userId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Vehicles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{accountsEndpoint}}/v1/driver/vehicle",
+              "host": ["{{accountsEndpoint}}"],
+              "path": ["v1", "driver", "vehicle"]
+            },
+            "description": "Returns all registered electric vehicles for the authenticated user.\n\n**Returns:** `ElectricVehicle[]` — `[{ make, model, year, color, chargingSpeed, dcChargingSpeed, ... }]`"
+          }
+        },
+        {
+          "name": "Get User Charging Status",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{mapcacheEndpoint}}/v2",
+              "host": ["{{mapcacheEndpoint}}"],
+              "path": ["v2"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_status\": {\n    \"timestamp\": {{$timestamp}}000\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Returns the user's current charging session status, or null if not currently charging.\n\n**Returns:** `UserChargingStatus | null` — `{ sessionId, startTime, state, stations[] }`"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Got charging status', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "const status = json.user_status?.charging_status;",
+                  "if (status?.session_id) {",
+                  "    pm.collectionVariables.set('sessionId', String(status.session_id));",
+                  "    console.log('Active session found:', status.session_id);",
+                  "} else {",
+                  "    console.log('No active charging session.');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Home Chargers",
+      "description": "Manage home charging equipment (ChargePoint Home Flex, Home, etc.).",
+      "item": [
+        {
+          "name": "Get Home Chargers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{hcpoHcmEndpoint}}/api/v1/configuration/users/{{userId}}/chargers",
+              "host": ["{{hcpoHcmEndpoint}}"],
+              "path": ["api", "v1", "configuration", "users", "{{userId}}", "chargers"]
+            },
+            "description": "Returns the list of home charger IDs registered to the user.\n\n**Returns:** `number[]` — array of charger IDs\n\n**Prerequisite:** `userId` must be set (run Get Account first)"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Got home chargers', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "const arr = Array.isArray(json.data) ? json.data : (Array.isArray(json.chargers) ? json.chargers : []);",
+                  "if (arr.length > 0) {",
+                  "    const first = arr[0];",
+                  "    const id = first.id ?? first.chargerId ?? first.charger_id;",
+                  "    pm.collectionVariables.set('chargerId', String(id));",
+                  "    console.log('First chargerId saved:', id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Home Charger Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{hcpoHcmEndpoint}}/api/v1/configuration/users/{{userId}}/chargers/{{chargerId}}/status",
+              "host": ["{{hcpoHcmEndpoint}}"],
+              "path": ["api", "v1", "configuration", "users", "{{userId}}", "chargers", "{{chargerId}}", "status"]
+            },
+            "description": "Returns the current status of a home charger.\n\n**Returns:** `HomeChargerStatus` — `{ chargerId, brand, model, macAddress, chargingStatus, isPluggedIn, isConnected, amperageLimit, possibleAmperageLimits, ... }`"
+          }
+        },
+        {
+          "name": "Get Home Charger Technical Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{hcpoHcmEndpoint}}/api/v1/configuration/users/{{userId}}/chargers/{{chargerId}}/technical-info",
+              "host": ["{{hcpoHcmEndpoint}}"],
+              "path": ["api", "v1", "configuration", "users", "{{userId}}", "chargers", "{{chargerId}}", "technical-info"]
+            },
+            "description": "Returns hardware and connectivity details for a home charger.\n\n**Returns:** `HomeChargerTechnicalInfo` — `{ modelNumber, serialNumber, wifiMac, macAddress, softwareVersion, lastOtaUpdate, lastConnectedAt, deviceIp, stopChargeSupported }`"
+          }
+        },
+        {
+          "name": "Get Home Charger Config",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{hcpoHcmEndpoint}}/api/v1/configuration/users/{{userId}}/chargers/{{chargerId}}/configurations",
+              "host": ["{{hcpoHcmEndpoint}}"],
+              "path": ["api", "v1", "configuration", "users", "{{userId}}", "chargers", "{{chargerId}}", "configurations"]
+            },
+            "description": "Returns the user-facing configuration of a home charger.\n\n**Returns:** `HomeChargerConfiguration` — `{ stationNickname, streetAddress, ledBrightness, hasUtilityInfo, utility, worksWithNest, isPairedWithNest, ... }`"
+          }
+        },
+        {
+          "name": "Get Home Charger Schedule",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{hcpoHcmEndpoint}}/api/v1/schedule/charger/{{chargerId}}/schedule",
+              "host": ["{{hcpoHcmEndpoint}}"],
+              "path": ["api", "v1", "schedule", "charger", "{{chargerId}}", "schedule"]
+            },
+            "description": "Returns the charge scheduling configuration for a home charger.\n\n**Returns:** `HomeChargerSchedule` — `{ scheduleEnabled, hasTouPricing, defaultSchedule, userSchedule, utilitySchedule, ... }`"
+          }
+        },
+        {
+          "name": "Set Home Charger Schedule",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{hcpoHcmEndpoint}}/api/v1/schedule/charger/{{chargerId}}/schedule",
+              "host": ["{{hcpoHcmEndpoint}}"],
+              "path": ["api", "v1", "schedule", "charger", "{{chargerId}}", "schedule"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schedule\": {\n    \"weekdays\": {\n      \"startTime\": \"23:00\",\n      \"endTime\": \"07:00\"\n    },\n    \"weekends\": {\n      \"startTime\": \"23:00\",\n      \"endTime\": \"09:00\"\n    }\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Sets the charging schedule for a home charger. Times are in `HH:MM` 24-hour format.\n\n**Body fields:**\n- `schedule.weekdays.startTime` — when off-peak charging begins (e.g. `\"23:00\"`)\n- `schedule.weekdays.endTime` — when off-peak charging ends (e.g. `\"07:00\"`)\n- `schedule.weekends.startTime` — weekend start (e.g. `\"23:00\"`)\n- `schedule.weekends.endTime` — weekend end (e.g. `\"09:00\"`)\n\n**Returns:** `HomeChargerSchedule`"
+          }
+        },
+        {
+          "name": "Disable Home Charger Schedule",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{hcpoHcmEndpoint}}/api/v1/schedule/charger/{{chargerId}}/schedule",
+              "host": ["{{hcpoHcmEndpoint}}"],
+              "path": ["api", "v1", "schedule", "charger", "{{chargerId}}", "schedule"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Disables the charging schedule for a home charger by sending an empty body to the schedule endpoint.\n\n**Returns:** `void`"
+          }
+        },
+        {
+          "name": "Set Amperage Limit",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{hcpoHcmEndpoint}}/api/v1/configuration/chargers/{{chargerId}}/charge-amperage-limit",
+              "host": ["{{hcpoHcmEndpoint}}"],
+              "path": ["api", "v1", "configuration", "chargers", "{{chargerId}}", "charge-amperage-limit"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chargeAmperageLimit\": 32\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Sets the maximum charging amperage for a home charger.\n\nValid values are listed in `HomeChargerStatus.possibleAmperageLimits` (e.g. 8, 16, 24, 32, 40, 48, 50).\n\n**Returns:** `void`"
+          }
+        },
+        {
+          "name": "Set LED Brightness",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{hcpoHcmEndpoint}}/api/v1/configuration/chargers/{{chargerId}}/led-brightness",
+              "host": ["{{hcpoHcmEndpoint}}"],
+              "path": ["api", "v1", "configuration", "chargers", "{{chargerId}}", "led-brightness"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ledBrightnessLevel\": 3\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Sets the LED indicator brightness level.\n\n**Levels:**\n- `0` — Off\n- `1` — 20%\n- `2` — 40%\n- `3` — 60%\n- `4` — 80%\n- `5` — 100%\n\nSupported levels are listed in `HomeChargerConfiguration.ledBrightness.supportedLevels`.\n\n**Returns:** `void`"
+          }
+        },
+        {
+          "name": "Restart Home Charger",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{hcpoHcmEndpoint}}/api/v1/configuration/users/{{userId}}/chargers/{{chargerId}}/restart",
+              "host": ["{{hcpoHcmEndpoint}}"],
+              "path": ["api", "v1", "configuration", "users", "{{userId}}", "chargers", "{{chargerId}}", "restart"]
+            },
+            "description": "Sends a remote restart command to the home charger. Use with caution — this interrupts any active charging session.\n\n**Returns:** `void`"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Charging Sessions",
+      "description": "Start, monitor, and stop charging sessions. The start/stop flow uses a two-step command + acknowledgement pattern.",
+      "item": [
+        {
+          "name": "Start Session — Send Command",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{accountsEndpoint}}/v1/driver/station/startsession",
+              "host": ["{{accountsEndpoint}}"],
+              "path": ["v1", "driver", "station", "startsession"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceId\": {{deviceId}}\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Step 1 of 2 for starting a charging session. Sends the start command to the station. The response includes an `ackId` which is saved automatically for use in **Poll Session Ack**.\n\nSet `deviceId` to the charging station's device ID.\n\n**Returns:** `{ ackId: string }`"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Start command sent', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "if (json.ackId) {",
+                  "    pm.collectionVariables.set('ackId', json.ackId);",
+                  "    console.log('ackId saved:', json.ackId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Poll Session Ack",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{accountsEndpoint}}/v1/driver/station/session/ack",
+              "host": ["{{accountsEndpoint}}"],
+              "path": ["v1", "driver", "station", "session", "ack"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ackId\": \"{{ackId}}\",\n  \"action\": \"start_session\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Step 2 of 2 for starting a session. Poll this endpoint with the `ackId` from **Send Command** until it returns HTTP 200. The library retries up to 20 times with a 3-second delay between attempts.\n\n**Action values:**\n- `start_session` — waiting for session start\n- `stop_session` — waiting for session stop\n\n**Returns:** `200` when command is acknowledged, non-200 while pending"
+          }
+        },
+        {
+          "name": "Get Session Data",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{internalApiGatewayEndpoint}}/driver-bff/v1/sessions/{{sessionId}}",
+              "host": ["{{internalApiGatewayEndpoint}}"],
+              "path": ["driver-bff", "v1", "sessions", "{{sessionId}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"charging_status\": {\n    \"session_id\": {{sessionId}},\n    \"mfhs\": []\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Fetches live data for an active charging session. This is the same endpoint called by `ChargingSession.refresh()`.\n\n**Returns:** `charging_status` object with all session properties (snake_case keys):\n- `current_charging` — e.g. `\"CHARGING\"`, `\"COMPLETED\"`\n- `energy_kwh`, `power_kw`, `miles_added`\n- `total_amount`, `payment_type`\n- `device_id`, `device_name`, `company_name`\n- `update_data[]` — historical energy readings\n- `vehicle_info`, `utility`"
+          }
+        },
+        {
+          "name": "Stop Session — Send Command",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{accountsEndpoint}}/v1/driver/station/stopSession",
+              "host": ["{{accountsEndpoint}}"],
+              "path": ["v1", "driver", "station", "stopSession"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceId\": {{deviceId}},\n  \"portNumber\": 1,\n  \"sessionId\": {{sessionId}}\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Step 1 of 2 for stopping a charging session. Sends the stop command. Poll **Poll Session Ack** (with `action: stop_session`) until HTTP 200.\n\n**Body fields:**\n- `deviceId` — station device ID\n- `portNumber` — outlet number (from session data, usually 1)\n- `sessionId` — active session ID\n\n**Returns:** `{ ackId: string }`"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Stop command sent', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "if (json.ackId) {",
+                  "    pm.collectionVariables.set('ackId', json.ackId);",
+                  "    console.log('ackId saved for stop poll:', json.ackId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Poll Stop Ack",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{accountsEndpoint}}/v1/driver/station/session/ack",
+              "host": ["{{accountsEndpoint}}"],
+              "path": ["v1", "driver", "station", "session", "ack"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ackId\": \"{{ackId}}\",\n  \"action\": \"stop_session\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Step 2 of 2 for stopping a session. Poll until HTTP 200. Uses `action: stop_session`."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Stations",
+      "description": "Look up public charging station information and find nearby stations.",
+      "item": [
+        {
+          "name": "Get Station Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{mapcacheEndpoint}}/v3/station/info?deviceId={{deviceId}}&use_cache=false",
+              "host": ["{{mapcacheEndpoint}}"],
+              "path": ["v3", "station", "info"],
+              "query": [
+                { "key": "deviceId", "value": "{{deviceId}}", "description": "Station device ID" },
+                { "key": "use_cache", "value": "false", "description": "Set to true to allow cached results" }
+              ]
+            },
+            "description": "Returns detailed information for a specific charging station by device ID.\n\n**Returns:** `StationInfo` — `{ deviceId, name[], address, portsInfo, stationStatus, stationPrice, network, latitude, longitude, maxPower, stopChargeSupported, ... }`"
+          }
+        },
+        {
+          "name": "Get Nearby Stations",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{mapcacheEndpoint}}/v2",
+              "host": ["{{mapcacheEndpoint}}"],
+              "path": ["v2"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"station_list\": {\n    \"ne_lat\": 37.8049,\n    \"ne_lon\": -122.3900,\n    \"sw_lat\": 37.7649,\n    \"sw_lon\": -122.4300,\n    \"statusAvailable\": false,\n    \"priceFree\": false,\n    \"networkChargepoint\": false,\n    \"connectorL2\": false,\n    \"dcFastCharging\": false\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Returns charging stations within a geographic bounding box. The example covers a portion of San Francisco — adjust `ne_lat/ne_lon/sw_lat/sw_lon` to your area.\n\n**Bounding box fields (required):**\n- `ne_lat` / `ne_lon` — northeast corner\n- `sw_lat` / `sw_lon` — southwest corner\n\n**Optional filter flags (set to `true` to filter):**\n- `statusAvailable` — only available stations\n- `priceFree` — only free stations\n- `networkChargepoint`, `networkEvgo`, `networkBlink`, `networkFlo`, `networkIonna`, etc.\n- `connectorL1`, `connectorL2`, `connectorL2Nema1450`, `connectorTesla`, `connectorCombo`, `connectorChademo`\n- `dcFastCharging` — DC fast charge only\n- `disabledParking`, `vanAccessible`\n\n**Returns:** `MapStation[]`"
+          }
+        }
+      ]
+    }
+  ]
+}
