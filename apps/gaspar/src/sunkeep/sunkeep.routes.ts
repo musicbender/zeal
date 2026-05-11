@@ -8,7 +8,7 @@ interface IPrismaChargingEvent {
 	findMany(args: {
 		skip: number;
 		take: number;
-		orderBy: { startedAt: string };
+		orderBy: { startedAt: 'asc' | 'desc' };
 	}): Promise<unknown[]>;
 	findUnique(args: { where: { id: string } }): Promise<unknown | null>;
 	count(): Promise<number>;

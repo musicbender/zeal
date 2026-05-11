@@ -9,6 +9,7 @@ import { registerHealthRoutes } from './health/health.routes';
 import { PrismaService } from './prisma/prisma.service';
 import { registerSensorRoutes } from './sensors/sensors.routes';
 import { SensorService } from './sensors/sensors.service';
+import { registerSunkeepPlugin } from './sunkeep/sunkeep.plugin.js';
 
 async function bootstrap() {
 	const server = fastify({ logger: false });
@@ -28,6 +29,7 @@ async function bootstrap() {
 	await registerAppRoutes(server, appService);
 	await registerHealthRoutes(server);
 	await registerSensorRoutes(server, sensorService);
+	await registerSunkeepPlugin(server, prismaService);
 
 	// Start server
 	const port = process.env.PORT || 3000;
