@@ -23,11 +23,27 @@ function calcTargetAmps(excessKw: number): number {
 
 function isWithinSolarWindow(start: string, end: string): boolean {
 	const now = new Date();
-	const [startH, startM] = start.split(':').map(Number);
-	const [endH, endM] = end.split(':').map(Number);
+	const startParts = start.split(':').map(Number);
+	const endParts = end.split(':').map(Number);
+	const startH = startParts[0];
+	const startM = startParts[1];
+	const endH = endParts[0];
+	const endM = endParts[1];
+	if (
+		startH === undefined ||
+		startM === undefined ||
+		endH === undefined ||
+		endM === undefined ||
+		isNaN(startH) ||
+		isNaN(startM) ||
+		isNaN(endH) ||
+		isNaN(endM)
+	) {
+		return false;
+	}
 	const nowMinutes = now.getHours() * 60 + now.getMinutes();
-	const startMinutes = (startH ?? 6) * 60 + (startM ?? 0);
-	const endMinutes = (endH ?? 20) * 60 + (endM ?? 0);
+	const startMinutes = startH * 60 + startM;
+	const endMinutes = endH * 60 + endM;
 	return nowMinutes >= startMinutes && nowMinutes < endMinutes;
 }
 
@@ -80,7 +96,7 @@ export class SunkeepService {
 			? {
 					sessionId: this.activeSession.sessionId,
 					currentAmps: this.currentAmps,
-					startedAt: this.sessionStartedAt?.toISOString() ?? new Date().toISOString(),
+					startedAt: this.sessionStartedAt?.toISOString() ?? null,
 				}
 			: null;
 
@@ -122,10 +138,11 @@ export class SunkeepService {
 	}
 
 	async manualStartSession(): Promise<void> {
+		if (this.state === SunkeepState.CHARGING) return;
 		const pwData = await this.powerwall.getData();
 		this.lastPwData = pwData;
 		const excessKw = pwData.solarKw - pwData.loadKw;
-		const targetAmps = Math.max(MIN_AMPS, calcTargetAmps(excessKw));
+		const targetAmps = calcTargetAmps(excessKw);
 		await this.startSession(targetAmps);
 	}
 
@@ -216,23 +233,31 @@ export class SunkeepService {
 	private async stopActiveSession(reason: StopReason): Promise<void> {
 		if (!this.activeSession || !this.activeEventId) return;
 
+		const session = this.activeSession;
+		const eventId = this.activeEventId;
+		const endAmps = this.currentAmps;
+
 		try {
-			await this.activeSession.stop();
+			await session.stop();
 		} catch (err) {
 			log.warn({ err }, 'Error stopping ChargePoint session');
 		}
 
-		await this.prisma.chargingEvent.update({
-			where: { id: this.activeEventId },
-			data: {
-				stoppedAt: new Date(),
-				stopReason: reason,
-				endAmps: this.currentAmps,
-				energyKwh: this.activeSession.energyKwh,
-			},
-		});
+		try {
+			await this.prisma.chargingEvent.update({
+				where: { id: eventId },
+				data: {
+					stoppedAt: new Date(),
+					stopReason: reason,
+					endAmps,
+					energyKwh: session.energyKwh,
+				},
+			});
+		} catch (err) {
+			log.error({ err }, 'Failed to update ChargingEvent on session stop');
+		}
 
-		log.info({ reason, sessionId: this.activeSession.sessionId }, 'Charging session stopped');
+		log.info({ reason, sessionId: session.sessionId }, 'Charging session stopped');
 		this.activeSession = null;
 		this.activeEventId = null;
 		this.currentAmps = 0;

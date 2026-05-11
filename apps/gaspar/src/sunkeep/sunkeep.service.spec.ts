@@ -147,7 +147,7 @@ describe('SunkeepService', () => {
 		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
 	});
 
-	it('transitions to WAITING when solar_kw is 0', async () => {
+	it('transitions to IDLE when solar_kw is 0', async () => {
 		service.enable();
 		vi.setSystemTime(NOON);
 		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
@@ -319,5 +319,40 @@ describe('SunkeepService', () => {
 		service.enable();
 		await service.manualStopSession();
 		expect(mockSession.stop).not.toHaveBeenCalled();
+	});
+
+	// --- Manual start ---
+
+	it('manualStartSession() starts a session with amps based on current solar', async () => {
+		service.enable();
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 })); // 3 kW → 12A
+		await service.manualStartSession();
+
+		expect(mockCp.setAmperageLimit).toHaveBeenCalledWith(42, 12);
+		expect(mockCp.startChargingSession).toHaveBeenCalledWith(42);
+		expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
+		expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+	});
+
+	it('manualStartSession() uses minimum 8A when excess is very low', async () => {
+		service.enable();
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 1.0, loadKw: 0.5 })); // 0.5 kW → 2A → clamped to 8A
+		await service.manualStartSession();
+		expect(mockCp.setAmperageLimit).toHaveBeenCalledWith(42, 8);
+	});
+
+	it('manualStartSession() is a no-op when already CHARGING', async () => {
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+		mockPw.getData.mockResolvedValue(goodPwData());
+		await service.runTick(); // get into CHARGING state
+
+		mockCp.startChargingSession.mockClear();
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 2.0, loadKw: 0.5 }));
+		await service.manualStartSession(); // should be no-op
+
+		expect(mockCp.startChargingSession).not.toHaveBeenCalled();
+		expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
 	});
 });

@@ -37,7 +37,7 @@ export interface SunkeepConfig {
 export interface ActiveSessionSummary {
 	sessionId: number;
 	currentAmps: number;
-	startedAt: string;
+	startedAt: string | null;
 }
 
 export interface SunkeepStatus {
