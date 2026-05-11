@@ -86,7 +86,10 @@ export class SunkeepService {
 		}
 	}
 
-	disable(): void {
+	async disable(): Promise<void> {
+		if (this.state === SunkeepState.CHARGING) {
+			await this.stopActiveSession(StopReason.MANUAL);
+		}
 		this.state = SunkeepState.DISABLED;
 		log.info('Sunkeep disabled');
 	}

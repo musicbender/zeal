@@ -30,9 +30,14 @@ export async function registerSunkeepRoutes(
 		return service.getStatus();
 	});
 
-	server.post('/sunkeep/disable', async () => {
-		service.disable();
-		return service.getStatus();
+	server.post('/sunkeep/disable', async (_req, reply) => {
+		try {
+			await service.disable();
+			return service.getStatus();
+		} catch (err) {
+			log.error({ err }, 'Disable failed');
+			return reply.status(500).send({ error: 'Failed to disable Sunkeep' });
+		}
 	});
 
 	server.post('/sunkeep/charge/start', async (_req, reply) => {

@@ -92,9 +92,27 @@ describe('SunkeepService', () => {
 		expect(service.getStatus().state).toBe(SunkeepState.IDLE);
 	});
 
-	it('transitions back to DISABLED after disable()', () => {
+	it('transitions back to DISABLED after disable()', async () => {
 		service.enable();
-		service.disable();
+		await service.disable();
+		expect(service.getStatus().state).toBe(SunkeepState.DISABLED);
+	});
+
+	it('transitions to DISABLED and stops active session when disable() called while CHARGING', async () => {
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+		mockPw.getData.mockResolvedValue(goodPwData());
+		await service.runTick(); // start CHARGING
+
+		await service.disable();
+
+		expect(mockSession.stop).toHaveBeenCalled();
+		expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({ stopReason: StopReason.MANUAL }),
+			})
+		);
 		expect(service.getStatus().state).toBe(SunkeepState.DISABLED);
 	});
 
