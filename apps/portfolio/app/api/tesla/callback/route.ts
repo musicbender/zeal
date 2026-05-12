@@ -1,6 +1,6 @@
 export async function GET(request: Request): Promise<Response> {
 	const { searchParams } = new URL(request.url);
-	const code = await searchParams.get('code');
+	const code = searchParams.get('code');
 
 	if (!code) {
 		return new Response('Missing code parameter', { status: 400 });
@@ -32,7 +32,16 @@ export async function GET(request: Request): Promise<Response> {
 		});
 	}
 
-	const tokens = (await tokenRes.json()) as { refresh_token: string };
+	const body = (await tokenRes.json()) as Record<string, unknown>;
+	const refreshToken = body['refresh_token'];
+
+	if (typeof refreshToken !== 'string' || !refreshToken) {
+		return new Response('Invalid token response from Tesla: missing refresh_token', {
+			status: 502,
+		});
+	}
+
+	const safeToken = refreshToken.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 	const html = `<!DOCTYPE html>
 <html lang="en">
@@ -44,7 +53,7 @@ export async function GET(request: Request): Promise<Response> {
 <body>
   <h2>Tesla authorization complete</h2>
   <p>Copy this refresh token to your Pi's <code>.env</code> as <code>TESLA_REFRESH_TOKEN</code>:</p>
-  <pre style="background:#f4f4f4;padding:16px;word-break:break-all;white-space:pre-wrap">${tokens.refresh_token}</pre>
+  <pre style="background:#f4f4f4;padding:16px;word-break:break-all;white-space:pre-wrap">${safeToken}</pre>
   <p><strong>Keep this token secret.</strong> Close this tab when done.</p>
 </body>
 </html>`;
