@@ -40,7 +40,23 @@ pnpm --filter gaspar prisma:migrate   # Run pending migrations
 | `PORT`         | No       | `3000`                        | Server port                     |
 | `LOG_LEVEL`    | No       | `debug` (dev) / `info` (prod) | Pino log level                  |
 
-Sunkeep requires additional env vars — see [docs/sunkeep.md](docs/sunkeep.md).
+### Sunkeep env vars
+
+| Variable                | Default | Description                                          |
+| ----------------------- | ------- | ---------------------------------------------------- |
+| `CHARGEPOINT_USERNAME`  | —       | ChargePoint account email                            |
+| `CHARGEPOINT_PASSWORD`  | —       | ChargePoint account password                         |
+| `CHARGEPOINT_DEVICE_ID` | —       | Numeric device ID of the home charger                |
+| `TESLA_CLIENT_ID`       | —       | App client ID from developer.tesla.com               |
+| `TESLA_CLIENT_SECRET`   | —       | App client secret                                    |
+| `TESLA_REFRESH_TOKEN`   | —       | Refresh token from one-time OAuth setup              |
+| `TESLA_ENERGY_SITE_ID`  | —       | Numeric energy site ID from Tesla Fleet API          |
+| `SOLAR_WINDOW_START`    | `06:00` | Local time — no API calls before this hour (`HH:MM`) |
+| `SOLAR_WINDOW_END`      | `20:00` | Local time — no API calls after this hour (`HH:MM`)  |
+| `SUNKEEP_ENABLED`       | `true`  | Start polling automatically on server boot           |
+| `SUNKEEP_SOE_THRESHOLD` | `95`    | Minimum battery % to allow charging (0–100)          |
+
+See [docs/sunkeep.md](docs/sunkeep.md) for full Sunkeep documentation.
 
 ## API
 

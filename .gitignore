@@ -62,3 +62,4 @@ pnpm-debug.log*
 # Misc
 .DS_Store
 *.pem
+!apps/portfolio/public/.well-known/appspecific/com.tesla.3p.public-key.pem

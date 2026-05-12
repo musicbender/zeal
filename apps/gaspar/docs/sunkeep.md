@@ -35,18 +35,19 @@ Background automation service that charges a car using excess solar power. It po
 
 All Sunkeep variables are required unless a default is shown.
 
-| Variable                | Default | Description                                            |
-| ----------------------- | ------- | ------------------------------------------------------ |
-| `CHARGEPOINT_USERNAME`  | —       | ChargePoint account email                              |
-| `CHARGEPOINT_PASSWORD`  | —       | ChargePoint account password                           |
-| `CHARGEPOINT_DEVICE_ID` | —       | Numeric device ID of the home charger                  |
-| `POWERWALL_HOST`        | —       | LAN IP of the Powerwall gateway (e.g. `192.168.1.100`) |
-| `POWERWALL_EMAIL`       | —       | Powerwall gateway login email                          |
-| `POWERWALL_PASSWORD`    | —       | Powerwall gateway login password                       |
-| `SOLAR_WINDOW_START`    | `06:00` | Local time — no API calls before this hour (`HH:MM`)   |
-| `SOLAR_WINDOW_END`      | `20:00` | Local time — no API calls after this hour (`HH:MM`)    |
-| `SUNKEEP_ENABLED`       | `true`  | Start polling automatically on server boot             |
-| `SUNKEEP_SOE_THRESHOLD` | `95`    | Minimum battery % to allow charging (0–100)            |
+| Variable                | Default | Description                                          |
+| ----------------------- | ------- | ---------------------------------------------------- |
+| `CHARGEPOINT_USERNAME`  | —       | ChargePoint account email                            |
+| `CHARGEPOINT_PASSWORD`  | —       | ChargePoint account password                         |
+| `CHARGEPOINT_DEVICE_ID` | —       | Numeric device ID of the home charger                |
+| `TESLA_CLIENT_ID`       | —       | App client ID from developer.tesla.com               |
+| `TESLA_CLIENT_SECRET`   | —       | App client secret                                    |
+| `TESLA_REFRESH_TOKEN`   | —       | Refresh token from one-time OAuth setup              |
+| `TESLA_ENERGY_SITE_ID`  | —       | Numeric energy site ID from Tesla Fleet API          |
+| `SOLAR_WINDOW_START`    | `06:00` | Local time — no API calls before this hour (`HH:MM`) |
+| `SOLAR_WINDOW_END`      | `20:00` | Local time — no API calls after this hour (`HH:MM`)  |
+| `SUNKEEP_ENABLED`       | `true`  | Start polling automatically on server boot           |
+| `SUNKEEP_SOE_THRESHOLD` | `95`    | Minimum battery % to allow charging (0–100)          |
 
 > The Powerwall reports SOE as a float that may read 99.7–99.9% when physically full. The default threshold of 95 avoids the automation being permanently blocked by minor SOE fluctuations.
 
