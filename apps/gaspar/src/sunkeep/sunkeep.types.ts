@@ -21,6 +21,10 @@ export interface PowerwallData {
 	loadKw: number;
 }
 
+export interface IPowerwallAdapter {
+	getData(): Promise<PowerwallData>;
+}
+
 export interface SunkeepConfig {
 	chargePointUsername: string;
 	chargePointPassword: string;

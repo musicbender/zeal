@@ -2,12 +2,12 @@ import { initLogger } from '@repo/logger/server';
 import type { ChargingSession, HomeChargerStatus } from 'node-chargepoint';
 import type {
 	ActiveSessionSummary,
+	IPowerwallAdapter,
 	PowerwallData,
 	SunkeepConfig,
 	SunkeepStatus,
 } from './sunkeep.types.js';
 import { StopReason, SunkeepState } from './sunkeep.types.js';
-import type { TeslaEnergyClient } from './tesla.client.js';
 
 const log = initLogger('sunkeep.service');
 
@@ -74,7 +74,7 @@ export class SunkeepService {
 
 	constructor(
 		private readonly chargePoint: IChargePointClient,
-		private readonly powerwall: TeslaEnergyClient,
+		private readonly powerwall: IPowerwallAdapter,
 		private readonly prisma: IPrisma,
 		private readonly config: SunkeepConfig
 	) {}
