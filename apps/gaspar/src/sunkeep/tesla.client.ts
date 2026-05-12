@@ -1,4 +1,4 @@
-import type { PowerwallData } from './sunkeep.types.js';
+import type { IPowerwallAdapter, PowerwallData } from './sunkeep.types.js';
 
 interface TeslaClientConfig {
 	clientId: string;
@@ -23,7 +23,7 @@ interface LiveStatusResponse {
 const AUTH_BASE = 'https://auth.tesla.com';
 const FLEET_BASE = 'https://fleet-api.prd.na.vn.cloud.tesla.com';
 
-export class TeslaEnergyClient {
+export class TeslaEnergyClient implements IPowerwallAdapter {
 	private accessToken: string | null = null;
 	private tokenExpiresAt = 0;
 

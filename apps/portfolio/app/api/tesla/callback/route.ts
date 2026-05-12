@@ -59,6 +59,6 @@ export async function GET(request: Request): Promise<Response> {
 </html>`;
 
 	return new Response(html, {
-		headers: { 'Content-Type': 'text/html' },
+		headers: { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' },
 	});
 }

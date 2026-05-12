@@ -1,10 +1,10 @@
 # Sunkeep
 
-Background automation service that charges a car using excess solar power. It polls every 10 minutes, checks the Powerwall state of energy and solar production, and starts or adjusts a ChargePoint home charging session whenever there's enough surplus to charge without drawing from the battery or grid.
+Background automation service that charges a car using excess solar power. It polls every 10 minutes, checks the Tesla energy site state (battery SOE and solar production via the Tesla Fleet API), and starts or adjusts a ChargePoint home charging session whenever there's enough surplus to charge without drawing from the battery or grid.
 
 ## How It Works
 
-1. Every 10 minutes (within the configured solar window), Sunkeep polls ChargePoint and Powerwall.
+1. Every 10 minutes (within the configured solar window), Sunkeep polls ChargePoint and the Tesla Fleet API.
 2. If the car is plugged in, battery is ≥95% charged, and excess solar ≥ 1.5 kW — start charging.
 3. Amperage is set based on current excess: `clamp(floor(excessKw × 1000 / 240), 8, 32)` amps.
 4. On subsequent ticks, amps are adjusted up or down to track the changing solar surplus.
@@ -26,7 +26,7 @@ Background automation service that charges a car using excess solar power. It po
 | ------------------ | ------------------------------------------------------------------------------------- |
 | `solar_dropped`    | Excess kW fell below 1.5 kW during active session                                     |
 | `night_safety`     | `solar_kw == 0` detected during active session                                        |
-| `battery_depleted` | Powerwall SOE dropped below threshold during active session                           |
+| `battery_depleted` | Tesla battery SOE dropped below threshold during active session                       |
 | `unplugged`        | Car unplugged during active session                                                   |
 | `manual`           | User called `POST /sunkeep/charge/stop`, `POST /sunkeep/disable`, or server shut down |
 | `error`            | Unrecoverable API error during active session                                         |
@@ -49,7 +49,7 @@ All Sunkeep variables are required unless a default is shown.
 | `SUNKEEP_ENABLED`       | `true`  | Start polling automatically on server boot           |
 | `SUNKEEP_SOE_THRESHOLD` | `95`    | Minimum battery % to allow charging (0–100)          |
 
-> The Powerwall reports SOE as a float that may read 99.7–99.9% when physically full. The default threshold of 95 avoids the automation being permanently blocked by minor SOE fluctuations.
+> The Tesla Fleet API reports battery SOE as a float that may read 99.7–99.9% when physically full. The default threshold of 95 avoids the automation being permanently blocked by minor SOE fluctuations.
 
 ## REST Endpoints
 
