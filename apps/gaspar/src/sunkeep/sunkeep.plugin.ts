@@ -2,12 +2,12 @@ import { initLogger } from '@repo/logger/server';
 import type { FastifyInstance } from 'fastify';
 import { ChargePoint } from 'node-chargepoint';
 import type { PrismaService } from '../prisma/prisma.service.js';
-import { PowerwallClient } from './powerwall.client.js';
 import { readSunkeepConfig } from './sunkeep.config.js';
 import { registerSunkeepRoutes } from './sunkeep.routes.js';
 import { SunkeepScheduler } from './sunkeep.scheduler.js';
 import { SunkeepService } from './sunkeep.service.js';
 import { SunkeepState } from './sunkeep.types.js';
+import { TeslaEnergyClient } from './tesla.client.js';
 
 const log = initLogger('sunkeep.plugin');
 
@@ -21,11 +21,12 @@ export async function registerSunkeepPlugin(
 	await chargePoint.loginWithPassword(config.chargePointPassword);
 	log.info('ChargePoint authenticated');
 
-	const powerwall = new PowerwallClient(
-		config.powerwallHost,
-		config.powerwallEmail,
-		config.powerwallPassword
-	);
+	const powerwall = new TeslaEnergyClient({
+		clientId: config.teslaClientId,
+		clientSecret: config.teslaClientSecret,
+		refreshToken: config.teslaRefreshToken,
+		energySiteId: config.teslaEnergySiteId,
+	});
 
 	const service = new SunkeepService(chargePoint, powerwall, prismaService, config);
 	const scheduler = new SunkeepScheduler(service);

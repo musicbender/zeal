@@ -25,9 +25,10 @@ export interface SunkeepConfig {
 	chargePointUsername: string;
 	chargePointPassword: string;
 	chargePointDeviceId: number;
-	powerwallHost: string;
-	powerwallEmail: string;
-	powerwallPassword: string;
+	teslaClientId: string;
+	teslaClientSecret: string;
+	teslaRefreshToken: string;
+	teslaEnergySiteId: string;
 	solarWindowStart: string;
 	solarWindowEnd: string;
 	sunkeepEnabled: boolean;
