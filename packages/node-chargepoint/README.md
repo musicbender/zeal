@@ -1,5 +1,10 @@
 # node-chargepoint
 
+![Pre-release](https://img.shields.io/badge/status-pre--release-orange?style=flat-square)
+![Not production ready](https://img.shields.io/badge/production-not%20ready-red?style=flat-square)
+
+> **Warning:** This library is in pre-release and is **not ready for production use**. The API is unstable and may change without notice between versions.
+
 A simple, async Node.js/TypeScript wrapper around the ChargePoint EV Charging Network API.
 
 > Based on [python-chargepoint](https://github.com/mbillow/python-chargepoint) by Marc Billow (MIT).
