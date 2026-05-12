@@ -26,6 +26,7 @@ pnpm --filter gaspar dev              # Dev server with hot reload
 pnpm --filter gaspar build            # Production build
 pnpm --filter gaspar start            # Run built output
 pnpm --filter gaspar test             # Run tests
+pnpm --filter gaspar test:integration # Run integration tests
 pnpm --filter gaspar typecheck        # Type check
 pnpm --filter gaspar prisma:generate  # Regenerate Prisma client
 pnpm --filter gaspar prisma:migrate   # Run pending migrations

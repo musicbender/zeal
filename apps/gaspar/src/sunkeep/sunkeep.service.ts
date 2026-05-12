@@ -173,7 +173,7 @@ export class SunkeepService {
 			return;
 		}
 
-		if (pwData.batteryPct < this.config.powerwallSoeThreshold) {
+		if (pwData.batteryPct < this.config.soeThreshold) {
 			if (this.state === SunkeepState.CHARGING) {
 				await this.stopActiveSession(StopReason.BATTERY_DEPLETED);
 				this.state = SunkeepState.WAITING;

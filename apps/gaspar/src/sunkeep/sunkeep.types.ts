@@ -36,7 +36,7 @@ export interface SunkeepConfig {
 	solarWindowStart: string;
 	solarWindowEnd: string;
 	sunkeepEnabled: boolean;
-	powerwallSoeThreshold: number;
+	soeThreshold: number;
 }
 
 export interface ActiveSessionSummary {

@@ -39,7 +39,7 @@ const testConfig = {
 	solarWindowStart: '06:00',
 	solarWindowEnd: '20:00',
 	sunkeepEnabled: false,
-	powerwallSoeThreshold: 95,
+	soeThreshold: 95,
 };
 
 function pluggedInStatus(overrides: Partial<HomeChargerStatus> = {}): HomeChargerStatus {

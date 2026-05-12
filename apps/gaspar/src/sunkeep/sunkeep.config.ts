@@ -18,6 +18,6 @@ export function readSunkeepConfig(): SunkeepConfig {
 		solarWindowStart: process.env.SOLAR_WINDOW_START ?? '06:00',
 		solarWindowEnd: process.env.SOLAR_WINDOW_END ?? '20:00',
 		sunkeepEnabled: process.env.SUNKEEP_ENABLED !== 'false',
-		powerwallSoeThreshold: Number(process.env.POWERWALL_SOE_THRESHOLD ?? '95'),
+		soeThreshold: Number(process.env.SUNKEEP_SOE_THRESHOLD ?? '95'),
 	};
 }
