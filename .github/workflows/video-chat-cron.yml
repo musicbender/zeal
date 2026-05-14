@@ -2,8 +2,8 @@ name: Video Chat Cron
 
 on:
   schedule:
-    - cron: '0 22 * * 0' # 3pm PDT (summer, UTC-7)
-    - cron: '0 23 * * 0' # 3pm PST (winter, UTC-8)
+    - cron: '20 21 * * 0' # ~3pm PDT (summer, UTC-7) — scheduled early to offset GitHub Actions delay
+    - cron: '20 22 * * 0' # ~3pm PST (winter, UTC-8) — scheduled early to offset GitHub Actions delay
   workflow_dispatch:
     inputs:
       force:
