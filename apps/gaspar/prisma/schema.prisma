@@ -20,3 +20,18 @@ model Sensor {
 
   @@map("sensor")
 }
+
+model ChargingEvent {
+  id          String    @id @default(uuid())
+  startedAt   DateTime  @default(now())
+  stoppedAt   DateTime?
+  stopReason  String?
+  startAmps   Int
+  endAmps     Int?
+  peakSolarKw Float?
+  energyKwh   Float?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("charging_event")
+}

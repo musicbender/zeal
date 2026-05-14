@@ -11,6 +11,7 @@
 		"typecheck": "tsc --noEmit",
 		"test": "vitest run",
 		"test:watch": "vitest",
+		"test:integration": "vitest run --config vitest.integration.config.ts",
 		"lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
 		"prisma:generate": "prisma generate",
 		"prisma:migrate": "prisma migrate deploy"
@@ -25,7 +26,9 @@
 		"@repo/logger": "workspace:*",
 		"@repo/types": "workspace:*",
 		"dotenv": "^16.4.0",
-		"fastify": "^5.8.3"
+		"fastify": "^5.8.3",
+		"node-chargepoint": "0.4.0",
+		"node-cron": "4.2.1"
 	},
 	"devDependencies": {
 		"@repo/eslint-config": "workspace:*",
