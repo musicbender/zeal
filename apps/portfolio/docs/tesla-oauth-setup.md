@@ -16,7 +16,7 @@ This doc covers registering a Tesla developer app and capturing a refresh token 
 2. Create a new application:
    - **Name:** anything (e.g. "Sunkeep")
    - **Domain:** `patjacobs.com`
-   - **Redirect URI:** `https://patjacobs.com/api/tesla/callback`
+   - **Redirect URI:** `https://www.patjacobs.com/tesla/callback`
    - **Allowed scopes:** `energy_device_data offline_access`
 3. Copy the **Client ID** and **Client Secret** — add them to:
    - Root `.env` on the Pi as `TESLA_CLIENT_ID` and `TESLA_CLIENT_SECRET`
@@ -60,10 +60,10 @@ curl -X POST https://fleet-api.prd.na.vn.cloud.tesla.com/api/1/partner_accounts 
 Construct the authorization URL and open it in a browser (replace `YOUR_CLIENT_ID`):
 
 ```
-https://auth.tesla.com/oauth2/v3/authorize?client_id=YOUR_CLIENT_ID&locale=en-US&prompt=login&redirect_uri=https%3A%2F%2Fpatjacobs.com%2Fapi%2Ftesla%2Fcallback&response_type=code&scope=energy_device_data+offline_access&state=sunkeep
+https://auth.tesla.com/oauth2/v3/authorize?client_id=YOUR_CLIENT_ID&locale=en-US&prompt=login&redirect_uri=https%3A%2F%2Fwww.patjacobs.com%2Ftesla%2Fcallback&response_type=code&scope=energy_device_data+offline_access&state=sunkeep
 ```
 
-Tesla redirects to `patjacobs.com/api/tesla/callback`, which exchanges the code and displays your refresh token. Copy it.
+Tesla redirects to `www.patjacobs.com/tesla/callback`, which exchanges the code and displays your refresh token. Copy it.
 
 ### 5. Find your energy site ID
 
