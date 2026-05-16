@@ -1,6 +1,12 @@
 import { initLogger } from '@repo/logger/server';
 import type { FastifyInstance } from 'fastify';
-import { ChargePoint } from 'node-chargepoint';
+import {
+	ChargePoint,
+	CommunicationError,
+	DatadomeCaptcha,
+	InvalidSession,
+	LoginError,
+} from 'node-chargepoint';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import { readSunkeepConfig } from './sunkeep.config.js';
 import { registerSunkeepRoutes } from './sunkeep.routes.js';
@@ -11,15 +17,52 @@ import { TeslaEnergyClient } from './tesla.client.js';
 
 const log = initLogger('sunkeep.plugin');
 
+async function authenticateWithPassword(chargePoint: ChargePoint, password: string): Promise<void> {
+	await chargePoint.loginWithPassword(password);
+	log.info(
+		{ coulombToken: chargePoint.coulombToken },
+		'ChargePoint authenticated — save CHARGEPOINT_TOKEN to skip future logins'
+	);
+}
+
 export async function registerSunkeepPlugin(
 	server: FastifyInstance,
 	prismaService: PrismaService
 ): Promise<void> {
 	const config = readSunkeepConfig();
+	const chargePoint = await ChargePoint.create(config.chargePointUsername, {
+		coulombToken: config.chargePointToken,
+	});
 
-	const chargePoint = await ChargePoint.create(config.chargePointUsername);
-	await chargePoint.loginWithPassword(config.chargePointPassword);
-	log.info('ChargePoint authenticated');
+	try {
+		if (config.chargePointToken) {
+			// Validate the stored token is still alive; fall back to password if it's stale.
+			try {
+				await chargePoint.getAccount();
+				log.info('ChargePoint authenticated via token');
+			} catch (err) {
+				if (!(err instanceof InvalidSession)) throw err;
+				log.warn('Stored CHARGEPOINT_TOKEN is expired — falling back to password login');
+				await authenticateWithPassword(chargePoint, config.chargePointPassword);
+			}
+		} else {
+			await authenticateWithPassword(chargePoint, config.chargePointPassword);
+		}
+	} catch (err) {
+		if (err instanceof DatadomeCaptcha) {
+			log.error(
+				{ err },
+				'ChargePoint bot protection triggered — set CHARGEPOINT_TOKEN to bypass login'
+			);
+		} else if (err instanceof LoginError) {
+			log.error({ err }, 'ChargePoint login failed');
+		} else if (err instanceof CommunicationError) {
+			log.error({ err }, `ChargePoint API error ${err.statusCode}`);
+		} else {
+			log.error({ err }, 'ChargePoint unexpected error');
+		}
+		return;
+	}
 
 	const powerwall = new TeslaEnergyClient({
 		clientId: config.teslaClientId,

@@ -10,6 +10,7 @@ export function readSunkeepConfig(): SunkeepConfig {
 	return {
 		chargePointUsername: required('CHARGEPOINT_USERNAME'),
 		chargePointPassword: required('CHARGEPOINT_PASSWORD'),
+		chargePointToken: process.env.CHARGEPOINT_TOKEN,
 		chargePointDeviceId: Number(required('CHARGEPOINT_DEVICE_ID')),
 		teslaClientId: required('TESLA_CLIENT_ID'),
 		teslaClientSecret: required('TESLA_CLIENT_SECRET'),
