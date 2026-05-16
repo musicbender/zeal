@@ -1,6 +1,17 @@
-## [v0.4.0](https://github.com/musicbender/node-chargepoint/releases/tag/v0.4.0) — 2026-05-10
+## [v0.4.1](https://github.com/musicbender/node-chargepoint/releases/tag/v0.4.1) — 2026-05-16
 
-<!-- Release notes generated using configuration in .github/release.yml at v0.4.0 -->
+<!-- Release notes generated using configuration in .github/release.yml at v0.4.1 -->
+
+## What's Changed
+### Bug Fixes & Patches
+* fix captcha handling by @musicbender in https://github.com/musicbender/node-chargepoint/pull/23
+### Other Changes
+* docs: add pre-release status badges and warning to README by @musicbender in https://github.com/musicbender/node-chargepoint/pull/22
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.4.0...v0.4.1
+
+---
 
 ## What's Changed
 ### New Features
