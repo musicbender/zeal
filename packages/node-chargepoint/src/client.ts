@@ -381,7 +381,14 @@ export class ChargePoint {
     const supportedLevels = Array.isArray(rawLed.supportedLevels)
       ? (rawLed.supportedLevels as (string | number)[]).map(Number)
       : [];
+    const rawPs = s.powerSource as RawObj | undefined;
+    const powerSource =
+      rawPs && typeof rawPs.amps === 'number' && typeof rawPs.type === 'string'
+        ? { amps: rawPs.amps, type: rawPs.type }
+        : null;
+
     return {
+      powerSource,
       serialNumber: String(s.serialNumber ?? ''),
       macAddress: String(s.macAddress ?? ''),
       stationNickname: String(s.stationNickname ?? ''),

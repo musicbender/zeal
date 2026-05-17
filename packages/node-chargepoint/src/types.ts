@@ -149,7 +149,13 @@ export interface LEDBrightness {
   isEnabled: boolean;
 }
 
+export interface PowerSource {
+  amps: number;
+  type: string;
+}
+
 export interface HomeChargerConfiguration {
+  powerSource: PowerSource | null;
   serialNumber: string;
   macAddress: string;
   stationNickname: string;

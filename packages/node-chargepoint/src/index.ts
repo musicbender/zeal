@@ -31,6 +31,7 @@ export type {
   MapFilter,
   MapStation,
   MaxPower,
+  PowerSource,
   PowerUtility,
   PowerUtilityPlan,
   StartSessionOptions,

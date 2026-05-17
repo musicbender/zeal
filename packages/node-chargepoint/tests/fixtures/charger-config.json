@@ -1,5 +1,6 @@
 {
   "settings": {
+    "powerSource": { "amps": 50, "type": "hardwired" },
     "serialNumber": "CHPXXX123456",
     "macAddress": "AA:BB:CC:DD:EE:FF",
     "stationNickname": "Home Charger",
