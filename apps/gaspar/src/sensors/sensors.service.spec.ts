@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@prisma/client', () => {
+	const PrismaClient = class {
+		sensor = {};
+		$connect = vi.fn();
+		$disconnect = vi.fn();
+	};
 	return {
-		PrismaClient: class {
-			sensor = {};
-			$connect = vi.fn();
-			$disconnect = vi.fn();
-		},
+		default: { PrismaClient },
+		PrismaClient,
 	};
 });
 
