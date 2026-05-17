@@ -19,6 +19,8 @@ const mockService = {
 	disable: vi.fn(),
 	manualStartSession: vi.fn().mockResolvedValue(undefined),
 	manualStopSession: vi.fn().mockResolvedValue(undefined),
+	lockAmps: vi.fn().mockResolvedValue(undefined),
+	unlockAmps: vi.fn(),
 };
 
 const mockPrisma = {
@@ -87,5 +89,43 @@ describe('Sunkeep routes', () => {
 		mockPrisma.chargingEvent.findUnique.mockResolvedValue(null);
 		const res = await app.inject({ method: 'GET', url: '/sunkeep/events/unknown' });
 		expect(res.statusCode).toBe(404);
+	});
+
+	it('POST /sunkeep/charge/amps with valid body calls lockAmps and returns status', async () => {
+		const res = await app.inject({
+			method: 'POST',
+			url: '/sunkeep/charge/amps',
+			payload: { amps: 16 },
+		});
+		expect(res.statusCode).toBe(200);
+		expect(mockService.lockAmps).toHaveBeenCalledWith(16);
+		expect(res.json()).toMatchObject({ state: SunkeepState.IDLE });
+	});
+
+	it('POST /sunkeep/charge/amps with out-of-range amps returns 400', async () => {
+		const res = await app.inject({
+			method: 'POST',
+			url: '/sunkeep/charge/amps',
+			payload: { amps: 5 },
+		});
+		expect(res.statusCode).toBe(400);
+		expect(mockService.lockAmps).not.toHaveBeenCalled();
+	});
+
+	it('POST /sunkeep/charge/amps with non-number amps returns 400', async () => {
+		const res = await app.inject({
+			method: 'POST',
+			url: '/sunkeep/charge/amps',
+			payload: { amps: 'fast' },
+		});
+		expect(res.statusCode).toBe(400);
+		expect(mockService.lockAmps).not.toHaveBeenCalled();
+	});
+
+	it('DELETE /sunkeep/charge/amps calls unlockAmps and returns status', async () => {
+		const res = await app.inject({ method: 'DELETE', url: '/sunkeep/charge/amps' });
+		expect(res.statusCode).toBe(200);
+		expect(mockService.unlockAmps).toHaveBeenCalledOnce();
+		expect(res.json()).toMatchObject({ state: SunkeepState.IDLE });
 	});
 });

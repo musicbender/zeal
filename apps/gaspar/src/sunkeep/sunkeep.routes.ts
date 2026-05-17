@@ -60,6 +60,25 @@ export async function registerSunkeepRoutes(
 		}
 	});
 
+	server.post<{ Body: { amps: unknown } }>('/sunkeep/charge/amps', async (request, reply) => {
+		const { amps } = request.body;
+		if (typeof amps !== 'number' || !Number.isInteger(amps) || amps < 8 || amps > 32) {
+			return reply.status(400).send({ error: 'amps must be an integer between 8 and 32' });
+		}
+		try {
+			await service.lockAmps(amps);
+			return service.getStatus();
+		} catch (err) {
+			log.error({ err }, 'Lock amps failed');
+			return reply.status(500).send({ error: 'Failed to lock amps' });
+		}
+	});
+
+	server.delete('/sunkeep/charge/amps', async () => {
+		service.unlockAmps();
+		return service.getStatus();
+	});
+
 	server.get<{ Querystring: { page?: string; limit?: string } }>(
 		'/sunkeep/events',
 		async (request) => {

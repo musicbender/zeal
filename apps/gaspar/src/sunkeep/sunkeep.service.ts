@@ -71,6 +71,7 @@ export class SunkeepService {
 	private lastPollAt: Date | null = null;
 	private lastPwData: PowerwallData | null = null;
 	private sessionStartedAt: Date | null = null;
+	private lockedAmps: number | null = null;
 
 	constructor(
 		private readonly chargePoint: IChargePointClient,
@@ -110,7 +111,9 @@ export class SunkeepService {
 			activeSession: session,
 			solarKw: this.lastPwData?.solarKw ?? null,
 			excessKw: this.lastPwData ? this.lastPwData.solarKw - this.lastPwData.loadKw : null,
+			loadKw: this.lastPwData?.loadKw ?? null,
 			batteryPct: this.lastPwData?.batteryPct ?? null,
+			lockedAmps: this.lockedAmps,
 		};
 	}
 
@@ -147,6 +150,25 @@ export class SunkeepService {
 		const excessKw = pwData.solarKw - pwData.loadKw;
 		const targetAmps = calcTargetAmps(excessKw);
 		await this.startSession(targetAmps);
+	}
+
+	async lockAmps(amps: number): Promise<void> {
+		if (!Number.isInteger(amps) || amps < MIN_AMPS || amps > MAX_AMPS) {
+			throw new RangeError(`amps must be an integer between ${MIN_AMPS} and ${MAX_AMPS}`);
+		}
+		this.lockedAmps = amps;
+		if (this.state === SunkeepState.CHARGING) {
+			await this.chargePoint.setAmperageLimit(this.config.chargePointDeviceId, amps);
+			this.currentAmps = amps;
+			log.info({ amps }, 'Amp lock applied, charger updated');
+		} else {
+			log.info({ amps }, 'Amp lock set (not currently charging)');
+		}
+	}
+
+	unlockAmps(): void {
+		this.lockedAmps = null;
+		log.info('Amp lock cleared, auto-adjust restored');
 	}
 
 	private async tick(): Promise<void> {
@@ -198,7 +220,7 @@ export class SunkeepService {
 		const targetAmps = calcTargetAmps(excessKw);
 
 		if (this.state === SunkeepState.CHARGING) {
-			if (targetAmps !== this.currentAmps) {
+			if (this.lockedAmps === null && targetAmps !== this.currentAmps) {
 				await this.chargePoint.setAmperageLimit(this.config.chargePointDeviceId, targetAmps);
 				this.currentAmps = targetAmps;
 				log.info({ targetAmps }, 'Adjusted charge amps');
@@ -266,5 +288,6 @@ export class SunkeepService {
 		this.currentAmps = 0;
 		this.peakSolarKw = 0;
 		this.sessionStartedAt = null;
+		this.lockedAmps = null;
 	}
 }

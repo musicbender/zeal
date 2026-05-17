@@ -29,3 +29,49 @@ export interface ServiceConfig {
 	systemdUnit: string;
 	color: string;
 }
+
+export type SunkeepState = 'DISABLED' | 'IDLE' | 'WAITING' | 'CHARGING' | 'ERROR';
+
+export type SunkeepStopReason =
+	| 'solar_dropped'
+	| 'night_safety'
+	| 'battery_depleted'
+	| 'unplugged'
+	| 'manual'
+	| 'error';
+
+export interface ActiveSessionSummary {
+	sessionId: number;
+	currentAmps: number;
+	startedAt: string | null;
+}
+
+export interface SunkeepStatus {
+	state: SunkeepState;
+	enabled: boolean;
+	lastPollAt: string | null;
+	activeSession: ActiveSessionSummary | null;
+	solarKw: number | null;
+	loadKw: number | null;
+	excessKw: number | null;
+	batteryPct: number | null;
+	lockedAmps: number | null;
+}
+
+export interface ChargingEventSummary {
+	id: string;
+	startedAt: string;
+	stoppedAt: string | null;
+	stopReason: SunkeepStopReason | null;
+	startAmps: number;
+	endAmps: number | null;
+	peakSolarKw: number | null;
+	energyKwh: number | null;
+}
+
+export interface ChargingEventsPage {
+	events: ChargingEventSummary[];
+	total: number;
+	page: number;
+	limit: number;
+}

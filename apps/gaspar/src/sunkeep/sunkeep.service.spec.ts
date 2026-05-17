@@ -374,4 +374,73 @@ describe('SunkeepService', () => {
 		expect(mockCp.startChargingSession).not.toHaveBeenCalled();
 		expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
 	});
+
+	// --- Amp locking ---
+
+	describe('amp locking', () => {
+		it('lockAmps() sets lockedAmps in status when not charging (no charger call)', async () => {
+			service.enable();
+			await service.lockAmps(20);
+			expect(service.getStatus().lockedAmps).toBe(20);
+			expect(mockCp.setAmperageLimit).not.toHaveBeenCalled();
+		});
+
+		it('lockAmps() when CHARGING: updates lockedAmps in status AND calls setAmperageLimit', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+			mockPw.getData.mockResolvedValue(goodPwData());
+			await service.runTick(); // enter CHARGING state
+
+			mockCp.setAmperageLimit.mockClear();
+			await service.lockAmps(24);
+
+			expect(service.getStatus().lockedAmps).toBe(24);
+			expect(mockCp.setAmperageLimit).toHaveBeenCalledWith(42, 24);
+		});
+
+		it('lockAmps() throws RangeError for out-of-range values', async () => {
+			await expect(service.lockAmps(7)).rejects.toThrow(RangeError);
+			await expect(service.lockAmps(33)).rejects.toThrow(RangeError);
+			await expect(service.lockAmps(7.5)).rejects.toThrow(RangeError);
+		});
+
+		it('unlockAmps() clears lockedAmps in status', async () => {
+			await service.lockAmps(16);
+			expect(service.getStatus().lockedAmps).toBe(16);
+			service.unlockAmps();
+			expect(service.getStatus().lockedAmps).toBeNull();
+		});
+
+		it('runTick() does NOT call setAmperageLimit for amp changes when locked', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 })); // 12A
+			await service.runTick(); // start CHARGING at 12A
+
+			await service.lockAmps(20);
+			mockCp.setAmperageLimit.mockClear();
+
+			// Solar changes — without a lock, this would trigger a setAmperageLimit call
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 6.0, loadKw: 1.0 })); // 20A natural
+			await service.runTick();
+
+			expect(mockCp.setAmperageLimit).not.toHaveBeenCalled();
+		});
+
+		it('stopActiveSession() via manualStopSession() clears the lock', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+			mockPw.getData.mockResolvedValue(goodPwData());
+			await service.runTick(); // enter CHARGING
+
+			await service.lockAmps(16);
+			expect(service.getStatus().lockedAmps).toBe(16);
+
+			await service.manualStopSession();
+			expect(service.getStatus().lockedAmps).toBeNull();
+		});
+	});
 });

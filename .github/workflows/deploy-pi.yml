@@ -157,6 +157,7 @@ jobs:
     environment: pi-production
     env:
       HOMEBRIDGE_API_KEY: ${{ secrets.HOMEBRIDGE_API_KEY }}
+      GASPAR_URL: ${{ secrets.GASPAR_URL }}
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
     steps:
@@ -189,8 +190,9 @@ jobs:
 
       - name: Write secrets file
         run: |
-          printf 'API_BASE_URL=http://localhost:3002\nHOMEBRIDGE_API_KEY=%s\n' \
+          printf 'API_BASE_URL=http://localhost:3002\nHOMEBRIDGE_API_KEY=%s\nGASPAR_URL=%s\n' \
             "$HOMEBRIDGE_API_KEY" \
+            "$GASPAR_URL" \
             | sudo tee /etc/fiendlord-keep/env > /dev/null
 
       - run: sudo systemctl restart fiendlord-keep

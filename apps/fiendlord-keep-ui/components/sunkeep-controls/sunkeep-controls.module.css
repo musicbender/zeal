@@ -1,0 +1,37 @@
+.card {
+	padding: var(--space-4);
+}
+
+.sectionLabel {
+	font-size: var(--font-size-1);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--gray-11);
+}
+
+.buttonRow {
+	display: flex;
+	gap: var(--space-2);
+	flex-wrap: wrap;
+}
+
+.ampRow {
+	display: flex;
+	gap: var(--space-2);
+	align-items: center;
+}
+
+.ampInput {
+	width: 80px;
+	padding: var(--space-1) var(--space-2);
+	border: 1px solid var(--gray-6);
+	border-radius: var(--radius-2);
+	background: var(--color-surface);
+	color: var(--gray-12);
+	font-size: var(--font-size-2);
+}
+
+.ampInput:focus {
+	outline: none;
+	border-color: var(--accent-8);
+}
