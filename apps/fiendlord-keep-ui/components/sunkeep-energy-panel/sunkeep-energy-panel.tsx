@@ -181,7 +181,6 @@ export function SunkeepEnergyPanel({ status, batteryCapacityKwh }: SunkeepEnergy
 					unit={gridKw != null ? 'kW' : undefined}
 					danger={gridKw != null && gridKw > 0.05}
 				/>
-				{status?.gridStatus != null && <StatCard label="Grid Status" value={status.gridStatus} />}
 			</div>
 			<Flex gap="4" className={styles.footer}>
 				<Text className={styles.lastUpdated}>Polled: {formatTime(status?.lastPollAt ?? null)}</Text>

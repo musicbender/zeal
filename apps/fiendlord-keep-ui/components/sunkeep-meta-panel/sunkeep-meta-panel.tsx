@@ -4,6 +4,7 @@ import styles from './sunkeep-meta-panel.module.css';
 
 interface SunkeepMetaPanelProps {
 	meta: SunkeepMeta;
+	gridStatus?: string | null;
 }
 
 function MetaRow({ label, value }: { label: string; value: string | number | null }) {
@@ -28,7 +29,7 @@ function MetaSection({ heading, children }: { heading: string; children: React.R
 	);
 }
 
-export function SunkeepMetaPanel({ meta }: SunkeepMetaPanelProps) {
+export function SunkeepMetaPanel({ meta, gridStatus }: SunkeepMetaPanelProps) {
 	return (
 		<div className={styles.grid}>
 			<MetaSection heading="ChargePoint">
@@ -87,6 +88,7 @@ export function SunkeepMetaPanel({ meta }: SunkeepMetaPanelProps) {
 						</Badge>
 					</Flex>
 				)}
+				{gridStatus != null && <MetaRow label="Grid Status" value={gridStatus} />}
 			</MetaSection>
 		</div>
 	);

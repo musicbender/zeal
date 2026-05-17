@@ -62,7 +62,7 @@ export default async function SunkeepPage() {
 				initialStatus={status}
 				batteryCapacityKwh={metaData?.teslaBatteryCapacityKwh}
 			/>
-			{metaData && <SunkeepMetaPanel meta={metaData} />}
+			{metaData && <SunkeepMetaPanel meta={metaData} gridStatus={status?.gridStatus} />}
 			<h2>Charging Sessions</h2>
 			<SunkeepEventsTable initialData={events} />
 		</div>
