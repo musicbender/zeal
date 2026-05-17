@@ -87,7 +87,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ serv
 			});
 	} catch (err) {
 		// journalctl unavailable (not on Pi) or service not found — return empty
-		log.debug({ service: serviceConfig.name, err }, 'journalctl unavailable');
+		log.warn({ service: serviceConfig.name, err }, 'journalctl unavailable');
 		entries = [];
 	}
 
