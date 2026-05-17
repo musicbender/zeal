@@ -48,14 +48,17 @@ async function callApi(
 
 export function SunkeepControls({ status, onAction }: SunkeepControlsProps) {
 	const [loading, setLoading] = useState(false);
-	const [ampInput, setAmpInput] = useState(status?.lockedAmps?.toString() ?? '');
+	const initialAmps = status?.lockedAmps ?? status?.chargerAmps;
+	const [ampInput, setAmpInput] = useState(initialAmps?.toString() ?? '');
 	const [error, setError] = useState<string | null>(null);
 
 	useEffect(() => {
 		if (status?.lockedAmps != null) {
 			setAmpInput(status.lockedAmps.toString());
+		} else if (status?.chargerAmps != null) {
+			setAmpInput((prev) => (prev === '' ? status.chargerAmps!.toString() : prev));
 		}
-	}, [status?.lockedAmps]);
+	}, [status?.lockedAmps, status?.chargerAmps]);
 
 	const withLoading = async (fn: () => Promise<void>) => {
 		setLoading(true);
@@ -163,10 +166,12 @@ export function SunkeepControls({ status, onAction }: SunkeepControlsProps) {
 				{/* Automation */}
 				<Flex align="center" justify="between" gap="2">
 					<Flex align="center" gap="2">
+						<span
+							className={styles.statusDot}
+							data-active={String(!!status?.enabled)}
+							aria-label={status?.enabled ? 'Enabled' : 'Disabled'}
+						/>
 						<Text className={styles.sectionLabel}>Automation</Text>
-						<Badge color={status?.enabled ? 'green' : 'gray'} variant="soft" size="1">
-							{status?.enabled ? 'Active' : 'Disabled'}
-						</Badge>
 					</Flex>
 					{status?.enabled ? (
 						<Button size="1" color="red" variant="soft" onClick={handleDisable} disabled={loading}>
@@ -182,9 +187,16 @@ export function SunkeepControls({ status, onAction }: SunkeepControlsProps) {
 				<Separator size="4" />
 
 				{/* Session controls */}
-				<Flex direction="column" gap="2">
-					<Text className={styles.sectionLabel}>Charging Session</Text>
-					<div className={styles.buttonRow}>
+				<Flex align="center" justify="between" gap="2">
+					<Flex align="center" gap="2">
+						<span
+							className={styles.statusDot}
+							data-active={String(isCharging)}
+							aria-label={isCharging ? 'Charging' : 'Not charging'}
+						/>
+						<Text className={styles.sectionLabel}>Charging Session</Text>
+					</Flex>
+					<Flex gap="2" flexShrink="0">
 						<Button
 							size="1"
 							color="teal"
@@ -202,7 +214,7 @@ export function SunkeepControls({ status, onAction }: SunkeepControlsProps) {
 						>
 							Force Stop
 						</Button>
-					</div>
+					</Flex>
 				</Flex>
 
 				<Separator size="4" />
@@ -211,30 +223,51 @@ export function SunkeepControls({ status, onAction }: SunkeepControlsProps) {
 				<Flex direction="column" gap="2">
 					<Text className={styles.sectionLabel}>Amp Override</Text>
 					<div className={styles.ampRow}>
-						<input
-							type="number"
-							min={8}
-							max={32}
-							step={1}
-							value={ampInput}
-							onChange={(e) => setAmpInput(e.target.value)}
-							className={styles.ampInput}
-							aria-label="Amp override value"
-						/>
-						<Button size="1" onClick={handleLockAmps} disabled={loading || !status}>
-							Lock
-						</Button>
-						{isLocked && (
-							<Button
-								size="1"
-								color="gray"
-								variant="soft"
-								onClick={handleUnlockAmps}
-								disabled={loading}
+						<Flex align="baseline" gap="1">
+							<Text size="4" weight="bold">
+								{status?.chargerAmps ?? '—'}
+							</Text>
+							{status?.chargerAmps != null && (
+								<Text size="2" color="gray">
+									A current
+								</Text>
+							)}
+						</Flex>
+						<Flex align="center" gap="2" className={styles.ampControls}>
+							<button
+								className={styles.stepBtn}
+								onClick={() => setAmpInput((v) => String(Math.max(8, (parseInt(v, 10) || 8) - 1)))}
+								disabled={loading || !status}
+								aria-label="Decrease amps"
 							>
-								Unlock
+								−
+							</button>
+							<Text size="3" weight="bold" className={styles.ampValue}>
+								{ampInput || '—'}
+							</Text>
+							<button
+								className={styles.stepBtn}
+								onClick={() => setAmpInput((v) => String(Math.min(32, (parseInt(v, 10) || 8) + 1)))}
+								disabled={loading || !status}
+								aria-label="Increase amps"
+							>
+								+
+							</button>
+							<Button size="1" onClick={handleLockAmps} disabled={loading || !status}>
+								Lock
 							</Button>
-						)}
+							{isLocked && (
+								<Button
+									size="1"
+									color="gray"
+									variant="soft"
+									onClick={handleUnlockAmps}
+									disabled={loading}
+								>
+									Unlock
+								</Button>
+							)}
+						</Flex>
 					</div>
 					<Text size="1" color="gray">
 						{isLocked ? `Locked at ${status!.lockedAmps} A` : 'Auto-adjusting'}

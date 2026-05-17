@@ -19,6 +19,7 @@ export interface PowerwallData {
 	batteryPct: number;
 	solarKw: number;
 	loadKw: number;
+	batteryKw?: number | null;
 	gridKw?: number | null;
 	gridStatus?: string | null;
 	lastTeslaAt?: string | null;
@@ -58,7 +59,9 @@ export interface SunkeepStatus {
 	excessKw: number | null;
 	loadKw: number | null;
 	batteryPct: number | null;
+	batteryKw: number | null;
 	lockedAmps: number | null;
+	chargerAmps: number | null;
 	isPluggedIn: boolean | null;
 	gridKw: number | null;
 	gridStatus: string | null;

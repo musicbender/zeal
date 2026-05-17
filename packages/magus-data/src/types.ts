@@ -22,12 +22,18 @@ export interface LogEntry {
 	service: string;
 }
 
+export interface ServiceSubPage {
+	name: string;
+	displayName: string;
+}
+
 export interface ServiceConfig {
 	name: string;
 	displayName: string;
 	port?: number;
 	systemdUnit: string;
 	color: string;
+	subPages?: ServiceSubPage[];
 }
 
 export type SunkeepState = 'DISABLED' | 'IDLE' | 'WAITING' | 'CHARGING' | 'ERROR';
@@ -55,7 +61,9 @@ export interface SunkeepStatus {
 	loadKw: number | null;
 	excessKw: number | null;
 	batteryPct: number | null;
+	batteryKw: number | null;
 	lockedAmps: number | null;
+	chargerAmps: number | null;
 	isPluggedIn: boolean | null;
 	gridKw: number | null;
 	gridStatus: string | null;

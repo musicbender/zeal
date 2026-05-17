@@ -77,6 +77,7 @@ export class SunkeepService {
 	private sessionStartedAt: Date | null = null;
 	private lockedAmps: number | null = null;
 	private isPluggedIn: boolean | null = null;
+	private chargerAmps: number | null = null;
 
 	constructor(
 		private readonly chargePoint: IChargePointClient,
@@ -118,7 +119,9 @@ export class SunkeepService {
 			excessKw: this.lastPwData ? this.lastPwData.solarKw - this.lastPwData.loadKw : null,
 			loadKw: this.lastPwData?.loadKw ?? null,
 			batteryPct: this.lastPwData?.batteryPct ?? null,
+			batteryKw: this.lastPwData?.batteryKw ?? null,
 			lockedAmps: this.lockedAmps,
+			chargerAmps: this.chargerAmps,
 			isPluggedIn: this.isPluggedIn,
 			gridKw: this.lastPwData?.gridKw ?? null,
 			gridStatus: this.lastPwData?.gridStatus ?? null,
@@ -203,6 +206,7 @@ export class SunkeepService {
 		]);
 
 		this.isPluggedIn = chargerStatus.isPluggedIn;
+		this.chargerAmps = chargerStatus.amperageLimit;
 		this.lastPwData = pwData;
 
 		if (!isWithinSolarWindow(this.config.solarWindowStart, this.config.solarWindowEnd)) {

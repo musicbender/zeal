@@ -7,6 +7,7 @@ export const SERVICE_REGISTRY: ServiceConfig[] = [
 		port: 3000,
 		systemdUnit: 'gaspar',
 		color: 'teal',
+		subPages: [{ name: 'sunkeep', displayName: 'Sunkeep' }],
 	},
 	{
 		name: 'worfbot-gateway',

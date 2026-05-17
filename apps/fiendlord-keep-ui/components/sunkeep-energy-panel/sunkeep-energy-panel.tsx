@@ -60,9 +60,26 @@ function StatCard({ label, value, unit, badge, progress }: StatCardProps) {
 	);
 }
 
+function batteryRateLabel(kw: number | null): string {
+	if (kw == null) return '—';
+	if (kw > 0.05) return `+${kw.toFixed(2)}`;
+	if (kw < -0.05) return kw.toFixed(2);
+	return '0.00';
+}
+
+function batteryRateBadge(
+	kw: number | null
+): { label: string; color: 'green' | 'yellow' | 'red' } | undefined {
+	if (kw == null) return undefined;
+	if (kw > 0.05) return { label: 'Charging', color: 'green' };
+	if (kw < -0.05) return { label: 'Discharging', color: 'yellow' };
+	return { label: 'Idle', color: 'yellow' };
+}
+
 export function SunkeepEnergyPanel({ status }: SunkeepEnergyPanelProps) {
 	const excessKw = status?.excessKw ?? null;
 	const batteryPct = status?.batteryPct ?? null;
+	const batteryKw = status?.batteryKw ?? null;
 	const gridKw = status?.gridKw ?? null;
 
 	return (
@@ -98,6 +115,12 @@ export function SunkeepEnergyPanel({ status }: SunkeepEnergyPanelProps) {
 					progress={
 						batteryPct != null ? { value: batteryPct, color: batteryColor(batteryPct) } : undefined
 					}
+				/>
+				<StatCard
+					label="Battery Rate"
+					value={batteryRateLabel(batteryKw)}
+					unit={batteryKw != null ? 'kW' : undefined}
+					badge={batteryRateBadge(batteryKw)}
 				/>
 				<StatCard
 					label="Grid Draw"
