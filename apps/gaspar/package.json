@@ -5,7 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "tsx --watch src/main.ts",
-		"build": "tsup",
+		"build": "prisma generate && tsup",
 		"start": "node dist/main.js",
 		"start:prod": "node dist/main.js",
 		"typecheck": "tsc --noEmit",
