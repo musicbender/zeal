@@ -1,6 +1,15 @@
-## [v0.4.1](https://github.com/musicbender/node-chargepoint/releases/tag/v0.4.1) — 2026-05-16
+## [v0.4.2](https://github.com/musicbender/node-chargepoint/releases/tag/v0.4.2) — 2026-05-17
 
-<!-- Release notes generated using configuration in .github/release.yml at v0.4.1 -->
+<!-- Release notes generated using configuration in .github/release.yml at v0.4.2 -->
+
+## What's Changed
+### Bug Fixes & Patches
+* Feat/power source config by @musicbender in https://github.com/musicbender/node-chargepoint/pull/25
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.4.1...v0.4.2
+
+---
 
 ## What's Changed
 ### Bug Fixes & Patches
