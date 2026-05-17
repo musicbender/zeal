@@ -17,6 +17,9 @@ interface LiveStatusResponse {
 		percentage_charged: number;
 		solar_power: number;
 		load_power: number;
+		grid_power?: number;
+		grid_status?: string;
+		timestamp?: string;
 	};
 }
 
@@ -43,7 +46,8 @@ export class TeslaEnergyClient implements IPowerwallAdapter {
 		}
 
 		const body = (await res.json()) as LiveStatusResponse;
-		const { percentage_charged, solar_power, load_power } = body.response;
+		const { percentage_charged, solar_power, load_power, grid_power, grid_status, timestamp } =
+			body.response;
 
 		if (percentage_charged === undefined || solar_power === undefined || load_power === undefined) {
 			throw new Error(`Tesla live_status unexpected shape: ${JSON.stringify(body)}`);
@@ -53,6 +57,9 @@ export class TeslaEnergyClient implements IPowerwallAdapter {
 			batteryPct: percentage_charged,
 			solarKw: solar_power / 1000,
 			loadKw: load_power / 1000,
+			gridKw: grid_power != null ? grid_power / 1000 : null,
+			gridStatus: grid_status ?? null,
+			lastTeslaAt: timestamp ?? null,
 		};
 	}
 

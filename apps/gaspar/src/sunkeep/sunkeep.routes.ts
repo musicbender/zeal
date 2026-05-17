@@ -25,6 +25,15 @@ export async function registerSunkeepRoutes(
 ) {
 	server.get('/sunkeep/status', async () => service.getStatus());
 
+	server.get('/sunkeep/meta', async (_req, reply) => {
+		try {
+			return await service.getMeta();
+		} catch (err) {
+			log.error({ err }, 'getMeta failed');
+			return reply.status(500).send({ error: 'Failed to fetch metadata' });
+		}
+	});
+
 	server.post('/sunkeep/enable', async () => {
 		service.enable();
 		return service.getStatus();

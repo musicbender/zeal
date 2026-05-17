@@ -5,6 +5,7 @@ import type {
 	IPowerwallAdapter,
 	PowerwallData,
 	SunkeepConfig,
+	SunkeepMeta,
 	SunkeepStatus,
 } from './sunkeep.types.js';
 import { StopReason, SunkeepState } from './sunkeep.types.js';
@@ -51,6 +52,9 @@ interface IChargePointClient {
 	getHomeChargerStatus(chargerId: number): Promise<HomeChargerStatus>;
 	setAmperageLimit(chargerId: number, amps: number): Promise<void>;
 	startChargingSession(deviceId: number): Promise<ChargingSession>;
+	getHomeChargerTechnicalInfo(
+		chargerId: number
+	): Promise<{ softwareVersion: string; deviceIp: string }>;
 }
 
 interface IPrismaChargingEvent {
@@ -72,6 +76,7 @@ export class SunkeepService {
 	private lastPwData: PowerwallData | null = null;
 	private sessionStartedAt: Date | null = null;
 	private lockedAmps: number | null = null;
+	private isPluggedIn: boolean | null = null;
 
 	constructor(
 		private readonly chargePoint: IChargePointClient,
@@ -114,15 +119,15 @@ export class SunkeepService {
 			loadKw: this.lastPwData?.loadKw ?? null,
 			batteryPct: this.lastPwData?.batteryPct ?? null,
 			lockedAmps: this.lockedAmps,
+			isPluggedIn: this.isPluggedIn,
+			gridKw: this.lastPwData?.gridKw ?? null,
+			gridStatus: this.lastPwData?.gridStatus ?? null,
+			lastTeslaAt: this.lastPwData?.lastTeslaAt ?? null,
 		};
 	}
 
 	async runTick(): Promise<void> {
 		if (this.state === SunkeepState.DISABLED) return;
-
-		if (!isWithinSolarWindow(this.config.solarWindowStart, this.config.solarWindowEnd)) {
-			return;
-		}
 
 		this.lastPollAt = new Date();
 
@@ -171,10 +176,42 @@ export class SunkeepService {
 		log.info('Amp lock cleared, auto-adjust restored');
 	}
 
+	async getMeta(): Promise<SunkeepMeta> {
+		let softwareVersion: string | null = null;
+		let deviceIp: string | null = null;
+		try {
+			const info = await this.chargePoint.getHomeChargerTechnicalInfo(
+				this.config.chargePointDeviceId
+			);
+			softwareVersion = info.softwareVersion;
+			deviceIp = info.deviceIp;
+		} catch (err) {
+			log.warn({ err }, 'Could not fetch ChargePoint technical info');
+		}
+		return {
+			chargePointDeviceId: this.config.chargePointDeviceId,
+			teslaEnergySiteId: this.config.teslaEnergySiteId,
+			softwareVersion,
+			deviceIp,
+		};
+	}
+
 	private async tick(): Promise<void> {
-		const chargerStatus = await this.chargePoint.getHomeChargerStatus(
-			this.config.chargePointDeviceId
-		);
+		const [chargerStatus, pwData] = await Promise.all([
+			this.chargePoint.getHomeChargerStatus(this.config.chargePointDeviceId),
+			this.powerwall.getData(),
+		]);
+
+		this.isPluggedIn = chargerStatus.isPluggedIn;
+		this.lastPwData = pwData;
+
+		if (!isWithinSolarWindow(this.config.solarWindowStart, this.config.solarWindowEnd)) {
+			if (this.state === SunkeepState.CHARGING) {
+				await this.stopActiveSession(StopReason.NIGHT_SAFETY);
+			}
+			this.state = chargerStatus.isPluggedIn ? SunkeepState.WAITING : SunkeepState.IDLE;
+			return;
+		}
 
 		if (!chargerStatus.isPluggedIn) {
 			if (this.state === SunkeepState.CHARGING) {
@@ -184,14 +221,11 @@ export class SunkeepService {
 			return;
 		}
 
-		const pwData = await this.powerwall.getData();
-		this.lastPwData = pwData;
-
 		if (pwData.solarKw === 0) {
 			if (this.state === SunkeepState.CHARGING) {
 				await this.stopActiveSession(StopReason.NIGHT_SAFETY);
 			}
-			this.state = SunkeepState.IDLE;
+			this.state = SunkeepState.WAITING;
 			return;
 		}
 

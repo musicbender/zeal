@@ -28,8 +28,11 @@
 	margin-left: var(--space-1);
 }
 
+.footer {
+	margin-top: var(--space-1);
+}
+
 .lastUpdated {
-	margin-top: var(--space-2);
 	color: var(--gray-10);
 	font-size: var(--font-size-1);
 }

@@ -10,6 +10,9 @@ export class SunkeepScheduler {
 	constructor(private readonly service: SunkeepService) {}
 
 	start(): void {
+		this.service.runTick().catch((err) => {
+			log.error({ err }, 'Unhandled error in initial Sunkeep tick');
+		});
 		this.job = cron.schedule('*/10 * * * *', () => {
 			this.service.runTick().catch((err) => {
 				log.error({ err }, 'Unhandled error in Sunkeep tick');

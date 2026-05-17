@@ -29,6 +29,11 @@ describe('SunkeepScheduler', () => {
 		expect(cron.schedule).toHaveBeenCalledWith('*/10 * * * *', expect.any(Function));
 	});
 
+	it('fires an immediate tick on start()', () => {
+		scheduler.start();
+		expect(mockService.runTick).toHaveBeenCalledOnce();
+	});
+
 	it('stop() calls job.stop()', () => {
 		scheduler.start();
 		const job = vi.mocked(cron.schedule).mock.results[0]?.value;

@@ -13,6 +13,13 @@ const mockStatus = {
 	batteryPct: null,
 };
 
+const mockMeta = {
+	chargePointDeviceId: 42,
+	teslaEnergySiteId: '12345',
+	softwareVersion: '1.2.3',
+	deviceIp: '192.168.1.100',
+};
+
 const mockService = {
 	getStatus: vi.fn().mockReturnValue(mockStatus),
 	enable: vi.fn(),
@@ -21,6 +28,7 @@ const mockService = {
 	manualStopSession: vi.fn().mockResolvedValue(undefined),
 	lockAmps: vi.fn().mockResolvedValue(undefined),
 	unlockAmps: vi.fn(),
+	getMeta: vi.fn().mockResolvedValue(mockMeta),
 };
 
 const mockPrisma = {
@@ -127,5 +135,16 @@ describe('Sunkeep routes', () => {
 		expect(res.statusCode).toBe(200);
 		expect(mockService.unlockAmps).toHaveBeenCalledOnce();
 		expect(res.json()).toMatchObject({ state: SunkeepState.IDLE });
+	});
+
+	it('GET /sunkeep/meta returns device metadata', async () => {
+		const res = await app.inject({ method: 'GET', url: '/sunkeep/meta' });
+		expect(res.statusCode).toBe(200);
+		expect(mockService.getMeta).toHaveBeenCalledOnce();
+		expect(res.json()).toMatchObject({
+			chargePointDeviceId: 42,
+			teslaEnergySiteId: '12345',
+			softwareVersion: '1.2.3',
+		});
 	});
 });

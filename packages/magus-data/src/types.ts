@@ -56,6 +56,17 @@ export interface SunkeepStatus {
 	excessKw: number | null;
 	batteryPct: number | null;
 	lockedAmps: number | null;
+	isPluggedIn: boolean | null;
+	gridKw: number | null;
+	gridStatus: string | null;
+	lastTeslaAt: string | null;
+}
+
+export interface SunkeepMeta {
+	chargePointDeviceId: number;
+	teslaEnergySiteId: string;
+	softwareVersion: string | null;
+	deviceIp: string | null;
 }
 
 export interface ChargingEventSummary {

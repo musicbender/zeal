@@ -20,9 +20,9 @@ function batteryColor(pct: number | null): 'green' | 'yellow' | 'red' {
 	return 'red';
 }
 
-function formatLastPollAt(lastPollAt: string | null): string {
-	if (!lastPollAt) return '—';
-	return new Date(lastPollAt).toLocaleTimeString();
+function formatTime(iso: string | null): string {
+	if (!iso) return '—';
+	return new Date(iso).toLocaleTimeString();
 }
 
 interface StatCardProps {
@@ -63,9 +63,10 @@ function StatCard({ label, value, unit, badge, progress }: StatCardProps) {
 export function SunkeepEnergyPanel({ status }: SunkeepEnergyPanelProps) {
 	const excessKw = status?.excessKw ?? null;
 	const batteryPct = status?.batteryPct ?? null;
+	const gridKw = status?.gridKw ?? null;
 
 	return (
-		<Flex direction="column" gap="2">
+		<Flex direction="column" gap="3">
 			<div className={styles.grid}>
 				<StatCard
 					label="Solar Production"
@@ -79,8 +80,8 @@ export function SunkeepEnergyPanel({ status }: SunkeepEnergyPanelProps) {
 				/>
 				<StatCard
 					label="Excess Solar"
-					value={status?.excessKw?.toFixed(2) ?? '—'}
-					unit={status?.excessKw != null ? 'kW' : undefined}
+					value={excessKw?.toFixed(2) ?? '—'}
+					unit={excessKw != null ? 'kW' : undefined}
 					badge={
 						excessKw != null
 							? {
@@ -92,16 +93,25 @@ export function SunkeepEnergyPanel({ status }: SunkeepEnergyPanelProps) {
 				/>
 				<StatCard
 					label="Battery"
-					value={status?.batteryPct?.toFixed(1) ?? '—'}
-					unit={status?.batteryPct != null ? '%' : undefined}
+					value={batteryPct?.toFixed(1) ?? '—'}
+					unit={batteryPct != null ? '%' : undefined}
 					progress={
 						batteryPct != null ? { value: batteryPct, color: batteryColor(batteryPct) } : undefined
 					}
 				/>
+				<StatCard
+					label="Grid Draw"
+					value={gridKw?.toFixed(2) ?? '—'}
+					unit={gridKw != null ? 'kW' : undefined}
+				/>
+				{status?.gridStatus != null && <StatCard label="Grid Status" value={status.gridStatus} />}
 			</div>
-			<Text className={styles.lastUpdated}>
-				Last updated: {formatLastPollAt(status?.lastPollAt ?? null)}
-			</Text>
+			<Flex gap="4" className={styles.footer}>
+				<Text className={styles.lastUpdated}>Polled: {formatTime(status?.lastPollAt ?? null)}</Text>
+				{status?.lastTeslaAt != null && (
+					<Text className={styles.lastUpdated}>Tesla: {formatTime(status.lastTeslaAt)}</Text>
+				)}
+			</Flex>
 		</Flex>
 	);
 }

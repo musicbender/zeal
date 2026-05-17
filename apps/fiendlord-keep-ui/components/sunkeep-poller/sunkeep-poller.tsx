@@ -3,7 +3,7 @@
 import { SunkeepControls } from '@/components/sunkeep-controls/sunkeep-controls';
 import { SunkeepEnergyPanel } from '@/components/sunkeep-energy-panel/sunkeep-energy-panel';
 import type { SunkeepStatus } from '@repo/magus-data';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import styles from './sunkeep-poller.module.css';
 
 interface SunkeepPollerProps {
@@ -12,6 +12,7 @@ interface SunkeepPollerProps {
 
 export function SunkeepPoller({ initialStatus }: SunkeepPollerProps) {
 	const [status, setStatus] = useState<SunkeepStatus | null>(initialStatus);
+	const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
 	const poll = useCallback(async () => {
 		try {
@@ -22,10 +23,37 @@ export function SunkeepPoller({ initialStatus }: SunkeepPollerProps) {
 		}
 	}, []);
 
-	useEffect(() => {
-		const interval = setInterval(poll, 30_000);
-		return () => clearInterval(interval);
+	const startPolling = useCallback(() => {
+		if (intervalRef.current) clearInterval(intervalRef.current);
+		intervalRef.current = setInterval(poll, 30_000);
 	}, [poll]);
+
+	const stopPolling = useCallback(() => {
+		if (intervalRef.current) {
+			clearInterval(intervalRef.current);
+			intervalRef.current = null;
+		}
+	}, []);
+
+	useEffect(() => {
+		startPolling();
+
+		const handleVisibilityChange = () => {
+			if (document.hidden) {
+				stopPolling();
+			} else {
+				poll();
+				startPolling();
+			}
+		};
+
+		document.addEventListener('visibilitychange', handleVisibilityChange);
+
+		return () => {
+			stopPolling();
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
+		};
+	}, [poll, startPolling, stopPolling]);
 
 	return (
 		<div className={styles.layout}>
