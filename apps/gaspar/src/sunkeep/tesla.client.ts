@@ -14,7 +14,7 @@ interface TokenResponse {
 
 interface LiveStatusResponse {
 	response: {
-		battery_percentage: number;
+		percentage_charged: number;
 		solar_power: number;
 		load_power: number;
 	};
@@ -37,13 +37,20 @@ export class TeslaEnergyClient implements IPowerwallAdapter {
 			{ headers: { Authorization: `Bearer ${this.accessToken}` } }
 		);
 
-		if (!res.ok) throw new Error(`Tesla live_status failed: ${res.status}`);
+		if (!res.ok) {
+			const body = await res.text().catch(() => '');
+			throw new Error(`Tesla live_status failed: ${res.status} — ${body}`);
+		}
 
 		const body = (await res.json()) as LiveStatusResponse;
-		const { battery_percentage, solar_power, load_power } = body.response;
+		const { percentage_charged, solar_power, load_power } = body.response;
+
+		if (percentage_charged === undefined || solar_power === undefined || load_power === undefined) {
+			throw new Error(`Tesla live_status unexpected shape: ${JSON.stringify(body)}`);
+		}
 
 		return {
-			batteryPct: battery_percentage,
+			batteryPct: percentage_charged,
 			solarKw: solar_power / 1000,
 			loadKw: load_power / 1000,
 		};
@@ -63,7 +70,10 @@ export class TeslaEnergyClient implements IPowerwallAdapter {
 			}),
 		});
 
-		if (!res.ok) throw new Error(`Tesla token refresh failed: ${res.status}`);
+		if (!res.ok) {
+			const body = await res.text().catch(() => '');
+			throw new Error(`Tesla token refresh failed: ${res.status} — ${body}`);
+		}
 
 		const { access_token, expires_in } = (await res.json()) as TokenResponse;
 		this.accessToken = access_token;

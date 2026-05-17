@@ -35,7 +35,8 @@
 		"SOLAR_WINDOW_START",
 		"SOLAR_WINDOW_END",
 		"SUNKEEP_ENABLED",
-		"SUNKEEP_SOE_THRESHOLD"
+		"SUNKEEP_SOE_THRESHOLD",
+		"CHARGEPOINT_TOKEN"
 	],
 	"tasks": {
 		"dev": {
@@ -51,6 +52,9 @@
 		"typecheck": {},
 		"lint": {},
 		"test": {},
+		"test:integration": {
+			"cache": false
+		},
 		"test:e2e": {
 			"cache": false
 		},
