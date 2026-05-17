@@ -11,6 +11,7 @@ const mockStatus = {
 	solarKw: null,
 	excessKw: null,
 	batteryPct: null,
+	waitReason: null,
 };
 
 const mockMeta = {
@@ -24,6 +25,7 @@ const mockService = {
 	getStatus: vi.fn().mockReturnValue(mockStatus),
 	enable: vi.fn(),
 	disable: vi.fn(),
+	runTick: vi.fn().mockResolvedValue(undefined),
 	manualStartSession: vi.fn().mockResolvedValue(undefined),
 	manualStopSession: vi.fn().mockResolvedValue(undefined),
 	lockAmps: vi.fn().mockResolvedValue(undefined),
@@ -52,6 +54,12 @@ describe('Sunkeep routes', () => {
 		const res = await app.inject({ method: 'GET', url: '/sunkeep/status' });
 		expect(res.statusCode).toBe(200);
 		expect(res.json()).toMatchObject({ state: SunkeepState.IDLE, enabled: true });
+	});
+
+	it('POST /sunkeep/poll calls service.runTick() and returns status', async () => {
+		const res = await app.inject({ method: 'POST', url: '/sunkeep/poll' });
+		expect(res.statusCode).toBe(200);
+		expect(mockService.runTick).toHaveBeenCalledOnce();
 	});
 
 	it('POST /sunkeep/enable calls service.enable()', async () => {

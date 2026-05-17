@@ -51,6 +51,25 @@ export function SunkeepControls({ status, onAction }: SunkeepControlsProps) {
 	const initialAmps = status?.lockedAmps ?? status?.chargerAmps;
 	const [ampInput, setAmpInput] = useState(initialAmps?.toString() ?? '');
 	const [error, setError] = useState<string | null>(null);
+	const [elapsed, setElapsed] = useState<string | null>(null);
+
+	useEffect(() => {
+		const startedAt = status?.activeSession?.startedAt;
+		if (!startedAt) {
+			setElapsed(null);
+			return;
+		}
+		const update = () => {
+			const secs = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
+			const h = Math.floor(secs / 3600);
+			const m = Math.floor((secs % 3600) / 60);
+			const s = secs % 60;
+			setElapsed(h > 0 ? `${h}h ${m}m` : `${m}m ${String(s).padStart(2, '0')}s`);
+		};
+		update();
+		const timer = setInterval(update, 1000);
+		return () => clearInterval(timer);
+	}, [status?.activeSession?.startedAt]);
 
 	useEffect(() => {
 		if (status?.lockedAmps != null) {
@@ -127,17 +146,26 @@ export function SunkeepControls({ status, onAction }: SunkeepControlsProps) {
 	const isLocked = status?.lockedAmps != null;
 	const isCharging = status?.state === 'CHARGING';
 	const isDisabled = !status || status.state === 'DISABLED';
+	const isLockUnchanged =
+		status?.lockedAmps != null && parseInt(ampInput, 10) === status.lockedAmps;
 
 	return (
 		<Card className={styles.card}>
 			<Flex direction="column" gap="4">
 				{/* State + Plug */}
-				<Flex align="center" justify="between" gap="2">
-					<Flex align="center" gap="2">
-						<Text className={styles.sectionLabel}>State</Text>
-						<Badge color={badgeColor} size="2">
-							{stateLabel}
-						</Badge>
+				<Flex align="start" justify="between" gap="2">
+					<Flex direction="column" gap="1">
+						<Flex align="center" gap="2">
+							<Text className={styles.sectionLabel}>State</Text>
+							<Badge color={badgeColor} size="2">
+								{stateLabel}
+							</Badge>
+						</Flex>
+						{status?.waitReason && (
+							<Text size="1" color="gray">
+								{status.waitReason}
+							</Text>
+						)}
 					</Flex>
 					{status?.isPluggedIn != null && (
 						<Badge color={status.isPluggedIn ? 'blue' : 'gray'} variant="soft" size="1">
@@ -157,6 +185,11 @@ export function SunkeepControls({ status, onAction }: SunkeepControlsProps) {
 							<Badge color="orange" variant="soft" size="1">
 								Locked
 							</Badge>
+						)}
+						{elapsed && (
+							<Text size="2" color="gray">
+								for {elapsed}
+							</Text>
 						)}
 					</Flex>
 				)}
@@ -201,7 +234,7 @@ export function SunkeepControls({ status, onAction }: SunkeepControlsProps) {
 							size="1"
 							color="teal"
 							onClick={handleForceStart}
-							disabled={loading || isDisabled || isCharging}
+							disabled={loading || isDisabled || isCharging || status?.isPluggedIn === false}
 						>
 							Force Start
 						</Button>
@@ -253,7 +286,11 @@ export function SunkeepControls({ status, onAction }: SunkeepControlsProps) {
 							>
 								+
 							</button>
-							<Button size="1" onClick={handleLockAmps} disabled={loading || !status}>
+							<Button
+								size="1"
+								onClick={handleLockAmps}
+								disabled={loading || !status || isLockUnchanged}
+							>
 								Lock
 							</Button>
 							{isLocked && (

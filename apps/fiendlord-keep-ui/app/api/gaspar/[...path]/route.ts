@@ -17,8 +17,11 @@ async function proxy(request: Request, { params }: Params): Promise<Response> {
 	try {
 		const init: RequestInit = { method: request.method };
 		if (request.method !== 'GET' && request.method !== 'DELETE') {
-			init.body = await request.text();
-			init.headers = { 'content-type': 'application/json' };
+			const body = await request.text();
+			if (body) {
+				init.body = body;
+				init.headers = { 'content-type': 'application/json' };
+			}
 		}
 		const upstream = await fetch(target, init);
 		const data = await upstream.json();

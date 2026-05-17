@@ -34,6 +34,16 @@ export async function registerSunkeepRoutes(
 		}
 	});
 
+	server.post('/sunkeep/poll', async (_req, reply) => {
+		try {
+			await service.runTick();
+			return service.getStatus();
+		} catch (err) {
+			log.error({ err }, 'Manual poll failed');
+			return reply.status(500).send({ error: 'Poll failed' });
+		}
+	});
+
 	server.post('/sunkeep/enable', async () => {
 		service.enable();
 		return service.getStatus();

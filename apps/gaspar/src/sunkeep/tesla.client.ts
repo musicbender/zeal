@@ -1,4 +1,4 @@
-import type { IPowerwallAdapter, PowerwallData } from './sunkeep.types.js';
+import type { IPowerwallAdapter, PowerwallData, TeslaSiteInfo } from './sunkeep.types.js';
 
 interface TeslaClientConfig {
 	clientId: string;
@@ -10,6 +10,22 @@ interface TeslaClientConfig {
 interface TokenResponse {
 	access_token: string;
 	expires_in: number;
+}
+
+interface SiteInfoResponse {
+	response: {
+		site_name?: string;
+		backup_reserve_percent?: number;
+		version?: string;
+		battery_count?: number;
+		user_settings?: { storm_mode_enabled?: boolean };
+		components?: {
+			gateways?: Array<{
+				part_name?: string;
+				nameplate_energy_watts?: number;
+			}>;
+		};
+	};
 }
 
 interface LiveStatusResponse {
@@ -69,6 +85,35 @@ export class TeslaEnergyClient implements IPowerwallAdapter {
 			gridKw: grid_power != null ? grid_power / 1000 : null,
 			gridStatus: grid_status ?? null,
 			lastTeslaAt: timestamp ?? null,
+		};
+	}
+
+	async getSiteInfo(): Promise<TeslaSiteInfo> {
+		await this.refreshIfNeeded();
+
+		const res = await fetch(
+			`${FLEET_BASE}/api/1/energy_sites/${this.config.energySiteId}/site_info`,
+			{ headers: { Authorization: `Bearer ${this.accessToken}` } }
+		);
+
+		if (!res.ok) {
+			const body = await res.text().catch(() => '');
+			throw new Error(`Tesla site_info failed: ${res.status} — ${body}`);
+		}
+
+		const body = (await res.json()) as SiteInfoResponse;
+		const r = body.response;
+		const gateway = r.components?.gateways?.[0];
+
+		return {
+			siteName: r.site_name ?? null,
+			batteryCapacityKwh:
+				gateway?.nameplate_energy_watts != null ? gateway.nameplate_energy_watts / 1000 : null,
+			backupReservePct: r.backup_reserve_percent ?? null,
+			model: gateway?.part_name ?? null,
+			firmwareVersion: r.version ? r.version.split(' ')[0]! : null,
+			batteryCount: r.battery_count ?? null,
+			stormModeEnabled: r.user_settings?.storm_mode_enabled ?? null,
 		};
 	}
 

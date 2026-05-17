@@ -13,15 +13,48 @@ const mockSession = {
 
 const mockTechInfo = { softwareVersion: '1.2.3', deviceIp: '192.168.1.100' };
 
+const mockCpConfig = {
+	powerSource: { amps: 50, type: 'hardwired' },
+	ledBrightness: {
+		level: 3,
+		inProgress: false,
+		supportedLevels: [0, 1, 2, 3, 4, 5],
+		isEnabled: true,
+	},
+	serialNumber: '',
+	macAddress: '',
+	stationNickname: '',
+	streetAddress: '',
+	hasUtilityInfo: false,
+	utility: null,
+	indicatorLightEcoMode: false,
+	flashlightReset: false,
+	worksWithNest: false,
+	isPairedWithNest: false,
+	isInstalledByInstaller: false,
+};
+
 const mockCp = {
 	getHomeChargerStatus: vi.fn(),
 	setAmperageLimit: vi.fn().mockResolvedValue(undefined),
 	startChargingSession: vi.fn().mockResolvedValue(mockSession),
 	getHomeChargerTechnicalInfo: vi.fn().mockResolvedValue(mockTechInfo),
+	getHomeChargerConfig: vi.fn().mockResolvedValue(mockCpConfig),
+};
+
+const mockSiteInfo = {
+	siteName: 'My Home',
+	batteryCapacityKwh: 27,
+	backupReservePct: 20,
+	model: 'Powerwall 3',
+	firmwareVersion: '26.10.3',
+	batteryCount: 2,
+	stormModeEnabled: true,
 };
 
 const mockPw = {
 	getData: vi.fn(),
+	getSiteInfo: vi.fn().mockResolvedValue(mockSiteInfo),
 };
 
 const mockPrisma = {
@@ -83,6 +116,35 @@ describe('SunkeepService', () => {
 
 	afterEach(() => {
 		vi.useRealTimers();
+	});
+
+	// --- getStatus() derived fields ---
+
+	describe('getStatus() excessKw', () => {
+		it('subtracts battery charging power from excess (battery charging = negative kw)', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus({ isPluggedIn: true }));
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 2.0, loadKw: 0.7, batteryKw: -1.0 }));
+			await service.runTick();
+			// excess = 2.0 - 0.7 + (-1.0) = 0.3
+			expect(service.getStatus().excessKw).toBeCloseTo(0.3);
+		});
+
+		it('adds battery discharging power to excess (battery discharging = positive kw)', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus({ isPluggedIn: true }));
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 1.0, loadKw: 0.5, batteryKw: 0.5 }));
+			await service.runTick();
+			// excess = 1.0 - 0.5 + 0.5 = 1.0
+			expect(service.getStatus().excessKw).toBeCloseTo(1.0);
+		});
+
+		it('returns null when no powerwall data', () => {
+			service.enable();
+			expect(service.getStatus().excessKw).toBeNull();
+		});
 	});
 
 	// --- Initial state ---
@@ -474,19 +536,126 @@ describe('SunkeepService', () => {
 	// --- Metadata ---
 
 	describe('getMeta()', () => {
-		it('returns device IDs from config and tech info from ChargePoint', async () => {
+		it('returns all ChargePoint and Tesla meta fields', async () => {
 			const meta = await service.getMeta();
 			expect(meta.chargePointDeviceId).toBe(42);
 			expect(meta.teslaEnergySiteId).toBe('12345');
 			expect(meta.softwareVersion).toBe('1.2.3');
 			expect(meta.deviceIp).toBe('192.168.1.100');
+			expect(meta.cpPowerSourceAmps).toBe(50);
+			expect(meta.cpPowerSourceType).toBe('hardwired');
+			expect(meta.cpLedBrightnessLevel).toBe(3);
+			expect(meta.cpLedBrightnessMax).toBe(5);
+			expect(meta.teslaSiteName).toBe('My Home');
+			expect(meta.teslaBatteryCapacityKwh).toBe(27);
+			expect(meta.teslaBackupReservePct).toBe(20);
+			expect(meta.teslaModel).toBe('Powerwall 3');
+			expect(meta.teslaFirmwareVersion).toBe('26.10.3');
+			expect(meta.teslaBatteryCount).toBe(2);
+			expect(meta.teslaStormModeEnabled).toBe(true);
 		});
 
-		it('returns null fields when ChargePoint tech info fetch fails', async () => {
+		it('returns cpScheduleActive from cached isDuringScheduledTime', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({ isDuringScheduledTime: true })
+			);
+			await service.runTick();
+			const meta = await service.getMeta();
+			expect(meta.cpScheduleActive).toBe(true);
+		});
+
+		it('returns null ChargePoint fields when tech info fetch fails', async () => {
 			mockCp.getHomeChargerTechnicalInfo.mockRejectedValueOnce(new Error('network'));
 			const meta = await service.getMeta();
 			expect(meta.softwareVersion).toBeNull();
 			expect(meta.deviceIp).toBeNull();
+		});
+
+		it('returns null CP config fields when config fetch fails', async () => {
+			mockCp.getHomeChargerConfig.mockRejectedValueOnce(new Error('network'));
+			const meta = await service.getMeta();
+			expect(meta.cpPowerSourceAmps).toBeNull();
+			expect(meta.cpLedBrightnessLevel).toBeNull();
+		});
+
+		it('returns null Tesla fields when getSiteInfo fails', async () => {
+			mockPw.getSiteInfo.mockRejectedValueOnce(new Error('tesla down'));
+			const meta = await service.getMeta();
+			expect(meta.teslaSiteName).toBeNull();
+			expect(meta.teslaBatteryCapacityKwh).toBeNull();
+			expect(meta.teslaBackupReservePct).toBeNull();
+		});
+	});
+
+	// --- waitReason ---
+
+	describe('waitReason', () => {
+		it('is "Outside solar window" when outside window and plugged in', async () => {
+			service.enable();
+			vi.setSystemTime(NIGHT);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus({ isPluggedIn: true }));
+			mockPw.getData.mockResolvedValue(goodPwData());
+			await service.runTick();
+			expect(service.getStatus().waitReason).toBe('Outside solar window');
+		});
+
+		it('is null when outside window and not plugged in (IDLE)', async () => {
+			service.enable();
+			vi.setSystemTime(NIGHT);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus({ isPluggedIn: false }));
+			mockPw.getData.mockResolvedValue(goodPwData());
+			await service.runTick();
+			expect(service.getStatus().state).toBe(SunkeepState.IDLE);
+			expect(service.getStatus().waitReason).toBeNull();
+		});
+
+		it('is "No solar production" when solarKw is 0', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 0 }));
+			await service.runTick();
+			expect(service.getStatus().waitReason).toBe('No solar production');
+		});
+
+		it('is "Battery below threshold" when battery < threshold', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+			mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 80 }));
+			await service.runTick();
+			expect(service.getStatus().waitReason).toBe('Battery below threshold');
+		});
+
+		it('is "Insufficient solar excess" when excessKw < MIN_EXCESS_KW', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 1.8, loadKw: 1.5 }));
+			await service.runTick();
+			expect(service.getStatus().waitReason).toBe('Insufficient solar excess');
+		});
+
+		it('is null when CHARGING', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+			mockPw.getData.mockResolvedValue(goodPwData());
+			await service.runTick();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+			expect(service.getStatus().waitReason).toBeNull();
+		});
+
+		it('is null when IDLE (car not plugged in)', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus({ isPluggedIn: false }));
+			mockPw.getData.mockResolvedValue(goodPwData());
+			await service.runTick();
+			expect(service.getStatus().state).toBe(SunkeepState.IDLE);
+			expect(service.getStatus().waitReason).toBeNull();
 		});
 	});
 

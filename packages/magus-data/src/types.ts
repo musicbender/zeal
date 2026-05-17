@@ -68,6 +68,7 @@ export interface SunkeepStatus {
 	gridKw: number | null;
 	gridStatus: string | null;
 	lastTeslaAt: string | null;
+	waitReason: string | null;
 }
 
 export interface SunkeepMeta {
@@ -75,6 +76,18 @@ export interface SunkeepMeta {
 	teslaEnergySiteId: string;
 	softwareVersion: string | null;
 	deviceIp: string | null;
+	cpPowerSourceAmps: number | null;
+	cpPowerSourceType: string | null;
+	cpLedBrightnessLevel: number | null;
+	cpLedBrightnessMax: number | null;
+	cpScheduleActive: boolean | null;
+	teslaSiteName: string | null;
+	teslaBatteryCapacityKwh: number | null;
+	teslaBackupReservePct: number | null;
+	teslaModel: string | null;
+	teslaFirmwareVersion: string | null;
+	teslaBatteryCount: number | null;
+	teslaStormModeEnabled: boolean | null;
 }
 
 export interface ChargingEventSummary {

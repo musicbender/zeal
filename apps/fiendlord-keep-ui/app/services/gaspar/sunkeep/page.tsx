@@ -58,7 +58,10 @@ export default async function SunkeepPage() {
 	return (
 		<div className={styles.page}>
 			<h1>Sunkeep</h1>
-			<SunkeepPoller initialStatus={status} />
+			<SunkeepPoller
+				initialStatus={status}
+				batteryCapacityKwh={metaData?.teslaBatteryCapacityKwh}
+			/>
 			{metaData && <SunkeepMetaPanel meta={metaData} />}
 			<h2>Charging Sessions</h2>
 			<SunkeepEventsTable initialData={events} />
