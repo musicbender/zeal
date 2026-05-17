@@ -10,7 +10,7 @@ const mockConfig = {
 
 const TOKEN_RESPONSE = { access_token: 'access-tok', expires_in: 28800 };
 const LIVE_STATUS_RESPONSE = {
-	response: { battery_percentage: 95.5, solar_power: 3200, load_power: 1800 },
+	response: { percentage_charged: 95.5, solar_power: 3200, load_power: 1800 },
 };
 
 function mockFetch(responses: { ok: boolean; body: unknown }[]) {

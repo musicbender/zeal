@@ -28,6 +28,7 @@ export interface IPowerwallAdapter {
 export interface SunkeepConfig {
 	chargePointUsername: string;
 	chargePointPassword: string;
+	chargePointToken?: string;
 	chargePointDeviceId: number;
 	teslaClientId: string;
 	teslaClientSecret: string;

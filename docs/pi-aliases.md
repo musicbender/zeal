@@ -10,6 +10,7 @@ alias m-g-edit='sudo systemctl edit --full gaspar'
 alias m-g-logs='sudo journalctl -u gaspar -n 100 --no-pager'
 alias m-g-follow='sudo journalctl -fu gaspar'
 alias m-g-boot='sudo journalctl -u gaspar -b'
+alias m-g-env='sudo vim /etc/gaspar/env'
 
 # ─── Worfbot Gateway ──────────────────────────────────────
 
@@ -23,6 +24,7 @@ alias m-w-edit='sudo systemctl edit --full worfbot-gateway'
 alias m-w-logs='sudo journalctl -u worfbot-gateway -n 100 --no-pager'
 alias m-w-follow='sudo journalctl -fu worfbot-gateway'
 alias m-w-boot='sudo journalctl -u worfbot-gateway -b'
+alias m-w-env='sudo vim /etc/worfbot-gateway/env'
 
 # ─── Fiendlord Keep ───────────────────────────────────────
 
@@ -36,6 +38,7 @@ alias m-f-edit='sudo systemctl edit --full fiendlord-keep'
 alias m-f-logs='sudo journalctl -u fiendlord-keep -n 100 --no-pager'
 alias m-f-follow='sudo journalctl -fu fiendlord-keep'
 alias m-f-boot='sudo journalctl -u fiendlord-keep -b'
+alias m-f-env='sudo vim /etc/fiendlord-keep/env'
 
 # ─── All services ─────────────────────────────────────────
 
@@ -65,3 +68,4 @@ alias m-r-boot='sudo journalctl -u actions.runner.musicbender-zeal.magus -b'
 # --- Other ----------------------------------------------
 
 alias z='source ~/.bashrc'
+alias z-alias='sudo vim ~/.bash_aliases'

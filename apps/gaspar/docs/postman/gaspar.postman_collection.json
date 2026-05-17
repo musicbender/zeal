@@ -1,0 +1,461 @@
+{
+	"info": {
+		"_postman_id": "gaspar-api-collection",
+		"name": "Gaspar API",
+		"description": "REST API for the Gaspar smart home sensor service.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:3000",
+			"type": "string"
+		},
+		{
+			"key": "sensorId",
+			"value": "",
+			"type": "string",
+			"description": "Set this after creating a sensor"
+		},
+		{
+			"key": "chargingEventId",
+			"value": "",
+			"type": "string",
+			"description": "Set this after fetching charging events"
+		}
+	],
+	"item": [
+		{
+			"name": "App",
+			"item": [
+				{
+					"name": "Root",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/",
+							"host": ["{{baseUrl}}"],
+							"path": [""]
+						},
+						"description": "Root health check — returns a hello message."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{ \"message\": \"Hello World!\" }"
+						}
+					]
+				},
+				{
+					"name": "Health",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/health",
+							"host": ["{{baseUrl}}"],
+							"path": ["health"]
+						},
+						"description": "Returns service health status and current timestamp."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{ \"status\": \"ok\", \"timestamp\": \"2026-05-14T12:00:00.000Z\" }"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Sensors",
+			"item": [
+				{
+					"name": "Create Sensor",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"  const body = pm.response.json();",
+									"  pm.collectionVariables.set('sensorId', body.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{baseUrl}}/sensors",
+							"host": ["{{baseUrl}}"],
+							"path": ["sensors"]
+						},
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Living Room Motion\",\n  \"type\": \"MOTION\",\n  \"room\": \"LIVING_ROOM\"\n}",
+							"options": {
+								"raw": { "language": "json" }
+							}
+						},
+						"description": "Create a new sensor.\n\n**type** — one of: `BED_OCCUPANCY`, `MOTION`, `CONTACT`, `TEMPERATURE`\n\n**room** — one of: `LIVING_ROOM`, `BEDROOM`, `BATHROOM`, `KITCHEN`, `DINING_ROOM`, `HALLWAY`, `GARAGE`, `CLOFFICE`, `HEARTH`, `BACKYARD`, `FRONTYARD`, `LEA_BEDROOM`, `MAX_BEDROOM`, or `null`"
+					},
+					"response": [
+						{
+							"name": "201 Created",
+							"status": "Created",
+							"code": 201,
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"name\": \"Living Room Motion\",\n  \"type\": \"MOTION\",\n  \"room\": \"LIVING_ROOM\",\n  \"isActive\": false,\n  \"activeSince\": null,\n  \"createdAt\": \"2026-05-14T12:00:00.000Z\",\n  \"updatedAt\": \"2026-05-14T12:00:00.000Z\"\n}"
+						},
+						{
+							"name": "400 Bad Request",
+							"status": "Bad Request",
+							"code": 400,
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{ \"error\": \"Failed to create sensor\" }"
+						}
+					]
+				},
+				{
+					"name": "List Sensors",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/sensors",
+							"host": ["{{baseUrl}}"],
+							"path": ["sensors"]
+						},
+						"description": "Retrieve all sensors."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "[\n  {\n    \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"name\": \"Living Room Motion\",\n    \"type\": \"MOTION\",\n    \"room\": \"LIVING_ROOM\",\n    \"isActive\": false,\n    \"activeSince\": null,\n    \"createdAt\": \"2026-05-14T12:00:00.000Z\",\n    \"updatedAt\": \"2026-05-14T12:00:00.000Z\"\n  }\n]"
+						}
+					]
+				},
+				{
+					"name": "Get Sensor",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/sensors/{{sensorId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["sensors", "{{sensorId}}"]
+						},
+						"description": "Retrieve a single sensor by UUID."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"name\": \"Living Room Motion\",\n  \"type\": \"MOTION\",\n  \"room\": \"LIVING_ROOM\",\n  \"isActive\": false,\n  \"activeSince\": null,\n  \"createdAt\": \"2026-05-14T12:00:00.000Z\",\n  \"updatedAt\": \"2026-05-14T12:00:00.000Z\"\n}"
+						},
+						{
+							"name": "404 Not Found",
+							"status": "Not Found",
+							"code": 404,
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{ \"message\": \"Sensor not found\" }"
+						}
+					]
+				},
+				{
+					"name": "Update Sensor",
+					"request": {
+						"method": "PATCH",
+						"url": {
+							"raw": "{{baseUrl}}/sensors/{{sensorId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["sensors", "{{sensorId}}"]
+						},
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Living Room Motion Sensor\",\n  \"room\": \"LIVING_ROOM\"\n}",
+							"options": {
+								"raw": { "language": "json" }
+							}
+						},
+						"description": "Partially update a sensor. All fields are optional.\n\n**type** — one of: `BED_OCCUPANCY`, `MOTION`, `CONTACT`, `TEMPERATURE`\n\n**room** — one of: `LIVING_ROOM`, `BEDROOM`, `BATHROOM`, `KITCHEN`, `DINING_ROOM`, `HALLWAY`, `GARAGE`, `CLOFFICE`, `HEARTH`, `BACKYARD`, `FRONTYARD`, `LEA_BEDROOM`, `MAX_BEDROOM`, or `null`"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"name\": \"Living Room Motion Sensor\",\n  \"type\": \"MOTION\",\n  \"room\": \"LIVING_ROOM\",\n  \"isActive\": false,\n  \"activeSince\": null,\n  \"createdAt\": \"2026-05-14T12:00:00.000Z\",\n  \"updatedAt\": \"2026-05-14T12:05:00.000Z\"\n}"
+						},
+						{
+							"name": "400 Bad Request",
+							"status": "Bad Request",
+							"code": 400,
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{ \"error\": \"Failed to update sensor\" }"
+						}
+					]
+				},
+				{
+					"name": "Delete Sensor",
+					"request": {
+						"method": "DELETE",
+						"url": {
+							"raw": "{{baseUrl}}/sensors/{{sensorId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["sensors", "{{sensorId}}"]
+						},
+						"description": "Delete a sensor by UUID. Returns 204 No Content on success."
+					},
+					"response": [
+						{
+							"name": "204 No Content",
+							"status": "No Content",
+							"code": 204,
+							"body": ""
+						},
+						{
+							"name": "400 Bad Request",
+							"status": "Bad Request",
+							"code": 400,
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{ \"error\": \"Failed to delete sensor\" }"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Sunkeep",
+			"item": [
+				{
+					"name": "Get Status",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/sunkeep/status",
+							"host": ["{{baseUrl}}"],
+							"path": ["sunkeep", "status"]
+						},
+						"description": "Returns the current Sunkeep state including charging status, solar/battery metrics, and session info.\n\n**state** — one of: `DISABLED`, `IDLE`, `WAITING`, `CHARGING`, `ERROR`"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"state\": \"IDLE\",\n  \"enabled\": true,\n  \"lastPollAt\": \"2026-05-14T12:00:00.000Z\",\n  \"activeSession\": null,\n  \"solarKw\": 4.2,\n  \"excessKw\": 1.8,\n  \"batteryPct\": 85\n}"
+						}
+					]
+				},
+				{
+					"name": "Enable Sunkeep",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{baseUrl}}/sunkeep/enable",
+							"host": ["{{baseUrl}}"],
+							"path": ["sunkeep", "enable"]
+						},
+						"description": "Enable the Sunkeep solar charging scheduler. Returns updated status."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"state\": \"IDLE\",\n  \"enabled\": true,\n  \"lastPollAt\": null,\n  \"activeSession\": null,\n  \"solarKw\": null,\n  \"excessKw\": null,\n  \"batteryPct\": null\n}"
+						}
+					]
+				},
+				{
+					"name": "Disable Sunkeep",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{baseUrl}}/sunkeep/disable",
+							"host": ["{{baseUrl}}"],
+							"path": ["sunkeep", "disable"]
+						},
+						"description": "Disable the Sunkeep solar charging scheduler. Returns updated status."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"state\": \"DISABLED\",\n  \"enabled\": false,\n  \"lastPollAt\": \"2026-05-14T12:00:00.000Z\",\n  \"activeSession\": null,\n  \"solarKw\": null,\n  \"excessKw\": null,\n  \"batteryPct\": null\n}"
+						},
+						{
+							"name": "500 Internal Server Error",
+							"status": "Internal Server Error",
+							"code": 500,
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{ \"error\": \"Failed to disable Sunkeep\" }"
+						}
+					]
+				},
+				{
+					"name": "Start Charging Session",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{baseUrl}}/sunkeep/charge/start",
+							"host": ["{{baseUrl}}"],
+							"path": ["sunkeep", "charge", "start"]
+						},
+						"description": "Manually start a charging session via ChargePoint. Returns updated status."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"state\": \"CHARGING\",\n  \"enabled\": true,\n  \"lastPollAt\": \"2026-05-14T12:00:00.000Z\",\n  \"activeSession\": {\n    \"sessionId\": 12345,\n    \"currentAmps\": 32,\n    \"startedAt\": \"2026-05-14T12:00:00.000Z\"\n  },\n  \"solarKw\": 4.2,\n  \"excessKw\": 1.8,\n  \"batteryPct\": 85\n}"
+						},
+						{
+							"name": "500 Internal Server Error",
+							"status": "Internal Server Error",
+							"code": 500,
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{ \"error\": \"Failed to start charging session\" }"
+						}
+					]
+				},
+				{
+					"name": "Stop Charging Session",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{baseUrl}}/sunkeep/charge/stop",
+							"host": ["{{baseUrl}}"],
+							"path": ["sunkeep", "charge", "stop"]
+						},
+						"description": "Manually stop the active charging session via ChargePoint. Returns updated status."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"state\": \"IDLE\",\n  \"enabled\": true,\n  \"lastPollAt\": \"2026-05-14T12:05:00.000Z\",\n  \"activeSession\": null,\n  \"solarKw\": 4.2,\n  \"excessKw\": 1.8,\n  \"batteryPct\": 87\n}"
+						},
+						{
+							"name": "500 Internal Server Error",
+							"status": "Internal Server Error",
+							"code": 500,
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{ \"error\": \"Failed to stop charging session\" }"
+						}
+					]
+				},
+				{
+					"name": "List Charging Events",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"  const body = pm.response.json();",
+									"  if (body.events && body.events.length > 0) {",
+									"    pm.collectionVariables.set('chargingEventId', body.events[0].id);",
+									"  }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/sunkeep/events?page=1&limit=20",
+							"host": ["{{baseUrl}}"],
+							"path": ["sunkeep", "events"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number (default: 1, min: 1)"
+								},
+								{
+									"key": "limit",
+									"value": "20",
+									"description": "Results per page (default: 20, min: 1, max: 100)"
+								}
+							]
+						},
+						"description": "Returns paginated charging events ordered by `startedAt` descending."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"events\": [\n    {\n      \"id\": \"clx123abc\",\n      \"startedAt\": \"2026-05-14T08:00:00.000Z\",\n      \"stoppedAt\": \"2026-05-14T11:00:00.000Z\",\n      \"stopReason\": \"solar_dropped\"\n    }\n  ],\n  \"total\": 1,\n  \"page\": 1,\n  \"limit\": 20\n}"
+						}
+					]
+				},
+				{
+					"name": "Get Charging Event",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/sunkeep/events/{{chargingEventId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["sunkeep", "events", "{{chargingEventId}}"]
+						},
+						"description": "Retrieve a single charging event by ID."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{\n  \"id\": \"clx123abc\",\n  \"startedAt\": \"2026-05-14T08:00:00.000Z\",\n  \"stoppedAt\": \"2026-05-14T11:00:00.000Z\",\n  \"stopReason\": \"solar_dropped\"\n}"
+						},
+						{
+							"name": "404 Not Found",
+							"status": "Not Found",
+							"code": 404,
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "{ \"error\": \"Charging event not found\" }"
+						}
+					]
+				}
+			]
+		}
+	]
+}

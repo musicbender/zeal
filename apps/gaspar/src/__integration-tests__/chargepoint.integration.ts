@@ -4,15 +4,18 @@ import { describe, expect, it } from 'vitest';
 
 const username = process.env.CHARGEPOINT_USERNAME;
 const password = process.env.CHARGEPOINT_PASSWORD;
+const token = process.env.CHARGEPOINT_TOKEN;
 const deviceId = process.env.CHARGEPOINT_DEVICE_ID
 	? Number(process.env.CHARGEPOINT_DEVICE_ID)
 	: undefined;
-const configured = Boolean(username && password && deviceId);
+const configured = Boolean(username && (token || password) && deviceId);
 
 describe.skipIf(!configured)('ChargePoint integration', () => {
 	it('authenticates and fetches charger status', async () => {
-		const cp = await ChargePoint.create(username!);
-		await cp.loginWithPassword(password!);
+		const cp = await ChargePoint.create(username!, { coulombToken: token });
+		if (!token) {
+			await cp.loginWithPassword(password!);
+		}
 
 		const status = await cp.getHomeChargerStatus(deviceId!);
 
