@@ -60,15 +60,19 @@ export async function handleMyCommand(interaction: ChatInputCommandInteraction):
 
 **Step 3: Wire in the gateway**
 
-`apps/worfbot-gateway/src/main.ts`, inside the `Events.InteractionCreate` handler:
+`apps/worfbot-gateway/src/main.ts` — the gateway currently only has a `Events.MessageCreate` handler. You must add a new `Events.InteractionCreate` handler to handle slash commands:
 
 ```ts
-if (interaction.isChatInputCommand()) {
-	if (interaction.commandName === 'my-command') {
-		await handleMyCommand(interaction);
+client.on(Events.InteractionCreate, async (interaction) => {
+	if (interaction.isChatInputCommand()) {
+		if (interaction.commandName === 'my-command') {
+			await handleMyCommand(interaction);
+		}
 	}
-}
+});
 ```
+
+This handler does not exist yet — it must be added as part of implementing any new slash command.
 
 **Step 4: Register with Discord (mandatory)**
 

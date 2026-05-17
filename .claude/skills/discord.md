@@ -44,10 +44,10 @@ Defined in `@repo/worfbot/src/commands/definitions.ts`. Registered via `pnpm --f
 
 ## Environment Variables
 
-| Var                      | Description                                            |
-| ------------------------ | ------------------------------------------------------ |
-| `DISCORD_TOKEN`          | Bot token from Discord Developer Portal                |
-| `DISCORD_APPLICATION_ID` | Application ID (needed for slash command registration) |
+| Var                 | Description                                            |
+| ------------------- | ------------------------------------------------------ |
+| `DISCORD_BOT_TOKEN` | Bot token from Discord Developer Portal                |
+| `DISCORD_APP_ID`    | Application ID (needed for slash command registration) |
 
 ## Key Types (discord.js v14)
 
