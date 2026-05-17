@@ -1,10 +1,15 @@
 import { initLogger } from '@repo/logger/server';
-import type { ChargingSession, HomeChargerStatus } from 'node-chargepoint';
+import type {
+	ChargingSession,
+	HomeChargerConfiguration,
+	HomeChargerStatus,
+} from 'node-chargepoint';
 import type {
 	ActiveSessionSummary,
 	IPowerwallAdapter,
 	PowerwallData,
 	SunkeepConfig,
+	SunkeepMeta,
 	SunkeepStatus,
 } from './sunkeep.types.js';
 import { StopReason, SunkeepState } from './sunkeep.types.js';
@@ -51,6 +56,10 @@ interface IChargePointClient {
 	getHomeChargerStatus(chargerId: number): Promise<HomeChargerStatus>;
 	setAmperageLimit(chargerId: number, amps: number): Promise<void>;
 	startChargingSession(deviceId: number): Promise<ChargingSession>;
+	getHomeChargerTechnicalInfo(
+		chargerId: number
+	): Promise<{ softwareVersion: string; deviceIp: string }>;
+	getHomeChargerConfig(chargerId: number): Promise<HomeChargerConfiguration>;
 }
 
 interface IPrismaChargingEvent {
@@ -71,6 +80,11 @@ export class SunkeepService {
 	private lastPollAt: Date | null = null;
 	private lastPwData: PowerwallData | null = null;
 	private sessionStartedAt: Date | null = null;
+	private lockedAmps: number | null = null;
+	private isPluggedIn: boolean | null = null;
+	private chargerAmps: number | null = null;
+	private waitReason: string | null = null;
+	private isDuringScheduledTime: boolean | null = null;
 
 	constructor(
 		private readonly chargePoint: IChargePointClient,
@@ -109,17 +123,24 @@ export class SunkeepService {
 			lastPollAt: this.lastPollAt?.toISOString() ?? null,
 			activeSession: session,
 			solarKw: this.lastPwData?.solarKw ?? null,
-			excessKw: this.lastPwData ? this.lastPwData.solarKw - this.lastPwData.loadKw : null,
+			excessKw: this.lastPwData
+				? this.lastPwData.solarKw - this.lastPwData.loadKw + (this.lastPwData.batteryKw ?? 0)
+				: null,
+			loadKw: this.lastPwData?.loadKw ?? null,
 			batteryPct: this.lastPwData?.batteryPct ?? null,
+			batteryKw: this.lastPwData?.batteryKw ?? null,
+			lockedAmps: this.lockedAmps,
+			chargerAmps: this.chargerAmps,
+			isPluggedIn: this.isPluggedIn,
+			gridKw: this.lastPwData?.gridKw ?? null,
+			gridStatus: this.lastPwData?.gridStatus ?? null,
+			lastTeslaAt: this.lastPwData?.lastTeslaAt ?? null,
+			waitReason: this.state === SunkeepState.WAITING ? this.waitReason : null,
 		};
 	}
 
 	async runTick(): Promise<void> {
 		if (this.state === SunkeepState.DISABLED) return;
-
-		if (!isWithinSolarWindow(this.config.solarWindowStart, this.config.solarWindowEnd)) {
-			return;
-		}
 
 		this.lastPollAt = new Date();
 
@@ -149,27 +170,134 @@ export class SunkeepService {
 		await this.startSession(targetAmps);
 	}
 
+	async lockAmps(amps: number): Promise<void> {
+		if (!Number.isInteger(amps) || amps < MIN_AMPS || amps > MAX_AMPS) {
+			throw new RangeError(`amps must be an integer between ${MIN_AMPS} and ${MAX_AMPS}`);
+		}
+		this.lockedAmps = amps;
+		if (this.state === SunkeepState.CHARGING) {
+			await this.chargePoint.setAmperageLimit(this.config.chargePointDeviceId, amps);
+			this.currentAmps = amps;
+			log.info({ amps }, 'Amp lock applied, charger updated');
+		} else {
+			log.info({ amps }, 'Amp lock set (not currently charging)');
+		}
+	}
+
+	unlockAmps(): void {
+		this.lockedAmps = null;
+		log.info('Amp lock cleared, auto-adjust restored');
+	}
+
+	async getMeta(): Promise<SunkeepMeta> {
+		let softwareVersion: string | null = null;
+		let deviceIp: string | null = null;
+		let cpPowerSourceAmps: number | null = null;
+		let cpPowerSourceType: string | null = null;
+		let cpLedBrightnessLevel: number | null = null;
+		let cpLedBrightnessMax: number | null = null;
+		let teslaSiteName: string | null = null;
+		let teslaBatteryCapacityKwh: number | null = null;
+		let teslaBackupReservePct: number | null = null;
+		let teslaModel: string | null = null;
+		let teslaFirmwareVersion: string | null = null;
+		let teslaBatteryCount: number | null = null;
+		let teslaStormModeEnabled: boolean | null = null;
+
+		const [cpTechResult, cpConfigResult, teslaResult] = await Promise.allSettled([
+			this.chargePoint.getHomeChargerTechnicalInfo(this.config.chargePointDeviceId),
+			this.chargePoint.getHomeChargerConfig(this.config.chargePointDeviceId),
+			this.powerwall.getSiteInfo?.(),
+		]);
+
+		if (cpTechResult.status === 'fulfilled') {
+			softwareVersion = cpTechResult.value.softwareVersion;
+			deviceIp = cpTechResult.value.deviceIp;
+		} else {
+			log.warn({ err: cpTechResult.reason }, 'Could not fetch ChargePoint technical info');
+		}
+
+		if (cpConfigResult.status === 'fulfilled') {
+			const cfg = cpConfigResult.value;
+			cpPowerSourceAmps = cfg.powerSource?.amps ?? null;
+			cpPowerSourceType = cfg.powerSource?.type ?? null;
+			cpLedBrightnessLevel = cfg.ledBrightness.level;
+			cpLedBrightnessMax =
+				cfg.ledBrightness.supportedLevels.length > 0
+					? Math.max(...cfg.ledBrightness.supportedLevels)
+					: null;
+		} else {
+			log.warn({ err: cpConfigResult.reason }, 'Could not fetch ChargePoint config');
+		}
+
+		if (teslaResult.status === 'fulfilled' && teslaResult.value != null) {
+			teslaSiteName = teslaResult.value.siteName;
+			teslaBatteryCapacityKwh = teslaResult.value.batteryCapacityKwh;
+			teslaBackupReservePct = teslaResult.value.backupReservePct;
+			teslaModel = teslaResult.value.model;
+			teslaFirmwareVersion = teslaResult.value.firmwareVersion;
+			teslaBatteryCount = teslaResult.value.batteryCount;
+			teslaStormModeEnabled = teslaResult.value.stormModeEnabled;
+		} else if (teslaResult.status === 'rejected') {
+			log.warn({ err: teslaResult.reason }, 'Could not fetch Tesla site info');
+		}
+
+		return {
+			chargePointDeviceId: this.config.chargePointDeviceId,
+			teslaEnergySiteId: this.config.teslaEnergySiteId,
+			softwareVersion,
+			deviceIp,
+			cpPowerSourceAmps,
+			cpPowerSourceType,
+			cpLedBrightnessLevel,
+			cpLedBrightnessMax,
+			cpScheduleActive: this.isDuringScheduledTime,
+			teslaSiteName,
+			teslaBatteryCapacityKwh,
+			teslaBackupReservePct,
+			teslaModel,
+			teslaFirmwareVersion,
+			teslaBatteryCount,
+			teslaStormModeEnabled,
+		};
+	}
+
 	private async tick(): Promise<void> {
-		const chargerStatus = await this.chargePoint.getHomeChargerStatus(
-			this.config.chargePointDeviceId
-		);
+		const [chargerStatus, pwData] = await Promise.all([
+			this.chargePoint.getHomeChargerStatus(this.config.chargePointDeviceId),
+			this.powerwall.getData(),
+		]);
+
+		this.isPluggedIn = chargerStatus.isPluggedIn;
+		this.chargerAmps = chargerStatus.amperageLimit;
+		this.isDuringScheduledTime = chargerStatus.isDuringScheduledTime;
+		this.lastPwData = pwData;
+
+		if (!isWithinSolarWindow(this.config.solarWindowStart, this.config.solarWindowEnd)) {
+			if (this.state === SunkeepState.CHARGING) {
+				await this.stopActiveSession(StopReason.NIGHT_SAFETY);
+			}
+			this.state = chargerStatus.isPluggedIn ? SunkeepState.WAITING : SunkeepState.IDLE;
+			if (chargerStatus.isPluggedIn) this.waitReason = 'Outside solar window';
+			else this.waitReason = null;
+			return;
+		}
 
 		if (!chargerStatus.isPluggedIn) {
 			if (this.state === SunkeepState.CHARGING) {
 				await this.stopActiveSession(StopReason.UNPLUGGED);
 			}
 			this.state = SunkeepState.IDLE;
+			this.waitReason = null;
 			return;
 		}
-
-		const pwData = await this.powerwall.getData();
-		this.lastPwData = pwData;
 
 		if (pwData.solarKw === 0) {
 			if (this.state === SunkeepState.CHARGING) {
 				await this.stopActiveSession(StopReason.NIGHT_SAFETY);
 			}
-			this.state = SunkeepState.IDLE;
+			this.state = SunkeepState.WAITING;
+			this.waitReason = 'No solar production';
 			return;
 		}
 
@@ -180,6 +308,7 @@ export class SunkeepService {
 			} else {
 				this.state = SunkeepState.WAITING;
 			}
+			this.waitReason = 'Battery below threshold';
 			return;
 		}
 
@@ -192,13 +321,14 @@ export class SunkeepService {
 			} else {
 				this.state = SunkeepState.WAITING;
 			}
+			this.waitReason = 'Insufficient solar excess';
 			return;
 		}
 
 		const targetAmps = calcTargetAmps(excessKw);
 
 		if (this.state === SunkeepState.CHARGING) {
-			if (targetAmps !== this.currentAmps) {
+			if (this.lockedAmps === null && targetAmps !== this.currentAmps) {
 				await this.chargePoint.setAmperageLimit(this.config.chargePointDeviceId, targetAmps);
 				this.currentAmps = targetAmps;
 				log.info({ targetAmps }, 'Adjusted charge amps');
@@ -211,6 +341,7 @@ export class SunkeepService {
 				});
 			}
 		} else {
+			this.waitReason = null;
 			await this.startSession(targetAmps);
 		}
 	}
@@ -266,5 +397,6 @@ export class SunkeepService {
 		this.currentAmps = 0;
 		this.peakSolarKw = 0;
 		this.sessionStartedAt = null;
+		this.lockedAmps = null;
 	}
 }

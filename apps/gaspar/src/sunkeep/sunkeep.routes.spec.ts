@@ -11,14 +11,26 @@ const mockStatus = {
 	solarKw: null,
 	excessKw: null,
 	batteryPct: null,
+	waitReason: null,
+};
+
+const mockMeta = {
+	chargePointDeviceId: 42,
+	teslaEnergySiteId: '12345',
+	softwareVersion: '1.2.3',
+	deviceIp: '192.168.1.100',
 };
 
 const mockService = {
 	getStatus: vi.fn().mockReturnValue(mockStatus),
 	enable: vi.fn(),
 	disable: vi.fn(),
+	runTick: vi.fn().mockResolvedValue(undefined),
 	manualStartSession: vi.fn().mockResolvedValue(undefined),
 	manualStopSession: vi.fn().mockResolvedValue(undefined),
+	lockAmps: vi.fn().mockResolvedValue(undefined),
+	unlockAmps: vi.fn(),
+	getMeta: vi.fn().mockResolvedValue(mockMeta),
 };
 
 const mockPrisma = {
@@ -42,6 +54,12 @@ describe('Sunkeep routes', () => {
 		const res = await app.inject({ method: 'GET', url: '/sunkeep/status' });
 		expect(res.statusCode).toBe(200);
 		expect(res.json()).toMatchObject({ state: SunkeepState.IDLE, enabled: true });
+	});
+
+	it('POST /sunkeep/poll calls service.runTick() and returns status', async () => {
+		const res = await app.inject({ method: 'POST', url: '/sunkeep/poll' });
+		expect(res.statusCode).toBe(200);
+		expect(mockService.runTick).toHaveBeenCalledOnce();
 	});
 
 	it('POST /sunkeep/enable calls service.enable()', async () => {
@@ -87,5 +105,54 @@ describe('Sunkeep routes', () => {
 		mockPrisma.chargingEvent.findUnique.mockResolvedValue(null);
 		const res = await app.inject({ method: 'GET', url: '/sunkeep/events/unknown' });
 		expect(res.statusCode).toBe(404);
+	});
+
+	it('POST /sunkeep/charge/amps with valid body calls lockAmps and returns status', async () => {
+		const res = await app.inject({
+			method: 'POST',
+			url: '/sunkeep/charge/amps',
+			payload: { amps: 16 },
+		});
+		expect(res.statusCode).toBe(200);
+		expect(mockService.lockAmps).toHaveBeenCalledWith(16);
+		expect(res.json()).toMatchObject({ state: SunkeepState.IDLE });
+	});
+
+	it('POST /sunkeep/charge/amps with out-of-range amps returns 400', async () => {
+		const res = await app.inject({
+			method: 'POST',
+			url: '/sunkeep/charge/amps',
+			payload: { amps: 5 },
+		});
+		expect(res.statusCode).toBe(400);
+		expect(mockService.lockAmps).not.toHaveBeenCalled();
+	});
+
+	it('POST /sunkeep/charge/amps with non-number amps returns 400', async () => {
+		const res = await app.inject({
+			method: 'POST',
+			url: '/sunkeep/charge/amps',
+			payload: { amps: 'fast' },
+		});
+		expect(res.statusCode).toBe(400);
+		expect(mockService.lockAmps).not.toHaveBeenCalled();
+	});
+
+	it('DELETE /sunkeep/charge/amps calls unlockAmps and returns status', async () => {
+		const res = await app.inject({ method: 'DELETE', url: '/sunkeep/charge/amps' });
+		expect(res.statusCode).toBe(200);
+		expect(mockService.unlockAmps).toHaveBeenCalledOnce();
+		expect(res.json()).toMatchObject({ state: SunkeepState.IDLE });
+	});
+
+	it('GET /sunkeep/meta returns device metadata', async () => {
+		const res = await app.inject({ method: 'GET', url: '/sunkeep/meta' });
+		expect(res.statusCode).toBe(200);
+		expect(mockService.getMeta).toHaveBeenCalledOnce();
+		expect(res.json()).toMatchObject({
+			chargePointDeviceId: 42,
+			teslaEnergySiteId: '12345',
+			softwareVersion: '1.2.3',
+		});
 	});
 });

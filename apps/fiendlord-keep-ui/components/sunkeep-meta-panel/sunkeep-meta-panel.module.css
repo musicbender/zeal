@@ -1,0 +1,30 @@
+.grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: var(--space-3);
+}
+
+@media (max-width: 600px) {
+	.grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+.card {
+	padding: var(--space-4);
+}
+
+.heading {
+	font-size: var(--font-size-1);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--gray-11);
+	margin-bottom: var(--space-1);
+}
+
+.label {
+	font-size: var(--font-size-1);
+	color: var(--gray-10);
+	min-width: 130px;
+	flex-shrink: 0;
+}

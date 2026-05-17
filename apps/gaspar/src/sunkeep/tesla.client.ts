@@ -1,4 +1,4 @@
-import type { IPowerwallAdapter, PowerwallData } from './sunkeep.types.js';
+import type { IPowerwallAdapter, PowerwallData, TeslaSiteInfo } from './sunkeep.types.js';
 
 interface TeslaClientConfig {
 	clientId: string;
@@ -12,11 +12,31 @@ interface TokenResponse {
 	expires_in: number;
 }
 
+interface SiteInfoResponse {
+	response: {
+		site_name?: string;
+		backup_reserve_percent?: number;
+		version?: string;
+		battery_count?: number;
+		user_settings?: { storm_mode_enabled?: boolean };
+		components?: {
+			gateways?: Array<{
+				part_name?: string;
+				nameplate_energy_watts?: number;
+			}>;
+		};
+	};
+}
+
 interface LiveStatusResponse {
 	response: {
 		percentage_charged: number;
 		solar_power: number;
 		load_power: number;
+		battery_power?: number;
+		grid_power?: number;
+		grid_status?: string;
+		timestamp?: string;
 	};
 }
 
@@ -43,7 +63,15 @@ export class TeslaEnergyClient implements IPowerwallAdapter {
 		}
 
 		const body = (await res.json()) as LiveStatusResponse;
-		const { percentage_charged, solar_power, load_power } = body.response;
+		const {
+			percentage_charged,
+			solar_power,
+			load_power,
+			battery_power,
+			grid_power,
+			grid_status,
+			timestamp,
+		} = body.response;
 
 		if (percentage_charged === undefined || solar_power === undefined || load_power === undefined) {
 			throw new Error(`Tesla live_status unexpected shape: ${JSON.stringify(body)}`);
@@ -53,6 +81,39 @@ export class TeslaEnergyClient implements IPowerwallAdapter {
 			batteryPct: percentage_charged,
 			solarKw: solar_power / 1000,
 			loadKw: load_power / 1000,
+			batteryKw: battery_power != null ? battery_power / 1000 : null,
+			gridKw: grid_power != null ? grid_power / 1000 : null,
+			gridStatus: grid_status ?? null,
+			lastTeslaAt: timestamp ?? null,
+		};
+	}
+
+	async getSiteInfo(): Promise<TeslaSiteInfo> {
+		await this.refreshIfNeeded();
+
+		const res = await fetch(
+			`${FLEET_BASE}/api/1/energy_sites/${this.config.energySiteId}/site_info`,
+			{ headers: { Authorization: `Bearer ${this.accessToken}` } }
+		);
+
+		if (!res.ok) {
+			const body = await res.text().catch(() => '');
+			throw new Error(`Tesla site_info failed: ${res.status} — ${body}`);
+		}
+
+		const body = (await res.json()) as SiteInfoResponse;
+		const r = body.response;
+		const gateway = r.components?.gateways?.[0];
+
+		return {
+			siteName: r.site_name ?? null,
+			batteryCapacityKwh:
+				gateway?.nameplate_energy_watts != null ? gateway.nameplate_energy_watts / 1000 : null,
+			backupReservePct: r.backup_reserve_percent ?? null,
+			model: gateway?.part_name ?? null,
+			firmwareVersion: r.version ? r.version.split(' ')[0]! : null,
+			batteryCount: r.battery_count ?? null,
+			stormModeEnabled: r.user_settings?.storm_mode_enabled ?? null,
 		};
 	}
 

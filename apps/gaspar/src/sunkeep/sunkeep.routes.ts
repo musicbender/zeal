@@ -25,6 +25,25 @@ export async function registerSunkeepRoutes(
 ) {
 	server.get('/sunkeep/status', async () => service.getStatus());
 
+	server.get('/sunkeep/meta', async (_req, reply) => {
+		try {
+			return await service.getMeta();
+		} catch (err) {
+			log.error({ err }, 'getMeta failed');
+			return reply.status(500).send({ error: 'Failed to fetch metadata' });
+		}
+	});
+
+	server.post('/sunkeep/poll', async (_req, reply) => {
+		try {
+			await service.runTick();
+			return service.getStatus();
+		} catch (err) {
+			log.error({ err }, 'Manual poll failed');
+			return reply.status(500).send({ error: 'Poll failed' });
+		}
+	});
+
 	server.post('/sunkeep/enable', async () => {
 		service.enable();
 		return service.getStatus();
@@ -58,6 +77,25 @@ export async function registerSunkeepRoutes(
 			log.error({ err }, 'Manual charge stop failed');
 			return reply.status(500).send({ error: 'Failed to stop charging session' });
 		}
+	});
+
+	server.post<{ Body: { amps: unknown } }>('/sunkeep/charge/amps', async (request, reply) => {
+		const { amps } = request.body;
+		if (typeof amps !== 'number' || !Number.isInteger(amps) || amps < 8 || amps > 32) {
+			return reply.status(400).send({ error: 'amps must be an integer between 8 and 32' });
+		}
+		try {
+			await service.lockAmps(amps);
+			return service.getStatus();
+		} catch (err) {
+			log.error({ err }, 'Lock amps failed');
+			return reply.status(500).send({ error: 'Failed to lock amps' });
+		}
+	});
+
+	server.delete('/sunkeep/charge/amps', async () => {
+		service.unlockAmps();
+		return service.getStatus();
 	});
 
 	server.get<{ Querystring: { page?: string; limit?: string } }>(

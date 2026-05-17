@@ -11,9 +11,11 @@ import { getServiceByName } from '@/lib/services';
 
 const execFileAsync = promisify(execFile);
 
+const SERVICES_HOST = process.env.SERVICES_HOST ?? 'localhost';
+
 async function checkHttpHealth(port: number, isHomebridge: boolean): Promise<ServiceHealth> {
 	const controller = new AbortController();
-	const timeout = setTimeout(() => controller.abort(), 3000);
+	const timeout = setTimeout(() => controller.abort(), 1500);
 
 	const headers: HeadersInit = {};
 	if (isHomebridge) {
@@ -24,7 +26,7 @@ async function checkHttpHealth(port: number, isHomebridge: boolean): Promise<Ser
 	}
 
 	try {
-		const res = await fetch(`http://localhost:${port}/health`, {
+		const res = await fetch(`http://${SERVICES_HOST}:${port}/health`, {
 			signal: controller.signal,
 			headers,
 		});
@@ -39,11 +41,10 @@ async function checkHttpHealth(port: number, isHomebridge: boolean): Promise<Ser
 			checkedAt: new Date().toISOString(),
 		};
 	} catch (err) {
-		const message = err instanceof Error ? err.message : 'Unknown error';
-		log.warn({ port, err }, 'HTTP health check failed');
+		log.warn({ port, err }, 'HTTP health check unreachable');
 		return {
-			status: 'down',
-			message,
+			status: 'unknown',
+			message: 'Service unreachable',
 			checkedAt: new Date().toISOString(),
 		};
 	} finally {

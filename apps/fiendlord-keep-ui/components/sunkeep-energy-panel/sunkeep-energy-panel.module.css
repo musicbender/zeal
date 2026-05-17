@@ -1,0 +1,38 @@
+.grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: var(--space-3);
+}
+
+.card {
+	padding: var(--space-3);
+}
+
+.label {
+	font-size: var(--font-size-1);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--gray-11);
+	margin-bottom: var(--space-1);
+}
+
+.value {
+	font-size: var(--font-size-6);
+	font-weight: bold;
+	line-height: 1;
+}
+
+.unit {
+	font-size: var(--font-size-2);
+	color: var(--gray-11);
+	margin-left: var(--space-1);
+}
+
+.footer {
+	margin-top: var(--space-1);
+}
+
+.lastUpdated {
+	color: var(--gray-10);
+	font-size: var(--font-size-1);
+}

@@ -19,10 +19,25 @@ export interface PowerwallData {
 	batteryPct: number;
 	solarKw: number;
 	loadKw: number;
+	batteryKw?: number | null;
+	gridKw?: number | null;
+	gridStatus?: string | null;
+	lastTeslaAt?: string | null;
+}
+
+export interface TeslaSiteInfo {
+	siteName: string | null;
+	batteryCapacityKwh: number | null;
+	backupReservePct: number | null;
+	model: string | null;
+	firmwareVersion: string | null;
+	batteryCount: number | null;
+	stormModeEnabled: boolean | null;
 }
 
 export interface IPowerwallAdapter {
 	getData(): Promise<PowerwallData>;
+	getSiteInfo?(): Promise<TeslaSiteInfo>;
 }
 
 export interface SunkeepConfig {
@@ -53,5 +68,33 @@ export interface SunkeepStatus {
 	activeSession: ActiveSessionSummary | null;
 	solarKw: number | null;
 	excessKw: number | null;
+	loadKw: number | null;
 	batteryPct: number | null;
+	batteryKw: number | null;
+	lockedAmps: number | null;
+	chargerAmps: number | null;
+	isPluggedIn: boolean | null;
+	gridKw: number | null;
+	gridStatus: string | null;
+	lastTeslaAt: string | null;
+	waitReason: string | null;
+}
+
+export interface SunkeepMeta {
+	chargePointDeviceId: number;
+	teslaEnergySiteId: string;
+	softwareVersion: string | null;
+	deviceIp: string | null;
+	cpPowerSourceAmps: number | null;
+	cpPowerSourceType: string | null;
+	cpLedBrightnessLevel: number | null;
+	cpLedBrightnessMax: number | null;
+	cpScheduleActive: boolean | null;
+	teslaSiteName: string | null;
+	teslaBatteryCapacityKwh: number | null;
+	teslaBackupReservePct: number | null;
+	teslaModel: string | null;
+	teslaFirmwareVersion: string | null;
+	teslaBatteryCount: number | null;
+	teslaStormModeEnabled: boolean | null;
 }
