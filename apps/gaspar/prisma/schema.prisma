@@ -21,6 +21,14 @@ model Sensor {
   @@map("sensor")
 }
 
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("setting")
+}
+
 model ChargingEvent {
   id          String    @id @default(uuid())
   startedAt   DateTime  @default(now())

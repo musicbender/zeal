@@ -13,6 +13,7 @@ import type {
 	SunkeepStatus,
 } from './sunkeep.types.js';
 import { StopReason, SunkeepState } from './sunkeep.types.js';
+import { TeslaAuthError } from './tesla.client.js';
 
 const log = initLogger('sunkeep.service');
 
@@ -100,6 +101,13 @@ export class SunkeepService {
 		}
 	}
 
+	updateTeslaRefreshToken(token: string): void {
+		this.powerwall.updateRefreshToken?.(token);
+		if (this.state === SunkeepState.DISABLED) {
+			this.enable();
+		}
+	}
+
 	async disable(): Promise<void> {
 		if (this.state === SunkeepState.CHARGING) {
 			await this.stopActiveSession(StopReason.MANUAL);
@@ -147,6 +155,16 @@ export class SunkeepService {
 		try {
 			await this.tick();
 		} catch (err) {
+			if (err instanceof TeslaAuthError) {
+				log.error(
+					'Tesla refresh token invalid — PUT /sunkeep/tesla/refresh-token with a new token to recover. Disabling sunkeep.'
+				);
+				if (this.state === SunkeepState.CHARGING) {
+					await this.stopActiveSession(StopReason.ERROR);
+				}
+				this.state = SunkeepState.DISABLED;
+				return;
+			}
 			log.error({ err }, 'Sunkeep tick error');
 			if (this.state === SunkeepState.CHARGING) {
 				await this.stopActiveSession(StopReason.ERROR);

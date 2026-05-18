@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { TeslaEnergyClient } from './tesla.client.js';
+import { TeslaAuthError, TeslaEnergyClient } from './tesla.client.js';
 
 const mockConfig = {
 	clientId: 'client-id',
@@ -13,15 +13,16 @@ const LIVE_STATUS_RESPONSE = {
 	response: { percentage_charged: 95.5, solar_power: 3200, load_power: 1800 },
 };
 
-function mockFetch(responses: { ok: boolean; body: unknown }[]) {
+function mockFetch(responses: { ok: boolean; status?: number; body: unknown }[]) {
 	let i = 0;
 	vi.spyOn(global, 'fetch').mockImplementation(async () => {
 		const r = responses[i++]!;
+		const status = r.status ?? (r.ok ? 200 : 500);
 		return {
 			ok: r.ok,
-			status: r.ok ? 200 : 500,
+			status,
 			json: async () => r.body,
-			text: async () => String(r.body),
+			text: async () => (typeof r.body === 'string' ? r.body : JSON.stringify(r.body)),
 		} as Response;
 	});
 }
@@ -60,6 +61,22 @@ describe('TeslaEnergyClient', () => {
 
 		// token fetched once, live_status fetched twice = 3 total
 		expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3);
+	});
+
+	it('throws TeslaAuthError on login_required and circuit-breaks subsequent calls', async () => {
+		mockFetch([
+			{
+				ok: false,
+				status: 401,
+				body: { error: 'login_required', error_description: 'The refresh_token is invalid' },
+			},
+		]);
+
+		await expect(client.getData()).rejects.toBeInstanceOf(TeslaAuthError);
+
+		// Second call must not make any network request
+		await expect(client.getData()).rejects.toBeInstanceOf(TeslaAuthError);
+		expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
 	});
 
 	it('refreshes token when expired', async () => {
