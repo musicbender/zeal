@@ -131,14 +131,14 @@ describe('SunkeepService', () => {
 			expect(service.getStatus().excessKw).toBeCloseTo(0.3);
 		});
 
-		it('adds battery discharging power to excess (battery discharging = positive kw)', async () => {
+		it('does not add battery discharging power to excess (discharge is not solar)', async () => {
 			service.enable();
 			vi.setSystemTime(NOON);
 			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus({ isPluggedIn: true }));
 			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 1.0, loadKw: 0.5, batteryKw: 0.5 }));
 			await service.runTick();
-			// excess = 1.0 - 0.5 + 0.5 = 1.0
-			expect(service.getStatus().excessKw).toBeCloseTo(1.0);
+			// excess = 1.0 - 0.5 + min(0, 0.5) = 0.5 — battery discharge is not solar excess
+			expect(service.getStatus().excessKw).toBeCloseTo(0.5);
 		});
 
 		it('returns null when no powerwall data', () => {
@@ -307,9 +307,10 @@ describe('SunkeepService', () => {
 		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
 		await service.runTick(); // starts at 12A
 
-		// Second tick: solar drops, should adjust to 8A
+		// Second tick: solar drops. Tesla loadKw includes car at 12A (2.88 kW), so
+		// net excess = 2.5 - (1.0 + 2.88) + 2.88 = 1.5 kW → adjusts to 8A
 		mockCp.setAmperageLimit.mockClear();
-		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 2.5, loadKw: 1.0 })); // 1.5 kW → 8A
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 2.5, loadKw: 1.0 + (12 * 240) / 1000 }));
 		await service.runTick();
 		expect(mockCp.setAmperageLimit).toHaveBeenCalledWith(42, 8);
 	});
@@ -321,7 +322,9 @@ describe('SunkeepService', () => {
 		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
 		await service.runTick(); // start at 12A
 		mockCp.setAmperageLimit.mockClear();
-		await service.runTick(); // same data → no call
+		// Tesla now reports total load including car at 12A (2.88 kW): net excess = 4.0 - 3.88 + 2.88 = 3.0 → 12A unchanged
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 + (12 * 240) / 1000 }));
+		await service.runTick();
 		expect(mockCp.setAmperageLimit).not.toHaveBeenCalled();
 	});
 
@@ -334,7 +337,8 @@ describe('SunkeepService', () => {
 		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
 		await service.runTick(); // start CHARGING
 
-		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 1.5, loadKw: 1.4 })); // 0.1 kW — below threshold
+		// Tesla loadKw includes car at 12A (2.88 kW): net excess = 1.5 - (1.4 + 2.88) + 2.88 = 0.1 kW — below threshold
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 1.5, loadKw: 1.4 + (12 * 240) / 1000 }));
 		await service.runTick();
 
 		expect(mockSession.stop).toHaveBeenCalled();
