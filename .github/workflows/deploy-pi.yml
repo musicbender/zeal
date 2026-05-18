@@ -99,7 +99,7 @@ jobs:
           cp -r apps/gaspar/dist /tmp/gaspar-deploy/
           mkdir -p /tmp/gaspar-deploy/prisma
           cp apps/gaspar/prisma/schema.prisma /tmp/gaspar-deploy/prisma/schema.prisma
-          cd /tmp/gaspar-deploy && $GITHUB_WORKSPACE/node_modules/.bin/prisma generate
+          pnpm --dir $GITHUB_WORKSPACE --filter=gaspar exec prisma generate --schema=/tmp/gaspar-deploy/prisma/schema.prisma
           rm -rf /tmp/gaspar-deploy/prisma
           sudo mkdir -p /home/magus/apps/gaspar
           sudo rsync -a --delete /tmp/gaspar-deploy/ /home/magus/apps/gaspar/
