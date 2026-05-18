@@ -14,8 +14,17 @@ interface IPrismaChargingEvent {
 	count(): Promise<number>;
 }
 
+interface IPrismaSetting {
+	upsert(args: {
+		where: { key: string };
+		update: { value: string };
+		create: { key: string; value: string };
+	}): Promise<unknown>;
+}
+
 interface IPrisma {
 	chargingEvent: IPrismaChargingEvent;
+	setting: IPrismaSetting;
 }
 
 export async function registerSunkeepRoutes(
@@ -97,6 +106,24 @@ export async function registerSunkeepRoutes(
 		service.unlockAmps();
 		return service.getStatus();
 	});
+
+	server.put<{ Body: { refreshToken: unknown } }>(
+		'/sunkeep/tesla/refresh-token',
+		async (request, reply) => {
+			const { refreshToken } = request.body;
+			if (typeof refreshToken !== 'string' || !refreshToken.trim()) {
+				return reply.status(400).send({ error: 'refreshToken must be a non-empty string' });
+			}
+			await prisma.setting.upsert({
+				where: { key: 'tesla_refresh_token' },
+				update: { value: refreshToken },
+				create: { key: 'tesla_refresh_token', value: refreshToken },
+			});
+			service.updateTeslaRefreshToken(refreshToken);
+			log.info('Tesla refresh token updated via API');
+			return service.getStatus();
+		}
+	);
 
 	server.get<{ Querystring: { page?: string; limit?: string } }>(
 		'/sunkeep/events',

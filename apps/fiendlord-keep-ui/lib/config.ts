@@ -4,5 +4,5 @@ export function getApiBaseUrl(): string {
 }
 
 export function getGasparUrl(): string {
-	return process.env.GASPAR_URL ?? 'http://localhost:3000';
+	return process.env.GASPAR_URL || 'http://localhost:3000';
 }
