@@ -1,14 +1,23 @@
 import type { IPowerwallAdapter, PowerwallData, TeslaSiteInfo } from './sunkeep.types.js';
 
+export class TeslaAuthError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = 'TeslaAuthError';
+	}
+}
+
 interface TeslaClientConfig {
 	clientId: string;
 	clientSecret: string;
 	refreshToken: string;
 	energySiteId: string;
+	onTokenRotated?: (newRefreshToken: string) => Promise<void>;
 }
 
 interface TokenResponse {
 	access_token: string;
+	refresh_token?: string;
 	expires_in: number;
 }
 
@@ -46,6 +55,7 @@ const FLEET_BASE = 'https://fleet-api.prd.na.vn.cloud.tesla.com';
 export class TeslaEnergyClient implements IPowerwallAdapter {
 	private accessToken: string | null = null;
 	private tokenExpiresAt = 0;
+	private fatalError: TeslaAuthError | null = null;
 
 	constructor(private readonly config: TeslaClientConfig) {}
 
@@ -118,6 +128,7 @@ export class TeslaEnergyClient implements IPowerwallAdapter {
 	}
 
 	private async refreshIfNeeded(): Promise<void> {
+		if (this.fatalError) throw this.fatalError;
 		if (this.accessToken && Date.now() < this.tokenExpiresAt - 60_000) return;
 
 		const res = await fetch(`${AUTH_BASE}/oauth2/v3/token`, {
@@ -132,12 +143,31 @@ export class TeslaEnergyClient implements IPowerwallAdapter {
 		});
 
 		if (!res.ok) {
-			const body = await res.text().catch(() => '');
-			throw new Error(`Tesla token refresh failed: ${res.status} — ${body}`);
+			const text = await res.text().catch(() => '');
+			let errorCode: string | undefined;
+			try {
+				errorCode = (JSON.parse(text) as { error?: string }).error;
+			} catch {}
+			if (errorCode === 'login_required') {
+				this.fatalError = new TeslaAuthError(
+					'Tesla refresh token is invalid — update TESLA_REFRESH_TOKEN and restart'
+				);
+				throw this.fatalError;
+			}
+			throw new Error(`Tesla token refresh failed: ${res.status} — ${text}`);
 		}
 
-		const { access_token, expires_in } = (await res.json()) as TokenResponse;
+		const { access_token, refresh_token, expires_in } = (await res.json()) as TokenResponse;
 		this.accessToken = access_token;
 		this.tokenExpiresAt = Date.now() + expires_in * 1000;
+		if (refresh_token && refresh_token !== this.config.refreshToken) {
+			this.config.refreshToken = refresh_token;
+			await this.config.onTokenRotated?.(refresh_token);
+		}
+	}
+
+	updateRefreshToken(token: string): void {
+		this.config.refreshToken = token;
+		this.fatalError = null;
 	}
 }

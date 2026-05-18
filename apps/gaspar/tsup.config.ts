@@ -5,6 +5,6 @@ export default defineConfig({
 	format: ['esm'],
 	outDir: 'dist',
 	clean: true,
-	external: ['pino', 'pino-pretty'],
+	external: ['@prisma/client', 'pino', 'pino-pretty'],
 	noExternal: [/@repo\/.*/],
 });

@@ -38,6 +38,7 @@ export interface TeslaSiteInfo {
 export interface IPowerwallAdapter {
 	getData(): Promise<PowerwallData>;
 	getSiteInfo?(): Promise<TeslaSiteInfo>;
+	updateRefreshToken?(token: string): void;
 }
 
 export interface SunkeepConfig {
