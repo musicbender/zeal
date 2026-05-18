@@ -105,7 +105,13 @@ jobs:
           sudo rsync -a --delete /tmp/gaspar-deploy/ /home/magus/apps/gaspar/
 
       - name: Write secrets file
-        run: printf 'DATABASE_URL=%s\n' "$DATABASE_URL" | sudo tee /etc/gaspar/env > /dev/null
+        run: |
+          sudo mkdir -p /etc/gaspar
+          if sudo grep -q '^DATABASE_URL=' /etc/gaspar/env 2>/dev/null; then
+            sudo sed -i "s|^DATABASE_URL=.*|DATABASE_URL=$DATABASE_URL|" /etc/gaspar/env
+          else
+            printf 'DATABASE_URL=%s\n' "$DATABASE_URL" | sudo tee -a /etc/gaspar/env > /dev/null
+          fi
 
       - run: sudo systemctl restart gaspar
 
