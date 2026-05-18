@@ -64,11 +64,25 @@ export async function registerSunkeepPlugin(
 		return;
 	}
 
+	const storedToken = await prismaService.setting
+		.findUnique({ where: { key: 'tesla_refresh_token' } })
+		.then((s) => s?.value ?? null)
+		.catch(() => null);
+
+	const persistToken = async (token: string) => {
+		await prismaService.setting.upsert({
+			where: { key: 'tesla_refresh_token' },
+			update: { value: token },
+			create: { key: 'tesla_refresh_token', value: token },
+		});
+	};
+
 	const powerwall = new TeslaEnergyClient({
 		clientId: config.teslaClientId,
 		clientSecret: config.teslaClientSecret,
-		refreshToken: config.teslaRefreshToken,
+		refreshToken: storedToken ?? config.teslaRefreshToken,
 		energySiteId: config.teslaEnergySiteId,
+		onTokenRotated: persistToken,
 	});
 
 	const service = new SunkeepService(chargePoint, powerwall, prismaService, config);

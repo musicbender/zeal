@@ -22,6 +22,10 @@ export class PrismaService {
 		return this.prismaClient.chargingEvent;
 	}
 
+	get setting() {
+		return this.prismaClient.setting;
+	}
+
 	async $disconnect(): Promise<void> {
 		await this.prismaClient.$disconnect();
 	}
