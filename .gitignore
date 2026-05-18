@@ -59,6 +59,10 @@ pnpm-debug.log*
 # Worktrees
 .worktrees
 
+# Skills installation artifacts (content tracked via skills-lock.json)
+.agents/
+.claude/worktrees/
+
 # Misc
 .DS_Store
 *.pem
