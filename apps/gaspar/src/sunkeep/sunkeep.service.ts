@@ -132,7 +132,10 @@ export class SunkeepService {
 			activeSession: session,
 			solarKw: this.lastPwData?.solarKw ?? null,
 			excessKw: this.lastPwData
-				? this.lastPwData.solarKw - this.lastPwData.loadKw + (this.lastPwData.batteryKw ?? 0)
+				? this.lastPwData.solarKw -
+					this.lastPwData.loadKw +
+					Math.min(0, this.lastPwData.batteryKw ?? 0) +
+					(this.activeSession ? (this.currentAmps * VOLTAGE) / 1000 : 0)
 				: null,
 			loadKw: this.lastPwData?.loadKw ?? null,
 			batteryPct: this.lastPwData?.batteryPct ?? null,
@@ -330,7 +333,10 @@ export class SunkeepService {
 			return;
 		}
 
-		const excessKw = pwData.solarKw - pwData.loadKw;
+		// Tesla load_power includes EV charging load; add it back so we measure solar excess
+		// available for the car rather than treating the car's own draw as a deficit.
+		const carKw = this.state === SunkeepState.CHARGING ? (this.currentAmps * VOLTAGE) / 1000 : 0;
+		const excessKw = pwData.solarKw - pwData.loadKw + carKw;
 
 		if (excessKw < MIN_EXCESS_KW) {
 			if (this.state === SunkeepState.CHARGING) {
