@@ -92,13 +92,15 @@ jobs:
 
       - run: pnpm turbo run build --filter=gaspar
 
-      - run: pnpm --filter gaspar prisma:generate
-
       - name: Stage to stable deploy directory
         run: |
           rm -rf /tmp/gaspar-deploy
           pnpm --filter=gaspar deploy --prod --legacy /tmp/gaspar-deploy
           cp -r apps/gaspar/dist /tmp/gaspar-deploy/
+          mkdir -p /tmp/gaspar-deploy/prisma
+          cp apps/gaspar/prisma/schema.prisma /tmp/gaspar-deploy/prisma/schema.prisma
+          cd /tmp/gaspar-deploy && $GITHUB_WORKSPACE/node_modules/.bin/prisma generate
+          rm -rf /tmp/gaspar-deploy/prisma
           sudo mkdir -p /home/magus/apps/gaspar
           sudo rsync -a --delete /tmp/gaspar-deploy/ /home/magus/apps/gaspar/
 
