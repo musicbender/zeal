@@ -27,10 +27,10 @@ export async function GET(req: Request): Promise<Response> {
 
 	const force = new URL(req.url).searchParams.get('force') === 'true';
 
-	// Cron fires at both 22:00 and 23:00 UTC to cover PST and PDT.
-	// Only proceed when it's actually 3 PM in Los Angeles (or force=true for testing).
-	if (!force && getLAHour() !== 15) {
-		log.info('Cron skipped due to not being 3pm PST');
+	// Cron fires at both 21:55 and 22:55 UTC to cover PDT and PST (arriving ~3 PM LA time).
+	// Only proceed when it's actually 2 PM in Los Angeles (or force=true for testing).
+	if (!force && getLAHour() !== 14) {
+		log.info('Cron skipped due to not being 2:55pm LA time');
 		return Response.json({ skipped: true });
 	}
 
@@ -48,9 +48,22 @@ export async function GET(req: Request): Promise<Response> {
 				createEmbed('announcement')
 					.setTitle('⚔️ Family Council')
 					.setDescription(
-						`The hour of the family council is upon us. Warriors do not linger. They assemble.\n\n[Join the war room](${MEET_LINK})`
+						`The hour of the family council is upon us. Warriors do not linger. They assemble.`
 					)
 					.toJSON(),
+			],
+			components: [
+				{
+					type: 1,
+					components: [
+						{
+							type: 2,
+							style: 5,
+							label: 'Join Family Chat',
+							url: MEET_LINK,
+						},
+					],
+				},
 			],
 		}),
 	});
