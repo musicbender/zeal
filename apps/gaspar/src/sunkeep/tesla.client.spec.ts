@@ -79,6 +79,42 @@ describe('TeslaEnergyClient', () => {
 		expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
 	});
 
+	it('deduplicates concurrent refresh calls — only one token exchange in flight', async () => {
+		const onTokenRotated = vi.fn().mockResolvedValue(undefined);
+		const clientWithCallback = new TeslaEnergyClient({ ...mockConfig, onTokenRotated });
+
+		mockFetch([
+			{ ok: true, body: TOKEN_RESPONSE },
+			{ ok: true, body: LIVE_STATUS_RESPONSE },
+			{ ok: true, body: LIVE_STATUS_RESPONSE },
+		]);
+
+		// Fire two getData() calls simultaneously before either has refreshed
+		const [a, b] = await Promise.all([clientWithCallback.getData(), clientWithCallback.getData()]);
+
+		expect(a.solarKw).toBeCloseTo(3.2);
+		expect(b.solarKw).toBeCloseTo(3.2);
+		const tokenCalls = vi
+			.mocked(fetch)
+			.mock.calls.filter(([url]) => String(url).includes('oauth2'));
+		expect(tokenCalls).toHaveLength(1);
+	});
+
+	it('succeeds even when onTokenRotated DB persist fails', async () => {
+		const onTokenRotated = vi.fn().mockRejectedValue(new Error('DB unavailable'));
+		const clientWithCallback = new TeslaEnergyClient({ ...mockConfig, onTokenRotated });
+
+		mockFetch([
+			{ ok: true, body: { ...TOKEN_RESPONSE, refresh_token: 'new-refresh-tok' } },
+			{ ok: true, body: LIVE_STATUS_RESPONSE },
+		]);
+
+		// DB failure must not bubble up — access token was obtained successfully
+		const data = await clientWithCallback.getData();
+		expect(data.solarKw).toBeCloseTo(3.2);
+		expect(onTokenRotated).toHaveBeenCalledWith('new-refresh-tok');
+	});
+
 	it('refreshes token when expired', async () => {
 		mockFetch([
 			{ ok: true, body: TOKEN_RESPONSE },
