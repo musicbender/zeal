@@ -1,4 +1,7 @@
+import { initLogger } from '@repo/logger/server';
 import type { IPowerwallAdapter, PowerwallData, TeslaSiteInfo } from './sunkeep.types.js';
+
+const log = initLogger('tesla.client');
 
 export class TeslaAuthError extends Error {
 	constructor(message: string) {
@@ -56,6 +59,7 @@ export class TeslaEnergyClient implements IPowerwallAdapter {
 	private accessToken: string | null = null;
 	private tokenExpiresAt = 0;
 	private fatalError: TeslaAuthError | null = null;
+	private refreshPromise: Promise<void> | null = null;
 
 	constructor(private readonly config: TeslaClientConfig) {}
 
@@ -127,10 +131,19 @@ export class TeslaEnergyClient implements IPowerwallAdapter {
 		};
 	}
 
-	private async refreshIfNeeded(): Promise<void> {
+	private refreshIfNeeded(): Promise<void> {
 		if (this.fatalError) throw this.fatalError;
-		if (this.accessToken && Date.now() < this.tokenExpiresAt - 60_000) return;
+		if (this.accessToken && Date.now() < this.tokenExpiresAt - 60_000) return Promise.resolve();
+		// Deduplicate concurrent refresh calls — only one token exchange in flight at a time.
+		if (!this.refreshPromise) {
+			this.refreshPromise = this.doRefresh().finally(() => {
+				this.refreshPromise = null;
+			});
+		}
+		return this.refreshPromise;
+	}
 
+	private async doRefresh(): Promise<void> {
 		const res = await fetch(`${AUTH_BASE}/oauth2/v3/token`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -160,9 +173,21 @@ export class TeslaEnergyClient implements IPowerwallAdapter {
 		const { access_token, refresh_token, expires_in } = (await res.json()) as TokenResponse;
 		this.accessToken = access_token;
 		this.tokenExpiresAt = Date.now() + expires_in * 1000;
+
 		if (refresh_token && refresh_token !== this.config.refreshToken) {
 			this.config.refreshToken = refresh_token;
-			await this.config.onTokenRotated?.(refresh_token);
+			log.info('Tesla access token refreshed — persisting rotated refresh token');
+			try {
+				await this.config.onTokenRotated?.(refresh_token);
+				log.info('Rotated refresh token persisted to DB');
+			} catch (err) {
+				log.error(
+					{ err },
+					'Rotated refresh token saved in memory but failed to persist to DB — manual token update will be needed after restart'
+				);
+			}
+		} else {
+			log.info('Tesla access token refreshed');
 		}
 	}
 
