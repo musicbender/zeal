@@ -27,10 +27,11 @@ export async function GET(req: Request): Promise<Response> {
 
 	const force = new URL(req.url).searchParams.get('force') === 'true';
 
-	// Cron fires at both 21:55 and 22:55 UTC to cover PDT and PST (arriving ~3 PM LA time).
-	// Only proceed when it's actually 2 PM in Los Angeles (or force=true for testing).
-	if (!force && getLAHour() !== 14) {
-		log.info('Cron skipped due to not being 2:55pm LA time');
+	// GitHub Actions cron fires at 21:15/22:15 UTC (early to offset queue delay),
+	// arriving at the endpoint around 3 PM LA time.
+	// Only proceed when it's actually 3 PM in Los Angeles (or force=true for testing).
+	if (!force && getLAHour() !== 15) {
+		log.info('Cron skipped due to not being 3pm LA time');
 		return Response.json({ skipped: true });
 	}
 

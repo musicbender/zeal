@@ -16,10 +16,10 @@ function makeRequest(secret?: string, force = false): Request {
 	});
 }
 
-// 2026-04-26 (Sunday) 21:55 UTC = 14:55 PDT (America/Los_Angeles in summer)
-const AT_FIRE_TIME_PDT = new Date('2026-04-26T21:55:00Z');
-// 2026-04-26 (Sunday) 20:00 UTC = 13:00 PDT — two hours before
-const AT_WRONG_TIME_PDT = new Date('2026-04-26T20:00:00Z');
+// 2026-04-26 (Sunday) 22:00 UTC = 15:00 PDT (America/Los_Angeles in summer)
+const AT_FIRE_TIME_PDT = new Date('2026-04-26T22:00:00Z');
+// 2026-04-26 (Sunday) 21:00 UTC = 14:00 PDT — one hour before
+const AT_WRONG_TIME_PDT = new Date('2026-04-26T21:00:00Z');
 
 describe('GET /api/cron/video-chat', () => {
 	beforeEach(() => {
