@@ -1,5 +1,5 @@
 import type { ChargePoint } from './client.js';
-import { APIError, CommunicationError } from './exceptions.js';
+import { CommunicationError, StartVerificationTimeoutError } from './exceptions.js';
 import type { ChargingSessionUpdate, PowerUtility, StartSessionOptions, VehicleInfo } from './types.js';
 
 const sleep = (ms: number): Promise<void> =>
@@ -233,16 +233,29 @@ export class ChargingSession {
     // The start ack confirms the cloud received the command, but the session
     // may take a moment to appear in the status API (same async IoT pattern
     // as amperage/LED changes). Poll until it shows up.
-    const deadline = Date.now() + (options?.pollTimeoutMs ?? 15_000);
+    const pollTimeoutMs = options?.pollTimeoutMs ?? 15_000;
+    const pollIntervalMs = options?.pollIntervalMs ?? 2_000;
+    const deadline = Date.now() + pollTimeoutMs;
+    let pollAttempts = 0;
     let status = await client.getUserChargingStatus();
+    pollAttempts++;
     while (!status && Date.now() < deadline) {
-      await sleep(options?.pollIntervalMs ?? 2_000);
+      await sleep(pollIntervalMs);
       status = await client.getUserChargingStatus();
+      pollAttempts++;
     }
 
     if (!status) {
-      throw new APIError('No active charging session found after start command.');
+      let chargerConfirmedCharging = false;
+      try {
+        const chargerStatus = await client.getHomeChargerStatus(deviceId);
+        chargerConfirmedCharging = chargerStatus.chargingStatus === 'CHARGING';
+      } catch {
+        // Cross-check unavailable; proceed with what we know.
+      }
+      throw new StartVerificationTimeoutError(deviceId, pollTimeoutMs, pollAttempts, chargerConfirmedCharging);
     }
+
     const session = new ChargingSession(status.sessionId);
     session._setClient(client);
     await session.refresh();

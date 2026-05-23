@@ -3,8 +3,8 @@ import { http, HttpResponse } from 'msw';
 import { server } from './setup.js';
 import { ChargePoint } from '../src/client.js';
 import { ChargingSession } from '../src/session.js';
-import { CommunicationError } from '../src/exceptions.js';
-import { TEST_TOKEN, TEST_SESSION_ID } from './handlers.js';
+import { CommunicationError, StartVerificationTimeoutError } from '../src/exceptions.js';
+import { TEST_TOKEN, TEST_SESSION_ID, TEST_DEVICE_ID, TEST_USER_ID } from './handlers.js';
 
 async function authenticatedClient(): Promise<ChargePoint> {
   return ChargePoint.create('testuser', { coulombToken: TEST_TOKEN });
@@ -112,16 +112,47 @@ describe('ChargingSession.stop()', () => {
 });
 
 describe('ChargingSession.start()', () => {
-  it('sends start command, polls ack, then fetches session', async () => {
+  it('sends start command, polls ack, then fetches session on first try', async () => {
     const client = await authenticatedClient();
-    const session = await ChargingSession.start(9001, client);
+    const session = await ChargingSession.start(TEST_DEVICE_ID, client);
 
     expect(session).toBeInstanceOf(ChargingSession);
     expect(session.sessionId).toBe(TEST_SESSION_ID);
     expect(session.energyKwh).toBe(10.5);
   });
 
-  it('throws APIError when no active session found after start', async () => {
+  it('returns session after polling finds status on retry', async () => {
+    vi.useFakeTimers();
+    let callCount = 0;
+
+    server.use(
+      http.post('https://mc.chargepoint.com/map-prod/v2', async ({ request }) => {
+        const body = await request.json() as Record<string, unknown>;
+        if ('user_status' in body) {
+          callCount++;
+          if (callCount < 3) {
+            return HttpResponse.json({ user_status: null });
+          }
+          return HttpResponse.json({ user_status: { charging_status: { session_id: TEST_SESSION_ID, start_time: 1609459200000, current_charging: 'CHARGING', stations: [] } } });
+        }
+        return new HttpResponse(null, { status: 400 });
+      }),
+    );
+
+    const client = await authenticatedClient();
+    const startPromise = ChargingSession.start(TEST_DEVICE_ID, client, { pollTimeoutMs: 30_000 });
+
+    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(2000);
+
+    const session = await startPromise;
+    expect(session).toBeInstanceOf(ChargingSession);
+    expect(callCount).toBe(3);
+
+    vi.useRealTimers();
+  });
+
+  it('throws StartVerificationTimeoutError (not generic APIError) when polling exhausts', async () => {
     server.use(
       http.post('https://mc.chargepoint.com/map-prod/v2', () =>
         HttpResponse.json({ user_status: null }),
@@ -129,9 +160,46 @@ describe('ChargingSession.start()', () => {
     );
 
     const client = await authenticatedClient();
-    const { APIError } = await import('../src/exceptions.js');
-    await expect(ChargingSession.start(9001, client)).rejects.toThrow(APIError);
-  }, 20_000);
+    const error = await ChargingSession.start(TEST_DEVICE_ID, client, { pollTimeoutMs: 0 }).catch((e) => e);
+
+    expect(error).toBeInstanceOf(StartVerificationTimeoutError);
+    expect(error.deviceId).toBe(TEST_DEVICE_ID);
+    expect(error.pollTimeoutMs).toBe(0);
+    expect(error.pollAttempts).toBeGreaterThanOrEqual(1);
+    expect(error.constructor.name).toBe('StartVerificationTimeoutError');
+  });
+
+  it('includes chargerConfirmedCharging: true when home charger reports CHARGING after poll exhaustion', async () => {
+    server.use(
+      http.post('https://mc.chargepoint.com/map-prod/v2', () =>
+        HttpResponse.json({ user_status: null }),
+      ),
+      http.get(
+        `https://hcpoprodhcm.chargepoint.com/api/v1/configuration/users/${TEST_USER_ID}/chargers/${TEST_DEVICE_ID}/status`,
+        () => HttpResponse.json({ chargingStatus: 'CHARGING', brand: 'ChargePoint', model: 'CPH25', macAddress: 'AA:BB:CC:DD:EE:FF', isPluggedIn: true, isConnected: true, isReminderEnabled: false, plugInReminderTime: '22:00', hasUtilityInfo: false, isDuringScheduledTime: false, chargeAmperageSettings: { chargeLimit: 32, inProgress: false, possibleChargeLimit: [16, 24, 32] } }),
+      ),
+    );
+
+    const client = await authenticatedClient();
+    const error = await ChargingSession.start(TEST_DEVICE_ID, client, { pollTimeoutMs: 0 }).catch((e) => e);
+
+    expect(error).toBeInstanceOf(StartVerificationTimeoutError);
+    expect(error.chargerConfirmedCharging).toBe(true);
+  });
+
+  it('propagates sendCommand failure as CommunicationError, not StartVerificationTimeoutError', async () => {
+    server.use(
+      http.post('https://account.chargepoint.com/v1/driver/station/startsession', () =>
+        new HttpResponse(JSON.stringify({ error: 'Auth failed' }), { status: 401, headers: { 'Content-Type': 'application/json' } }),
+      ),
+    );
+
+    const client = await authenticatedClient();
+    const error = await ChargingSession.start(TEST_DEVICE_ID, client).catch((e) => e);
+
+    expect(error).toBeInstanceOf(CommunicationError);
+    expect(error).not.toBeInstanceOf(StartVerificationTimeoutError);
+  });
 });
 
 describe('sendCommand() polling', () => {

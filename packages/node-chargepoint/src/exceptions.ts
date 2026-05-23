@@ -44,3 +44,17 @@ export class DatadomeCaptcha extends APIError {
     Object.setPrototypeOf(this, new.target.prototype);
   }
 }
+
+export class StartVerificationTimeoutError extends APIError {
+  constructor(
+    public readonly deviceId: number,
+    public readonly pollTimeoutMs: number,
+    public readonly pollAttempts: number,
+    public readonly chargerConfirmedCharging: boolean = false,
+    message = 'No active charging session found after start command.',
+  ) {
+    super(message);
+    this.name = 'StartVerificationTimeoutError';
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}

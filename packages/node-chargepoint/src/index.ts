@@ -9,6 +9,7 @@ export {
   DatadomeCaptcha,
   InvalidSession,
   LoginError,
+  StartVerificationTimeoutError,
 } from './exceptions.js';
 
 export type {
