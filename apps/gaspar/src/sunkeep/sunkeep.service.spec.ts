@@ -1,4 +1,4 @@
-import type { HomeChargerStatus } from 'node-chargepoint';
+import { StartVerificationTimeoutError, type HomeChargerStatus } from 'node-chargepoint';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SunkeepService } from './sunkeep.service.js';
 import { StopReason, SunkeepState } from './sunkeep.types.js';
@@ -40,6 +40,8 @@ const mockCp = {
 	startChargingSession: vi.fn().mockResolvedValue(mockSession),
 	getHomeChargerTechnicalInfo: vi.fn().mockResolvedValue(mockTechInfo),
 	getHomeChargerConfig: vi.fn().mockResolvedValue(mockCpConfig),
+	getUserChargingStatus: vi.fn().mockResolvedValue(null),
+	getChargingSession: vi.fn().mockResolvedValue(mockSession),
 };
 
 const mockSiteInfo = {
@@ -61,6 +63,7 @@ const mockPrisma = {
 	chargingEvent: {
 		create: vi.fn().mockResolvedValue({ id: 'event-1' }),
 		update: vi.fn().mockResolvedValue({}),
+		findFirst: vi.fn().mockResolvedValue(null),
 	},
 };
 
@@ -84,7 +87,10 @@ function pluggedInStatus(overrides: Partial<HomeChargerStatus> = {}): HomeCharge
 		brand: 'ChargePoint',
 		model: 'CPH50',
 		macAddress: '',
-		chargingStatus: 'CHARGING',
+		// Default to NOT_CHARGING so tests that expect a fresh start don't trip
+		// the orphaned-session adoption path. Override to 'CHARGING' to test
+		// recovery from a session left running by a prior process.
+		chargingStatus: 'NOT_CHARGING' as HomeChargerStatus['chargingStatus'],
 		isPluggedIn: true,
 		isConnected: true,
 		isReminderEnabled: false,
@@ -279,6 +285,44 @@ describe('SunkeepService', () => {
 		expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
 	});
 
+	it('persists event and enters CHARGING when start verification times out but charger confirms charging', async () => {
+		// Simulates the ChargePoint user-status endpoint being slow to reflect a
+		// newly-started session, while getHomeChargerStatus already shows the
+		// charger drawing power. Pre-fix this caused the exception to bubble up
+		// before the DB row was written, leaving the car charging unmonitored.
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+		mockCp.startChargingSession.mockRejectedValueOnce(
+			new StartVerificationTimeoutError(42, 15000, 8, true)
+		);
+
+		await service.runTick();
+
+		expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
+		expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+	});
+
+	it('persists event but rethrows when start verification times out and charger does NOT confirm', async () => {
+		// Verification timed out and the charger doesn't show CHARGING either —
+		// we can't tell if the start took. Row stays open so the next tick's
+		// reconcile (adopt-if-charging / close-as-UNKNOWN otherwise) resolves it.
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+		mockCp.startChargingSession.mockRejectedValueOnce(
+			new StartVerificationTimeoutError(42, 15000, 8, false)
+		);
+
+		await service.runTick(); // swallowed by runTick's top-level catch
+
+		expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
+		// State did not advance to CHARGING — we have no confirmation.
+		expect(service.getStatus().state).not.toBe(SunkeepState.CHARGING);
+	});
+
 	it('calculates correct amps: clamps to 8 at 1.5 kW excess', async () => {
 		service.enable();
 		vi.setSystemTime(NOON);
@@ -437,6 +481,7 @@ describe('SunkeepService', () => {
 
 	it('manualStartSession() starts a session with amps based on current solar', async () => {
 		service.enable();
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
 		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 })); // 3 kW → 12A
 		await service.manualStartSession();
 
@@ -448,6 +493,7 @@ describe('SunkeepService', () => {
 
 	it('manualStartSession() uses minimum 8A when excess is very low', async () => {
 		service.enable();
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
 		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 1.0, loadKw: 0.5 })); // 0.5 kW → 2A → clamped to 8A
 		await service.manualStartSession();
 		expect(mockCp.setAmperageLimit).toHaveBeenCalledWith(42, 8);
@@ -660,6 +706,249 @@ describe('SunkeepService', () => {
 			await service.runTick();
 			expect(service.getStatus().state).toBe(SunkeepState.IDLE);
 			expect(service.getStatus().waitReason).toBeNull();
+		});
+	});
+
+	// --- Recovery from orphaned sessions ---
+
+	describe('session recovery', () => {
+		const orphanedSession = {
+			sessionId: 7777,
+			energyKwh: 1.1,
+			stop: vi.fn().mockResolvedValue(undefined),
+		};
+
+		beforeEach(() => {
+			orphanedSession.stop.mockClear();
+			mockCp.getChargingSession.mockResolvedValue(orphanedSession);
+		});
+
+		it('adopts an orphaned session using the incomplete DB event when the process restarts mid-charge', async () => {
+			const startedAt = new Date('2026-05-23T10:00:00Z');
+			mockPrisma.chargingEvent.findFirst.mockResolvedValueOnce({
+				id: 'event-orphan',
+				startedAt,
+				startAmps: 21,
+				peakSolarKw: 7.2,
+			});
+			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
+
+			service.enable(); // fresh process: state = IDLE, activeSession = null
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 21,
+				})
+			);
+			// Tesla loadKw already includes car @ 21A (5.04 kW). Use load slightly
+			// below solar so that after the car draw is added back the target stays
+			// at 21A (avoids adjustment side-effects in this assertion).
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 5.5, loadKw: 5.4 }));
+
+			await service.runTick();
+
+			const status = service.getStatus();
+			expect(status.state).toBe(SunkeepState.CHARGING);
+			expect(status.activeSession).not.toBeNull();
+			expect(status.activeSession?.sessionId).toBe(7777);
+			expect(status.activeSession?.currentAmps).toBe(21);
+			expect(status.activeSession?.startedAt).toBe(startedAt.toISOString());
+			// excess = solar - load + carKw = 5.5 - 5.4 + 5.04 = 5.14
+			expect(status.excessKw).toBeCloseTo(5.14);
+			// Should NOT have created a new event — reused the incomplete one.
+			expect(mockPrisma.chargingEvent.create).not.toHaveBeenCalled();
+			// No adjustment expected: target amps = floor(5140 / 240) = 21
+			expect(mockCp.setAmperageLimit).not.toHaveBeenCalled();
+		});
+
+		it('resumes amp adjustment after adopting an orphaned session (regression: previous bug left amps stuck)', async () => {
+			mockPrisma.chargingEvent.findFirst.mockResolvedValueOnce({
+				id: 'event-orphan',
+				startedAt: new Date('2026-05-23T10:00:00Z'),
+				startAmps: 21,
+				peakSolarKw: 7.2,
+			});
+			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
+
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 21,
+				})
+			);
+			// Solar 6.01, load 5.50 — the exact scenario from the bug report.
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 6.01, loadKw: 5.5 }));
+
+			await service.runTick();
+
+			// excess after adoption = 6.01 - 5.5 + 5.04 = 5.55 → target = floor(5550/240) = 23
+			expect(mockCp.setAmperageLimit).toHaveBeenCalledWith(42, 23);
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+			expect(service.getStatus().activeSession?.currentAmps).toBe(23);
+		});
+
+		it('closes a stale (>12h old) incomplete event and creates a fresh one when adopting', async () => {
+			// Simulate a session row left over from days ago. The charger has since
+			// started a new session, but we should NOT inherit the ancient startedAt.
+			const ancientStartedAt = new Date(NOON.getTime() - 72 * 60 * 60 * 1000); // 3 days before NOON
+			mockPrisma.chargingEvent.findFirst.mockResolvedValueOnce({
+				id: 'event-ancient',
+				startedAt: ancientStartedAt,
+				startAmps: 16,
+				peakSolarKw: 4.0,
+			});
+			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
+
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 21,
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 5.5, loadKw: 5.4 }));
+
+			await service.runTick();
+
+			// Old row should be closed with UNKNOWN
+			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
+				expect.objectContaining({
+					where: { id: 'event-ancient' },
+					data: expect.objectContaining({ stopReason: StopReason.UNKNOWN }),
+				})
+			);
+			// And a fresh event should be created for the live session
+			expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+			// The session's startedAt should be ~now (not 3 days ago)
+			const sessionStart = service.getStatus().activeSession?.startedAt;
+			expect(sessionStart).not.toBe(ancientStartedAt.toISOString());
+			expect(new Date(sessionStart!).getTime()).toBeCloseTo(NOON.getTime(), -3); // within ~1s
+		});
+
+		it('reuses an open event that is just under the 12h threshold (preserves startedAt)', async () => {
+			const recentStartedAt = new Date(NOON.getTime() - 11 * 60 * 60 * 1000); // 11h before NOON
+			mockPrisma.chargingEvent.findFirst.mockResolvedValueOnce({
+				id: 'event-recent',
+				startedAt: recentStartedAt,
+				startAmps: 21,
+				peakSolarKw: 7.0,
+			});
+			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
+
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 21,
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 5.5, loadKw: 5.4 }));
+
+			await service.runTick();
+
+			// Should NOT create a new row, should NOT close the existing one.
+			expect(mockPrisma.chargingEvent.create).not.toHaveBeenCalled();
+			expect(mockPrisma.chargingEvent.update).not.toHaveBeenCalled();
+			expect(service.getStatus().activeSession?.startedAt).toBe(recentStartedAt.toISOString());
+		});
+
+		it('creates a new ChargingEvent when charger is charging but DB has no incomplete event', async () => {
+			mockPrisma.chargingEvent.findFirst.mockResolvedValueOnce(null);
+			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
+
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 16,
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 5.0, loadKw: 4.5 }));
+
+			await service.runTick();
+
+			expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+			expect(service.getStatus().activeSession?.sessionId).toBe(7777);
+		});
+
+		it('closes a stale incomplete ChargingEvent when charger is not charging', async () => {
+			mockPrisma.chargingEvent.findFirst.mockResolvedValueOnce({
+				id: 'event-stale',
+				startedAt: new Date('2026-05-23T09:00:00Z'),
+				startAmps: 16,
+				peakSolarKw: 5.0,
+			});
+
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'NOT_CHARGING' as HomeChargerStatus['chargingStatus'],
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData());
+
+			await service.runTick();
+
+			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
+				expect.objectContaining({
+					where: { id: 'event-stale' },
+					data: expect.objectContaining({ stopReason: StopReason.UNKNOWN }),
+				})
+			);
+		});
+
+		it('does not adopt when getUserChargingStatus returns null', async () => {
+			mockCp.getUserChargingStatus.mockResolvedValueOnce(null);
+			mockPrisma.chargingEvent.findFirst.mockResolvedValue(null);
+
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 6.0, loadKw: 5.5 }));
+
+			await service.runTick();
+
+			expect(service.getStatus().activeSession).toBeNull();
+			expect(mockPrisma.chargingEvent.create).not.toHaveBeenCalled();
+		});
+
+		it('manualStartSession adopts an orphaned session instead of starting a new one', async () => {
+			const startedAt = new Date('2026-05-23T10:00:00Z');
+			mockPrisma.chargingEvent.findFirst.mockResolvedValueOnce({
+				id: 'event-orphan',
+				startedAt,
+				startAmps: 24,
+				peakSolarKw: 8.0,
+			});
+			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
+
+			service.enable();
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 24,
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData());
+
+			await service.manualStartSession();
+
+			expect(mockCp.startChargingSession).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+			expect(service.getStatus().activeSession?.sessionId).toBe(7777);
 		});
 	});
 

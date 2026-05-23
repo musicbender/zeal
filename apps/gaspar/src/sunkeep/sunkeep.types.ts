@@ -13,6 +13,7 @@ export enum StopReason {
 	UNPLUGGED = 'unplugged',
 	MANUAL = 'manual',
 	ERROR = 'error',
+	UNKNOWN = 'unknown',
 }
 
 export interface PowerwallData {

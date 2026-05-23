@@ -139,8 +139,8 @@ importers:
         specifier: ^5.8.3
         version: 5.8.5
       node-chargepoint:
-        specifier: 0.4.2
-        version: 0.4.2
+        specifier: 0.5.0
+        version: 0.5.0
       node-cron:
         specifier: 4.2.1
         version: 4.2.1
@@ -3873,8 +3873,8 @@ packages:
       sass:
         optional: true
 
-  node-chargepoint@0.4.2:
-    resolution: {integrity: sha512-H5Ao8mo1Lk7RsAoMsvy0+67ZoIp1dVShz1x8qXnSWhXMqLaKuwKwX+nApj/6rpE7RQ32UBQYHyzpaU267RQWfg==}
+  node-chargepoint@0.5.0:
+    resolution: {integrity: sha512-LLavAp/XpZg/J25dnRD+Glkw067UgpGpVqEaiQBk7olU6JPYhvl267EGhxf5H1FUfr5HYxhrhVJYRpVXmZfEMQ==}
     engines: {node: '>=22'}
     hasBin: true
 
@@ -8288,7 +8288,7 @@ snapshots:
       - '@babel/core'
       - babel-plugin-macros
 
-  node-chargepoint@0.4.2:
+  node-chargepoint@0.5.0:
     dependencies:
       commander: 12.1.0
 
