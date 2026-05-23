@@ -1,4 +1,4 @@
-import type { HomeChargerStatus } from 'node-chargepoint';
+import { StartVerificationTimeoutError, type HomeChargerStatus } from 'node-chargepoint';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SunkeepService } from './sunkeep.service.js';
 import { StopReason, SunkeepState } from './sunkeep.types.js';
@@ -283,6 +283,44 @@ describe('SunkeepService', () => {
 		expect(mockCp.startChargingSession).toHaveBeenCalledWith(42);
 		expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
 		expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+	});
+
+	it('persists event and enters CHARGING when start verification times out but charger confirms charging', async () => {
+		// Simulates the ChargePoint user-status endpoint being slow to reflect a
+		// newly-started session, while getHomeChargerStatus already shows the
+		// charger drawing power. Pre-fix this caused the exception to bubble up
+		// before the DB row was written, leaving the car charging unmonitored.
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+		mockCp.startChargingSession.mockRejectedValueOnce(
+			new StartVerificationTimeoutError(42, 15000, 8, true)
+		);
+
+		await service.runTick();
+
+		expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
+		expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+	});
+
+	it('persists event but rethrows when start verification times out and charger does NOT confirm', async () => {
+		// Verification timed out and the charger doesn't show CHARGING either —
+		// we can't tell if the start took. Row stays open so the next tick's
+		// reconcile (adopt-if-charging / close-as-UNKNOWN otherwise) resolves it.
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+		mockCp.startChargingSession.mockRejectedValueOnce(
+			new StartVerificationTimeoutError(42, 15000, 8, false)
+		);
+
+		await service.runTick(); // swallowed by runTick's top-level catch
+
+		expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
+		// State did not advance to CHARGING — we have no confirmation.
+		expect(service.getStatus().state).not.toBe(SunkeepState.CHARGING);
 	});
 
 	it('calculates correct amps: clamps to 8 at 1.5 kW excess', async () => {

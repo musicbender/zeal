@@ -1,9 +1,10 @@
 import { initLogger } from '@repo/logger/server';
-import type {
-	ChargingSession,
-	HomeChargerConfiguration,
-	HomeChargerStatus,
-	UserChargingStatus,
+import {
+	StartVerificationTimeoutError,
+	type ChargingSession,
+	type HomeChargerConfiguration,
+	type HomeChargerStatus,
+	type UserChargingStatus,
 } from 'node-chargepoint';
 import type {
 	ActiveSessionSummary,
@@ -550,20 +551,60 @@ export class SunkeepService {
 
 	private async startSession(targetAmps: number): Promise<void> {
 		await this.chargePoint.setAmperageLimit(this.config.chargePointDeviceId, targetAmps);
-		const session = await this.chargePoint.startChargingSession(this.config.chargePointDeviceId);
+
+		// Persist the event row up-front so the attempt is always recorded.
+		// ChargePoint's post-start status poll can timeout (slow user-status
+		// propagation) even when the start command succeeded and the car is
+		// physically drawing power — without this, every such case left us
+		// with a charging car and zero DB evidence.
 		const event = await this.prisma.chargingEvent.create({
 			data: {
 				startAmps: targetAmps,
 				peakSolarKw: this.lastPwData?.solarKw ?? null,
 			},
 		});
+		const startedAt = new Date();
+
+		let session: ChargingSession;
+		try {
+			session = await this.chargePoint.startChargingSession(this.config.chargePointDeviceId);
+		} catch (err) {
+			// node-chargepoint cross-checks the charger directly when user-status
+			// polling times out. If that fallback confirmed CHARGING, the start
+			// succeeded — adopt the row immediately so we record this session's
+			// real start instead of waiting for the next tick.
+			if (err instanceof StartVerificationTimeoutError && err.chargerConfirmedCharging) {
+				this.activeEventId = event.id;
+				this.currentAmps = targetAmps;
+				this.peakSolarKw = this.lastPwData?.solarKw ?? 0;
+				this.sessionStartedAt = startedAt;
+				this.state = SunkeepState.CHARGING;
+				log.warn(
+					{ targetAmps, eventId: event.id, pollAttempts: err.pollAttempts },
+					'ChargePoint user-status poll timed out but charger reports CHARGING; treating as success'
+				);
+				return;
+			}
+			// Either a hard failure or a timeout we can't confirm. Leave the row
+			// open so the next tick's reconcile resolves it (adopt if the start
+			// did take, close as UNKNOWN if it didn't).
+			log.warn(
+				{ err, eventId: event.id, targetAmps },
+				'startChargingSession failed; leaving event open for next-tick reconcile'
+			);
+			throw err;
+		}
+
 		this.activeSession = session;
 		this.activeEventId = event.id;
 		this.currentAmps = targetAmps;
 		this.peakSolarKw = this.lastPwData?.solarKw ?? 0;
-		this.sessionStartedAt = new Date();
+		this.sessionStartedAt = startedAt;
 		this.state = SunkeepState.CHARGING;
-		log.info({ targetAmps, sessionId: session.sessionId }, 'Charging session started');
+		log.info(
+			{ targetAmps, sessionId: session.sessionId, eventId: event.id },
+			'Charging session started'
+		);
 	}
 
 	private async stopActiveSession(reason: StopReason): Promise<void> {
