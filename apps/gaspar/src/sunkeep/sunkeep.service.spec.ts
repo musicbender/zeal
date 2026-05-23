@@ -752,6 +752,74 @@ describe('SunkeepService', () => {
 			expect(service.getStatus().activeSession?.currentAmps).toBe(23);
 		});
 
+		it('closes a stale (>12h old) incomplete event and creates a fresh one when adopting', async () => {
+			// Simulate a session row left over from days ago. The charger has since
+			// started a new session, but we should NOT inherit the ancient startedAt.
+			const ancientStartedAt = new Date(NOON.getTime() - 72 * 60 * 60 * 1000); // 3 days before NOON
+			mockPrisma.chargingEvent.findFirst.mockResolvedValueOnce({
+				id: 'event-ancient',
+				startedAt: ancientStartedAt,
+				startAmps: 16,
+				peakSolarKw: 4.0,
+			});
+			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
+
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 21,
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 5.5, loadKw: 5.4 }));
+
+			await service.runTick();
+
+			// Old row should be closed with UNKNOWN
+			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
+				expect.objectContaining({
+					where: { id: 'event-ancient' },
+					data: expect.objectContaining({ stopReason: StopReason.UNKNOWN }),
+				})
+			);
+			// And a fresh event should be created for the live session
+			expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+			// The session's startedAt should be ~now (not 3 days ago)
+			const sessionStart = service.getStatus().activeSession?.startedAt;
+			expect(sessionStart).not.toBe(ancientStartedAt.toISOString());
+			expect(new Date(sessionStart!).getTime()).toBeCloseTo(NOON.getTime(), -3); // within ~1s
+		});
+
+		it('reuses an open event that is just under the 12h threshold (preserves startedAt)', async () => {
+			const recentStartedAt = new Date(NOON.getTime() - 11 * 60 * 60 * 1000); // 11h before NOON
+			mockPrisma.chargingEvent.findFirst.mockResolvedValueOnce({
+				id: 'event-recent',
+				startedAt: recentStartedAt,
+				startAmps: 21,
+				peakSolarKw: 7.0,
+			});
+			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
+
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 21,
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 5.5, loadKw: 5.4 }));
+
+			await service.runTick();
+
+			// Should NOT create a new row, should NOT close the existing one.
+			expect(mockPrisma.chargingEvent.create).not.toHaveBeenCalled();
+			expect(mockPrisma.chargingEvent.update).not.toHaveBeenCalled();
+			expect(service.getStatus().activeSession?.startedAt).toBe(recentStartedAt.toISOString());
+		});
+
 		it('creates a new ChargingEvent when charger is charging but DB has no incomplete event', async () => {
 			mockPrisma.chargingEvent.findFirst.mockResolvedValueOnce(null);
 			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });

@@ -22,6 +22,10 @@ const MIN_AMPS = 8;
 const MAX_AMPS = 32;
 const VOLTAGE = 240;
 const MIN_EXCESS_KW = 1.5;
+// Open ChargingEvent rows older than this are assumed to belong to a prior
+// session that ended outside our awareness — when adopting, we close them
+// and start a fresh row rather than show a misleading multi-day duration.
+const MAX_INCOMPLETE_EVENT_AGE_MS = 12 * 60 * 60 * 1000;
 
 function calcTargetAmps(excessKw: number): number {
 	const raw = Math.floor((excessKw * 1000) / VOLTAGE);
@@ -451,16 +455,43 @@ export class SunkeepService {
 				return null;
 			});
 
+		const now = new Date();
+		const isFresh =
+			incomplete !== null &&
+			now.getTime() - incomplete.startedAt.getTime() <= MAX_INCOMPLETE_EVENT_AGE_MS;
+
 		let eventId: string;
 		let startedAt: Date;
 		let peakSolarKw: number;
-		if (incomplete) {
+		if (isFresh && incomplete) {
 			eventId = incomplete.id;
 			startedAt = incomplete.startedAt;
 			peakSolarKw = incomplete.peakSolarKw ?? this.lastPwData?.solarKw ?? 0;
 		} else {
-			// Charger has a session but DB has no row — create one so we can
-			// record stop reason / energy when the session ends.
+			// Either no DB row exists, or the existing one is too old to plausibly
+			// belong to the currently-active ChargePoint session. Close the stale
+			// row (if any) and start a fresh event keyed to the adoption moment.
+			if (incomplete) {
+				await this.prisma.chargingEvent
+					.update({
+						where: { id: incomplete.id },
+						data: {
+							stoppedAt: now,
+							stopReason: StopReason.UNKNOWN,
+							endAmps: incomplete.startAmps,
+						},
+					})
+					.catch((err: unknown) => {
+						log.warn(
+							{ err, eventId: incomplete.id },
+							'Failed to close stale ChargingEvent before fresh adoption'
+						);
+					});
+				log.info(
+					{ eventId: incomplete.id, ageMs: now.getTime() - incomplete.startedAt.getTime() },
+					'Closed stale incomplete ChargingEvent (older than max age) before fresh adoption'
+				);
+			}
 			const event = await this.prisma.chargingEvent.create({
 				data: {
 					startAmps: amps,
@@ -468,7 +499,7 @@ export class SunkeepService {
 				},
 			});
 			eventId = event.id;
-			startedAt = new Date();
+			startedAt = now;
 			peakSolarKw = this.lastPwData?.solarKw ?? 0;
 		}
 
@@ -484,7 +515,7 @@ export class SunkeepService {
 				eventId,
 				sessionId: session.sessionId,
 				amps,
-				recoveredFromDb: incomplete !== null,
+				recoveredFromDb: isFresh,
 			},
 			'Adopted in-progress charging session'
 		);
