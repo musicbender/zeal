@@ -1,6 +1,15 @@
-## [v0.4.2](https://github.com/musicbender/node-chargepoint/releases/tag/v0.4.2) — 2026-05-17
+## [v0.5.0](https://github.com/musicbender/node-chargepoint/releases/tag/v0.5.0) — 2026-05-23
 
-<!-- Release notes generated using configuration in .github/release.yml at v0.4.2 -->
+<!-- Release notes generated using configuration in .github/release.yml at v0.5.0 -->
+
+## What's Changed
+### New Features
+* fix(session): distinguish start-command success from poll timeout with StartVerificationTimeoutError by @musicbender in https://github.com/musicbender/node-chargepoint/pull/26
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.4.2...v0.5.0
+
+---
 
 ## What's Changed
 ### Bug Fixes & Patches
