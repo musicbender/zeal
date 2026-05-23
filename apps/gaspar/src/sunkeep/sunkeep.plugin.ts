@@ -66,7 +66,7 @@ export async function registerSunkeepPlugin(
 
 	const storedToken = await prismaService.setting
 		.findUnique({ where: { key: 'tesla_refresh_token' } })
-		.then((s) => s?.value ?? null)
+		.then((s: { value: string } | null) => s?.value ?? null)
 		.catch(() => null);
 
 	const persistToken = async (token: string) => {

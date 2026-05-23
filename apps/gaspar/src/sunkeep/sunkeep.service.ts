@@ -329,6 +329,18 @@ export class SunkeepService {
 		// and/or an open ChargingEvent row in the DB.
 		await this.reconcileWithCharger(chargerStatus);
 
+		// ChargePoint reports 'DONE' when the car reached its charge limit and stopped
+		// accepting current. Detect this before the solar window check so it takes
+		// priority over less informative reasons like "Outside solar window".
+		if (chargerStatus.isPluggedIn && chargerStatus.chargingStatus === 'DONE') {
+			if (this.state === SunkeepState.CHARGING) {
+				await this.stopActiveSession(StopReason.CAR_FULL);
+			}
+			this.state = SunkeepState.WAITING;
+			this.waitReason = 'Car fully charged';
+			return;
+		}
+
 		if (!isWithinSolarWindow(this.config.solarWindowStart, this.config.solarWindowEnd)) {
 			if (this.state === SunkeepState.CHARGING) {
 				await this.stopActiveSession(StopReason.NIGHT_SAFETY);

@@ -10,6 +10,7 @@ export enum StopReason {
 	SOLAR_DROPPED = 'solar_dropped',
 	NIGHT_SAFETY = 'night_safety',
 	BATTERY_DEPLETED = 'battery_depleted',
+	CAR_FULL = 'car_full',
 	UNPLUGGED = 'unplugged',
 	MANUAL = 'manual',
 	ERROR = 'error',
