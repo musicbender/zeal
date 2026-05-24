@@ -1,5 +1,6 @@
 import { initLogger } from '@repo/logger/server';
 import {
+	InvalidSession,
 	StartVerificationTimeoutError,
 	type ChargingSession,
 	type HomeChargerConfiguration,
@@ -180,6 +181,16 @@ export class SunkeepService {
 			if (err instanceof TeslaAuthError) {
 				log.error(
 					'Tesla refresh token invalid — PUT /sunkeep/tesla/refresh-token with a new token to recover. Disabling sunkeep.'
+				);
+				if (this.state === SunkeepState.CHARGING) {
+					await this.stopActiveSession(StopReason.ERROR);
+				}
+				this.state = SunkeepState.DISABLED;
+				return;
+			}
+			if (err instanceof InvalidSession) {
+				log.error(
+					'ChargePoint session expired — restart the process with a valid CHARGEPOINT_TOKEN or CHARGEPOINT_PASSWORD to recover. Disabling sunkeep.'
 				);
 				if (this.state === SunkeepState.CHARGING) {
 					await this.stopActiveSession(StopReason.ERROR);
