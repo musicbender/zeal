@@ -1,6 +1,15 @@
-## [v0.5.0](https://github.com/musicbender/node-chargepoint/releases/tag/v0.5.0) — 2026-05-23
+## [v0.6.0](https://github.com/musicbender/node-chargepoint/releases/tag/v0.6.0) — 2026-05-24
 
-<!-- Release notes generated using configuration in .github/release.yml at v0.5.0 -->
+<!-- Release notes generated using configuration in .github/release.yml at v0.6.0 -->
+
+## What's Changed
+### New Features
+* Add onTokenRotated callback, ChargingStatus type, and explicit TechnicalInfo field mapping by @musicbender in https://github.com/musicbender/node-chargepoint/pull/27
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.5.0...v0.6.0
+
+---
 
 ## What's Changed
 ### New Features
