@@ -241,6 +241,60 @@ describe('SunkeepService', () => {
 		expect(mockPw.getData).toHaveBeenCalledOnce();
 	});
 
+	// --- Car fully charged ---
+
+	it('sets WAITING with "Car fully charged" when charger reports DONE (within solar window)', async () => {
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus.mockResolvedValue(
+			pluggedInStatus({ chargingStatus: 'DONE' as HomeChargerStatus['chargingStatus'] })
+		);
+		mockPw.getData.mockResolvedValue(goodPwData());
+		await service.runTick();
+
+		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+		expect(service.getStatus().waitReason).toBe('Car fully charged');
+		expect(mockCp.startChargingSession).not.toHaveBeenCalled();
+	});
+
+	it('sets WAITING with "Car fully charged" when charger reports DONE (outside solar window)', async () => {
+		service.enable();
+		vi.setSystemTime(NIGHT);
+		mockCp.getHomeChargerStatus.mockResolvedValue(
+			pluggedInStatus({ chargingStatus: 'DONE' as HomeChargerStatus['chargingStatus'] })
+		);
+		mockPw.getData.mockResolvedValue(goodPwData());
+		await service.runTick();
+
+		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+		expect(service.getStatus().waitReason).toBe('Car fully charged');
+	});
+
+	it('stops active session with CAR_FULL reason when car becomes fully charged during session', async () => {
+		service.enable();
+		vi.setSystemTime(NOON);
+		// First tick: start a session
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+		mockPw.getData.mockResolvedValue(goodPwData());
+		await service.runTick();
+		expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+
+		// Second tick: car reports DONE
+		mockCp.getHomeChargerStatus.mockResolvedValue(
+			pluggedInStatus({ chargingStatus: 'DONE' as HomeChargerStatus['chargingStatus'] })
+		);
+		await service.runTick();
+
+		expect(mockSession.stop).toHaveBeenCalled();
+		expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({ stopReason: StopReason.CAR_FULL }),
+			})
+		);
+		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+		expect(service.getStatus().waitReason).toBe('Car fully charged');
+	});
+
 	// --- WAITING transitions ---
 
 	it('transitions to WAITING when car is plugged in but battery < threshold', async () => {

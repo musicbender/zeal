@@ -17,12 +17,27 @@ import { TeslaEnergyClient } from './tesla.client.js';
 
 const log = initLogger('sunkeep.plugin');
 
+const CP_TOKEN_KEY = 'chargepoint_coulomb_token';
+const TESLA_TOKEN_KEY = 'tesla_refresh_token';
+
+async function readSetting(prisma: PrismaService, key: string): Promise<string | null> {
+	return prisma.setting
+		.findUnique({ where: { key } })
+		.then((s: { value: string } | null) => s?.value ?? null)
+		.catch(() => null);
+}
+
+async function upsertSetting(prisma: PrismaService, key: string, value: string): Promise<void> {
+	await prisma.setting.upsert({
+		where: { key },
+		update: { value },
+		create: { key, value },
+	});
+}
+
 async function authenticateWithPassword(chargePoint: ChargePoint, password: string): Promise<void> {
 	await chargePoint.loginWithPassword(password);
-	log.info(
-		{ coulombToken: chargePoint.coulombToken },
-		'ChargePoint authenticated — save CHARGEPOINT_TOKEN to skip future logins'
-	);
+	log.info('ChargePoint authenticated via password — token will be persisted automatically');
 }
 
 export async function registerSunkeepPlugin(
@@ -30,19 +45,32 @@ export async function registerSunkeepPlugin(
 	prismaService: PrismaService
 ): Promise<void> {
 	const config = readSunkeepConfig();
+
+	// Read both persisted tokens up-front so clients can be constructed with them.
+	const [storedCpToken, storedTeslaToken] = await Promise.all([
+		readSetting(prismaService, CP_TOKEN_KEY),
+		readSetting(prismaService, TESLA_TOKEN_KEY),
+	]);
+
 	const chargePoint = await ChargePoint.create(config.chargePointUsername, {
-		coulombToken: config.chargePointToken,
+		coulombToken: storedCpToken ?? config.chargePointToken,
+		onTokenRotated: (token) => {
+			upsertSetting(prismaService, CP_TOKEN_KEY, token).catch((err: unknown) => {
+				log.warn({ err }, 'Failed to persist rotated ChargePoint token');
+			});
+		},
 	});
 
+	const effectiveToken = storedCpToken ?? config.chargePointToken;
 	try {
-		if (config.chargePointToken) {
+		if (effectiveToken) {
 			// Validate the stored token is still alive; fall back to password if it's stale.
 			try {
 				await chargePoint.getAccount();
 				log.info('ChargePoint authenticated via token');
 			} catch (err) {
 				if (!(err instanceof InvalidSession)) throw err;
-				log.warn('Stored CHARGEPOINT_TOKEN is expired — falling back to password login');
+				log.warn('Stored ChargePoint token is expired — falling back to password login');
 				await authenticateWithPassword(chargePoint, config.chargePointPassword);
 			}
 		} else {
@@ -64,25 +92,12 @@ export async function registerSunkeepPlugin(
 		return;
 	}
 
-	const storedToken = await prismaService.setting
-		.findUnique({ where: { key: 'tesla_refresh_token' } })
-		.then((s) => s?.value ?? null)
-		.catch(() => null);
-
-	const persistToken = async (token: string) => {
-		await prismaService.setting.upsert({
-			where: { key: 'tesla_refresh_token' },
-			update: { value: token },
-			create: { key: 'tesla_refresh_token', value: token },
-		});
-	};
-
 	const powerwall = new TeslaEnergyClient({
 		clientId: config.teslaClientId,
 		clientSecret: config.teslaClientSecret,
-		refreshToken: storedToken ?? config.teslaRefreshToken,
+		refreshToken: storedTeslaToken ?? config.teslaRefreshToken,
 		energySiteId: config.teslaEnergySiteId,
-		onTokenRotated: persistToken,
+		onTokenRotated: (token) => upsertSetting(prismaService, TESLA_TOKEN_KEY, token),
 	});
 
 	const service = new SunkeepService(chargePoint, powerwall, prismaService, config);
