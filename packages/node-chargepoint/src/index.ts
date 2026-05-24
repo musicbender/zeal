@@ -1,5 +1,4 @@
 export { ChargePoint } from './client.js';
-export type { ChargePointOptions } from './client.js';
 export { ChargingSession } from './session.js';
 export { NODE_CHARGEPOINT_VERSION } from './constants.js';
 
@@ -16,7 +15,9 @@ export type {
   Account,
   AccountBalance,
   APIEndpoints,
+  ChargePointOptions,
   ChargeSchedule,
+  ChargingStatus,
   ChargeScheduleWindow,
   ChargingSessionUpdate,
   Country,

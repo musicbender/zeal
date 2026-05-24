@@ -1,6 +1,6 @@
 import type { ChargePoint } from './client.js';
 import { CommunicationError, StartVerificationTimeoutError } from './exceptions.js';
-import type { ChargingSessionUpdate, PowerUtility, StartSessionOptions, VehicleInfo } from './types.js';
+import type { ChargingSessionUpdate, ChargingStatus, PowerUtility, StartSessionOptions, VehicleInfo } from './types.js';
 
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
@@ -95,7 +95,7 @@ export class ChargingSession {
   sessionId: number;
   deviceId = 0;
   deviceName = '';
-  chargingState = '';
+  chargingState: ChargingStatus = '';
   chargingTime = 0;
   energyKwh = 0;
   milesAdded = 0;

@@ -4,6 +4,7 @@ import { fetchGlobalConfig } from './global-config.js';
 import { ChargingSession } from './session.js';
 import type {
   Account,
+  ChargePointOptions,
   ElectricVehicle,
   GlobalConfiguration,
   HomeChargerConfiguration,
@@ -21,15 +22,6 @@ import type {
 
 type RawObj = Record<string, unknown>;
 
-export interface ChargePointOptions {
-  coulombToken?: string;
-  region?: string;
-  /** Request timeout in milliseconds. Applied via AbortSignal.timeout(). */
-  timeout?: number;
-  /** Optional debug callback. Called with request/response info — never with header values. */
-  debug?: (msg: string) => void;
-}
-
 function parseMsTimestamp(v: unknown): Date {
   if (typeof v === 'number') return new Date(v);
   if (typeof v === 'string') return new Date(Number(v));
@@ -44,6 +36,7 @@ export class ChargePoint {
   private _userId: number | null = null;
   private _timeout: number | undefined;
   private _debug: ((msg: string) => void) | undefined;
+  private _onTokenRotated: ((token: string) => void) | undefined;
 
   /** The current session token. Save this after login to avoid re-authenticating. */
   get coulombToken(): string | null {
@@ -67,6 +60,7 @@ export class ChargePoint {
 
     client._timeout = options.timeout;
     client._debug = options.debug;
+    client._onTokenRotated = options.onTokenRotated;
 
     return client;
   }
@@ -118,6 +112,7 @@ export class ChargePoint {
         } catch {
           throw new CommunicationError(response.status, 'Malformed coulomb_sess cookie: invalid percent-encoding');
         }
+        this._onTokenRotated?.(this._coulombToken);
         break;
       }
     }
@@ -357,7 +352,18 @@ export class ChargePoint {
       throw new CommunicationError(response.status, 'Failed to get home charger technical info.');
     }
 
-    return (await response.json()) as HomeChargerTechnicalInfo;
+    const data = (await response.json()) as RawObj;
+    return {
+      modelNumber: String(data.modelNumber ?? ''),
+      serialNumber: String(data.serialNumber ?? ''),
+      wifiMac: String(data.wifiMac ?? ''),
+      macAddress: String(data.macAddress ?? ''),
+      softwareVersion: String(data.softwareVersion ?? ''),
+      lastOtaUpdate: String(data.lastOtaUpdate ?? ''),
+      lastConnectedAt: String(data.lastConnectedAt ?? ''),
+      deviceIp: String(data.deviceIp ?? ''),
+      stopChargeSupported: Boolean(data.stopChargeSupported),
+    };
   }
 
   async getHomeChargerConfig(chargerId: number): Promise<HomeChargerConfiguration> {

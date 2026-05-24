@@ -119,7 +119,7 @@ export interface HomeChargerStatus {
   brand: string;
   model: string;
   macAddress: string;
-  chargingStatus: string;
+  chargingStatus: ChargingStatus;
   isPluggedIn: boolean;
   isConnected: boolean;
   isReminderEnabled: boolean;
@@ -184,6 +184,19 @@ export interface StartSessionOptions {
   pollIntervalMs?: number;
 }
 
+export interface ChargePointOptions {
+  coulombToken?: string;
+  region?: string;
+  /** Request timeout in milliseconds. Applied via AbortSignal.timeout(). */
+  timeout?: number;
+  /** Optional debug callback. Called with request/response info — never with header values. */
+  debug?: (msg: string) => void;
+  /** Called with the new token whenever the server rotates coulomb_sess via Set-Cookie. */
+  onTokenRotated?: (token: string) => void;
+}
+
+export type ChargingStatus = 'CHARGING' | 'NOT_CHARGING' | 'DONE' | (string & {});
+
 export interface ChargeSchedule {
   weekdays: ChargeScheduleWindow;
   weekends: ChargeScheduleWindow;
@@ -229,7 +242,7 @@ export interface Station {
 export interface UserChargingStatus {
   sessionId: number;
   startTime: Date;
-  state: string;
+  state: ChargingStatus;
   stations: Station[];
 }
 
