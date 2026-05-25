@@ -1,6 +1,7 @@
 export { ChargePoint } from './client.js';
 export { ChargingSession } from './session.js';
 export { NODE_CHARGEPOINT_VERSION } from './constants.js';
+export { isWithinChargeScheduleWindow, getActiveScheduleWindow } from './utils.js';
 
 export {
   APIError,

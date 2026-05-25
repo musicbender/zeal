@@ -424,7 +424,10 @@ export class ChargePoint {
       throw new CommunicationError(response.status, 'Failed to get home charger schedule.');
     }
 
-    return (await response.json()) as HomeChargerSchedule;
+    const data = (await response.json()) as RawObj;
+    // API may nest the schedule under a 'schedule' key; fall back to flat shape.
+    const s = (typeof data.schedule === 'object' && data.schedule !== null ? data.schedule : data) as RawObj;
+    return s as unknown as HomeChargerSchedule;
   }
 
   async setHomeChargerSchedule(

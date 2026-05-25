@@ -182,6 +182,54 @@ console.log(updated.scheduleEnabled);  // true
 await client.disableHomeChargerSchedule(chargerId);
 ```
 
+#### Schedule window utilities
+
+Two pure helper functions are exported for evaluating schedule windows without an extra API call.
+
+**`getActiveScheduleWindow(schedule, date?)`**
+
+Resolves the window that is currently active from a `HomeChargerSchedule`. Returns `null` when `scheduleEnabled` is `false` — the signal that the ChargePoint schedule should be ignored and your own logic applied.
+
+Priority when multiple schedules exist: `userSchedule` → `utilitySchedule` → `defaultSchedule`.
+Automatically selects the weekday or weekend window based on `date` (defaults to now).
+
+**`isWithinChargeScheduleWindow(window, date?)`**
+
+Returns `true` if the time component of `date` (defaults to now) falls within the given `ChargeScheduleWindow`. Handles midnight-crossing windows (e.g. `22:00`–`06:00`). Start is inclusive, end is exclusive.
+
+**TOU / off-peak charging** — check the ChargePoint schedule:
+
+```typescript
+import { getActiveScheduleWindow, isWithinChargeScheduleWindow } from 'node-chargepoint';
+
+const schedule = await client.getHomeChargerSchedule(chargerId);
+const window = getActiveScheduleWindow(schedule);
+
+if (window && isWithinChargeScheduleWindow(window)) {
+  // within the configured off-peak window — ok to charge
+}
+```
+
+**Solar / custom scheduling** — ChargePoint schedule is off, apply your own window:
+
+```typescript
+const schedule = await client.getHomeChargerSchedule(chargerId);
+const window = getActiveScheduleWindow(schedule);
+
+if (!window) {
+  // ChargePoint schedule is disabled — use your own time window
+  const solarWindow = { startTime: '7:00', endTime: '19:00' };
+  if (isWithinChargeScheduleWindow(solarWindow)) {
+    // sun is up — ok to charge from solar
+  }
+}
+```
+
+> **Note:** `HomeChargerStatus.isDuringScheduledTime` is the ChargePoint API's own evaluation
+> of the configured off-peak schedule. Use `getActiveScheduleWindow` +
+> `isWithinChargeScheduleWindow` instead when you need to check a custom window (solar hours,
+> time-of-day rules, etc.) independently of TOU pricing.
+
 ---
 
 ### Charging Status and Sessions
