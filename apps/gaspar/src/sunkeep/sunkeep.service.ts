@@ -2,9 +2,13 @@ import { initLogger } from '@repo/logger/server';
 import {
 	InvalidSession,
 	StartVerificationTimeoutError,
+	getActiveScheduleWindow,
+	isWithinChargeScheduleWindow,
 	type ChargingSession,
 	type HomeChargerConfiguration,
+	type HomeChargerSchedule,
 	type HomeChargerStatus,
+	type TimeString,
 	type UserChargingStatus,
 } from 'node-chargepoint';
 import type {
@@ -34,34 +38,9 @@ function calcTargetAmps(excessKw: number): number {
 	return Math.max(MIN_AMPS, Math.min(MAX_AMPS, raw));
 }
 
-function isWithinSolarWindow(start: string, end: string): boolean {
-	const now = new Date();
-	const startParts = start.split(':').map(Number);
-	const endParts = end.split(':').map(Number);
-	const startH = startParts[0];
-	const startM = startParts[1];
-	const endH = endParts[0];
-	const endM = endParts[1];
-	if (
-		startH === undefined ||
-		startM === undefined ||
-		endH === undefined ||
-		endM === undefined ||
-		isNaN(startH) ||
-		isNaN(startM) ||
-		isNaN(endH) ||
-		isNaN(endM)
-	) {
-		return false;
-	}
-	const nowMinutes = now.getHours() * 60 + now.getMinutes();
-	const startMinutes = startH * 60 + startM;
-	const endMinutes = endH * 60 + endM;
-	return nowMinutes >= startMinutes && nowMinutes < endMinutes;
-}
-
 interface IChargePointClient {
 	getHomeChargerStatus(chargerId: number): Promise<HomeChargerStatus>;
+	getHomeChargerSchedule(chargerId: number): Promise<HomeChargerSchedule>;
 	setAmperageLimit(chargerId: number, amps: number): Promise<void>;
 	startChargingSession(deviceId: number): Promise<ChargingSession>;
 	getHomeChargerTechnicalInfo(
@@ -325,9 +304,10 @@ export class SunkeepService {
 	}
 
 	private async tick(): Promise<void> {
-		const [chargerStatus, pwData] = await Promise.all([
+		const [chargerStatus, pwData, cpSchedule] = await Promise.all([
 			this.chargePoint.getHomeChargerStatus(this.config.chargePointDeviceId),
 			this.powerwall.getData(),
+			this.chargePoint.getHomeChargerSchedule(this.config.chargePointDeviceId),
 		]);
 
 		this.isPluggedIn = chargerStatus.isPluggedIn;
@@ -352,7 +332,14 @@ export class SunkeepService {
 			return;
 		}
 
-		if (!isWithinSolarWindow(this.config.solarWindowStart, this.config.solarWindowEnd)) {
+		const activeWindow = getActiveScheduleWindow(cpSchedule);
+		const inSolarWindow = activeWindow
+			? isWithinChargeScheduleWindow(activeWindow)
+			: isWithinChargeScheduleWindow({
+					startTime: this.config.solarWindowStart as TimeString,
+					endTime: this.config.solarWindowEnd as TimeString,
+				});
+		if (!inSolarWindow) {
 			if (this.state === SunkeepState.CHARGING) {
 				await this.stopActiveSession(StopReason.NIGHT_SAFETY);
 			}

@@ -1,4 +1,8 @@
-import { StartVerificationTimeoutError, type HomeChargerStatus } from 'node-chargepoint';
+import {
+	StartVerificationTimeoutError,
+	type HomeChargerSchedule,
+	type HomeChargerStatus,
+} from 'node-chargepoint';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SunkeepService } from './sunkeep.service.js';
 import { StopReason, SunkeepState } from './sunkeep.types.js';
@@ -34,8 +38,20 @@ const mockCpConfig = {
 	isInstalledByInstaller: false,
 };
 
+const mockDisabledSchedule: HomeChargerSchedule = {
+	hasTouPricing: false,
+	scheduleEnabled: false,
+	hasUtilityInfo: false,
+	basedOnUtility: null,
+	defaultSchedule: {
+		weekdays: { startTime: '0:0', endTime: '0:0' },
+		weekends: { startTime: '0:0', endTime: '0:0' },
+	},
+};
+
 const mockCp = {
 	getHomeChargerStatus: vi.fn(),
+	getHomeChargerSchedule: vi.fn().mockResolvedValue(mockDisabledSchedule),
 	setAmperageLimit: vi.fn().mockResolvedValue(undefined),
 	startChargingSession: vi.fn().mockResolvedValue(mockSession),
 	getHomeChargerTechnicalInfo: vi.fn().mockResolvedValue(mockTechInfo),
