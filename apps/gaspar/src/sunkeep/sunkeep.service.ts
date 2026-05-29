@@ -2,11 +2,9 @@ import { initLogger } from '@repo/logger/server';
 import {
 	InvalidSession,
 	StartVerificationTimeoutError,
-	getActiveScheduleWindow,
 	isWithinChargeScheduleWindow,
 	type ChargingSession,
 	type HomeChargerConfiguration,
-	type HomeChargerSchedule,
 	type HomeChargerStatus,
 	type TimeString,
 	type UserChargingStatus,
@@ -40,7 +38,6 @@ function calcTargetAmps(excessKw: number): number {
 
 interface IChargePointClient {
 	getHomeChargerStatus(chargerId: number): Promise<HomeChargerStatus>;
-	getHomeChargerSchedule(chargerId: number): Promise<HomeChargerSchedule>;
 	setAmperageLimit(chargerId: number, amps: number): Promise<void>;
 	startChargingSession(deviceId: number): Promise<ChargingSession>;
 	getHomeChargerTechnicalInfo(
@@ -304,10 +301,9 @@ export class SunkeepService {
 	}
 
 	private async tick(): Promise<void> {
-		const [chargerStatus, pwData, cpSchedule] = await Promise.all([
+		const [chargerStatus, pwData] = await Promise.all([
 			this.chargePoint.getHomeChargerStatus(this.config.chargePointDeviceId),
 			this.powerwall.getData(),
-			this.chargePoint.getHomeChargerSchedule(this.config.chargePointDeviceId),
 		]);
 
 		this.isPluggedIn = chargerStatus.isPluggedIn;
@@ -332,13 +328,10 @@ export class SunkeepService {
 			return;
 		}
 
-		const activeWindow = getActiveScheduleWindow(cpSchedule);
-		const inSolarWindow = activeWindow
-			? isWithinChargeScheduleWindow(activeWindow)
-			: isWithinChargeScheduleWindow({
-					startTime: this.config.solarWindowStart as TimeString,
-					endTime: this.config.solarWindowEnd as TimeString,
-				});
+		const inSolarWindow = isWithinChargeScheduleWindow({
+			startTime: this.config.solarWindowStart as TimeString,
+			endTime: this.config.solarWindowEnd as TimeString,
+		});
 		if (!inSolarWindow) {
 			if (this.state === SunkeepState.CHARGING) {
 				await this.stopActiveSession(StopReason.NIGHT_SAFETY);
