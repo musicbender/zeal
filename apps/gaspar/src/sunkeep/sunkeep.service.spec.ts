@@ -38,6 +38,7 @@ const mockCp = {
 	getHomeChargerStatus: vi.fn(),
 	setAmperageLimit: vi.fn().mockResolvedValue(undefined),
 	startChargingSession: vi.fn().mockResolvedValue(mockSession),
+	stopChargingSession: vi.fn().mockResolvedValue(undefined),
 	getHomeChargerTechnicalInfo: vi.fn().mockResolvedValue(mockTechInfo),
 	getHomeChargerConfig: vi.fn().mockResolvedValue(mockCpConfig),
 	getUserChargingStatus: vi.fn().mockResolvedValue(null),
@@ -980,32 +981,64 @@ describe('SunkeepService', () => {
 			);
 		});
 
-		it('does not adopt or start session when getUserChargingStatus returns null; enters WAITING', async () => {
-			// Regression: charger is physically charging (started by a schedule or via
-			// the app) but getUserChargingStatus returns null. Previously sunkeep would
-			// fall through to startSession(), hit a 422 "charger in use", and set state
-			// to ERROR. Use ample excess (5 kW) so the bug path is actually reached —
-			// an earlier version of this test used 0.5 kW excess which exited before
-			// startSession via the "Insufficient solar excess" guard.
-			mockCp.getUserChargingStatus.mockResolvedValueOnce(null);
-			mockPrisma.chargingEvent.findFirst.mockResolvedValue(null);
+		it('stops an auto-started session (getUserChargingStatus null) and enters WAITING; starts managed session next tick', async () => {
+			// Regression: charger auto-starts on plug-in. getUserChargingStatus returns
+			// null because the session is not API-initiated. Sunkeep should stop it and
+			// start its own managed session on the following tick.
+			// Use ample excess (5 kW) so the bug path is actually reached — an earlier
+			// version of this test used 0.5 kW excess which exited before startSession
+			// via the "Insufficient solar excess" guard.
 
+			// Tick 1: charger is auto-charging, adoption fails → stop it → WAITING
+			mockCp.getUserChargingStatus.mockResolvedValueOnce(null);
 			service.enable();
 			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValueOnce(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 15,
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 6.0, loadKw: 1.0 }));
+
+			await service.runTick();
+
+			expect(mockCp.stopChargingSession).toHaveBeenCalledWith(42);
+			expect(mockCp.startChargingSession).not.toHaveBeenCalled();
+			expect(mockPrisma.chargingEvent.create).not.toHaveBeenCalled();
+			expect(service.getStatus().activeSession).toBeNull();
+			expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+
+			// Tick 2: charger is now idle (we stopped it) → sunkeep starts managed session
+			mockCp.getHomeChargerStatus.mockResolvedValueOnce(pluggedInStatus());
+			await service.runTick();
+
+			expect(mockCp.startChargingSession).toHaveBeenCalledWith(42);
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+		});
+
+		it('falls back to WAITING when getUserChargingStatus is null and stopChargingSession is unavailable', async () => {
+			const cpWithoutStop = { ...mockCp, stopChargingSession: undefined };
+			const svc = new SunkeepService(
+				cpWithoutStop as any,
+				mockPw as any,
+				mockPrisma as any,
+				testConfig
+			);
+			svc.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getUserChargingStatus.mockResolvedValueOnce(null);
 			mockCp.getHomeChargerStatus.mockResolvedValue(
 				pluggedInStatus({
 					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
 				})
 			);
-			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 6.0, loadKw: 1.0 })); // 5 kW excess
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 6.0, loadKw: 1.0 }));
 
-			await service.runTick();
+			await svc.runTick();
 
-			expect(service.getStatus().activeSession).toBeNull();
 			expect(mockCp.startChargingSession).not.toHaveBeenCalled();
-			expect(mockPrisma.chargingEvent.create).not.toHaveBeenCalled();
-			expect(service.getStatus().state).toBe(SunkeepState.WAITING);
-			expect(service.getStatus().waitReason).toBe('Charger busy');
+			expect(svc.getStatus().state).toBe(SunkeepState.WAITING);
 		});
 
 		it('manualStartSession adopts an orphaned session instead of starting a new one', async () => {
