@@ -66,7 +66,7 @@ pnpm --filter fiendlord-keep-ui dev   # Next.js dev server on port 3002
 ### External Integrations
 
 - **Tesla Fleet API** → `apps/gaspar/src/sunkeep/tesla.client.ts` · see `.claude/skills/tesla-fleet-api.md`
-- **ChargePoint** → `apps/gaspar/src/sunkeep/` via `node-chargepoint` npm package · source at `../node-chargepoint` · see `.claude/skills/chargepoint.md`
+- **ChargePoint** → `apps/gaspar/src/sunkeep/` via `node-chargepoint` npm package · source at `../node-chargepoint` (GitHub: `musicbender/node-chargepoint`, **owned by Pat** — fixes go there, not just in gaspar) · see `.claude/skills/chargepoint.md`
 - **Discord** → `apps/worfbot-gateway` + `@repo/worfbot` · see `.claude/skills/discord.md` + `.claude/skills/worfbot.md`
 - **Hygraph CMS** → `@repo/remote-data/src/hygraph.ts`
 

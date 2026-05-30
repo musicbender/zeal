@@ -40,6 +40,7 @@ interface IChargePointClient {
 	getHomeChargerStatus(chargerId: number): Promise<HomeChargerStatus>;
 	setAmperageLimit(chargerId: number, amps: number): Promise<void>;
 	startChargingSession(deviceId: number): Promise<ChargingSession>;
+	stopChargingSession(deviceId: number): Promise<void>;
 	getHomeChargerTechnicalInfo(
 		chargerId: number
 	): Promise<{ softwareVersion: string; deviceIp: string }>;
@@ -58,10 +59,10 @@ interface IncompleteChargingEvent {
 interface IPrismaChargingEvent {
 	create(args: { data: Record<string, unknown> }): Promise<{ id: string }>;
 	update(args: { where: { id: string }; data: Record<string, unknown> }): Promise<unknown>;
-	findFirst(args: {
+	findMany(args: {
 		where: { stoppedAt: null };
 		orderBy: { startedAt: 'asc' | 'desc' };
-	}): Promise<IncompleteChargingEvent | null>;
+	}): Promise<IncompleteChargingEvent[]>;
 }
 
 interface IPrisma {
@@ -82,6 +83,7 @@ export class SunkeepService {
 	private chargerAmps: number | null = null;
 	private waitReason: string | null = null;
 	private isDuringScheduledTime: boolean | null = null;
+	private chargerChargingStatus: HomeChargerStatus['chargingStatus'] | null = null;
 
 	constructor(
 		private readonly chargePoint: IChargePointClient,
@@ -131,7 +133,11 @@ export class SunkeepService {
 				? this.lastPwData.solarKw -
 					this.lastPwData.loadKw +
 					Math.min(0, this.lastPwData.batteryKw ?? 0) +
-					(this.activeSession ? (this.currentAmps * VOLTAGE) / 1000 : 0)
+					(this.activeSession
+						? (this.currentAmps * VOLTAGE) / 1000
+						: this.chargerChargingStatus === 'CHARGING' && this.chargerAmps
+							? (this.chargerAmps * VOLTAGE) / 1000
+							: 0)
 				: null,
 			loadKw: this.lastPwData?.loadKw ?? null,
 			batteryPct: this.lastPwData?.batteryPct ?? null,
@@ -196,6 +202,7 @@ export class SunkeepService {
 		]);
 		this.isPluggedIn = chargerStatus.isPluggedIn;
 		this.chargerAmps = chargerStatus.amperageLimit;
+		this.chargerChargingStatus = chargerStatus.chargingStatus;
 		this.lastPwData = pwData;
 		if (chargerStatus.chargingStatus === 'CHARGING') {
 			await this.reconcileWithCharger(chargerStatus);
@@ -309,12 +316,23 @@ export class SunkeepService {
 		this.isPluggedIn = chargerStatus.isPluggedIn;
 		this.chargerAmps = chargerStatus.amperageLimit;
 		this.isDuringScheduledTime = chargerStatus.isDuringScheduledTime;
+		this.chargerChargingStatus = chargerStatus.chargingStatus;
 		this.lastPwData = pwData;
 
 		// Reconcile in-memory state with what the charger and database say.
 		// Handles process restarts that left a session running on the charger
 		// and/or an open ChargingEvent row in the DB.
 		await this.reconcileWithCharger(chargerStatus);
+
+		// Adoption failed — charger is delivering current but getUserChargingStatus
+		// returned null (session started by a schedule or via the ChargePoint app).
+		// Do not attempt to start a competing session; wait for the next tick to
+		// retry adoption once the session becomes visible in the API.
+		if (chargerStatus.chargingStatus === 'CHARGING' && !this.activeSession) {
+			this.state = SunkeepState.WAITING;
+			this.waitReason = 'Charger busy';
+			return;
+		}
 
 		// ChargePoint reports 'DONE' when the car reached its charge limit and stopped
 		// accepting current. Detect this before the solar window check so it takes
@@ -373,8 +391,15 @@ export class SunkeepService {
 
 		// Tesla load_power includes EV charging load; add it back so we measure solar excess
 		// available for the car rather than treating the car's own draw as a deficit.
-		const carKw = this.state === SunkeepState.CHARGING ? (this.currentAmps * VOLTAGE) / 1000 : 0;
-		const excessKw = pwData.solarKw - pwData.loadKw + carKw;
+		// When we have an adopted session use currentAmps (what we commanded); otherwise
+		// fall back to the charger's reported amperageLimit if it's actively charging.
+		const carAmps =
+			this.state === SunkeepState.CHARGING
+				? this.currentAmps
+				: chargerStatus.chargingStatus === 'CHARGING' && chargerStatus.amperageLimit
+					? chargerStatus.amperageLimit
+					: 0;
+		const excessKw = pwData.solarKw - pwData.loadKw + (carAmps * VOLTAGE) / 1000;
 
 		if (excessKw < MIN_EXCESS_KW) {
 			if (this.state === SunkeepState.CHARGING) {
@@ -437,9 +462,18 @@ export class SunkeepService {
 			return;
 		}
 		if (!userStatus) {
+			// Charger is delivering current but the session isn't visible via the
+			// user API — most likely an auto-start triggered on plug-in. Stop it so
+			// sunkeep can establish its own managed session on the next tick.
 			log.warn(
-				'Charger reports CHARGING but getUserChargingStatus returned null — skipping adoption'
+				'Charger reports CHARGING but getUserChargingStatus returned null — stopping auto-started session'
 			);
+			try {
+				await this.chargePoint.stopChargingSession(this.config.chargePointDeviceId);
+				log.info('Stopped auto-started session; managed session will start next tick');
+			} catch (err) {
+				log.warn({ err }, 'Failed to stop auto-started session — will retry next tick');
+			}
 			return;
 		}
 
@@ -452,47 +486,71 @@ export class SunkeepService {
 		}
 
 		const amps = chargerStatus.amperageLimit;
-		const incomplete = await this.prisma.chargingEvent
-			.findFirst({ where: { stoppedAt: null }, orderBy: { startedAt: 'desc' } })
+		const incompletes = await this.prisma.chargingEvent
+			.findMany({ where: { stoppedAt: null }, orderBy: { startedAt: 'desc' } })
 			.catch((err: unknown) => {
 				log.warn({ err }, 'Failed to look up incomplete ChargingEvent during adoption');
 				return null;
 			});
 
 		const now = new Date();
+		// The freshest open row is the most likely candidate to reuse; everything
+		// older is an orphaned row from a prior failed start — close them all now.
+		const freshest = incompletes?.[0] ?? null;
+		const extras = incompletes?.slice(1) ?? [];
+
+		if (extras.length > 0) {
+			await Promise.all(
+				extras.map((ev) =>
+					this.prisma.chargingEvent
+						.update({
+							where: { id: ev.id },
+							data: { stoppedAt: now, stopReason: StopReason.UNKNOWN, endAmps: ev.startAmps },
+						})
+						.catch((err: unknown) => {
+							log.warn({ err, eventId: ev.id }, 'Failed to close extra incomplete ChargingEvent');
+						})
+				)
+			);
+			log.info(
+				{ count: extras.length, eventIds: extras.map((e) => e.id) },
+				'Closed extra incomplete ChargingEvent(s) during adoption'
+			);
+		}
+
 		const isFresh =
-			incomplete !== null &&
-			now.getTime() - incomplete.startedAt.getTime() <= MAX_INCOMPLETE_EVENT_AGE_MS;
+			freshest !== null &&
+			now.getTime() - freshest.startedAt.getTime() <= MAX_INCOMPLETE_EVENT_AGE_MS;
 
 		let eventId: string;
 		let startedAt: Date;
 		let peakSolarKw: number;
-		if (isFresh && incomplete) {
-			eventId = incomplete.id;
-			startedAt = incomplete.startedAt;
-			peakSolarKw = incomplete.peakSolarKw ?? this.lastPwData?.solarKw ?? 0;
+		if (isFresh && freshest) {
+			eventId = freshest.id;
+			startedAt = freshest.startedAt;
+			peakSolarKw = freshest.peakSolarKw ?? this.lastPwData?.solarKw ?? 0;
 		} else {
 			// Either no DB row exists, or the existing one is too old to plausibly
 			// belong to the currently-active ChargePoint session. Close the stale
 			// row (if any) and start a fresh event keyed to the adoption moment.
-			if (incomplete) {
+			if (freshest) {
 				await this.prisma.chargingEvent
 					.update({
-						where: { id: incomplete.id },
+						where: { id: freshest.id },
 						data: {
 							stoppedAt: now,
 							stopReason: StopReason.UNKNOWN,
-							endAmps: incomplete.startAmps,
+							endAmps: freshest.startAmps,
 						},
 					})
 					.catch((err: unknown) => {
 						log.warn(
-							{ err, eventId: incomplete.id },
+							{ err, eventId: freshest.id },
 							'Failed to close stale ChargingEvent before fresh adoption'
 						);
 					});
 				log.info(
-					{ eventId: incomplete.id, ageMs: now.getTime() - incomplete.startedAt.getTime() },
+					{ eventId: freshest.id, ageMs: now.getTime() - freshest.startedAt.getTime() },
 					'Closed stale incomplete ChargingEvent (older than max age) before fresh adoption'
 				);
 			}
@@ -526,30 +584,35 @@ export class SunkeepService {
 	}
 
 	private async closeStaleIncompleteEvent(): Promise<void> {
-		const incomplete = await this.prisma.chargingEvent
-			.findFirst({ where: { stoppedAt: null }, orderBy: { startedAt: 'desc' } })
+		const incompletes = await this.prisma.chargingEvent
+			.findMany({ where: { stoppedAt: null }, orderBy: { startedAt: 'desc' } })
 			.catch((err: unknown) => {
 				log.warn({ err }, 'Failed to look up incomplete ChargingEvent during reconcile');
 				return null;
 			});
-		if (!incomplete) return;
+		if (!incompletes || incompletes.length === 0) return;
 
-		try {
-			await this.prisma.chargingEvent.update({
-				where: { id: incomplete.id },
-				data: {
-					stoppedAt: new Date(),
-					stopReason: StopReason.UNKNOWN,
-					endAmps: incomplete.startAmps,
-				},
-			});
-			log.info(
-				{ eventId: incomplete.id },
-				'Closed stale incomplete ChargingEvent (charger no longer charging)'
-			);
-		} catch (err) {
-			log.warn({ err, eventId: incomplete.id }, 'Failed to close stale ChargingEvent');
-		}
+		const now = new Date();
+		await Promise.all(
+			incompletes.map((incomplete) =>
+				this.prisma.chargingEvent
+					.update({
+						where: { id: incomplete.id },
+						data: {
+							stoppedAt: now,
+							stopReason: StopReason.UNKNOWN,
+							endAmps: incomplete.startAmps,
+						},
+					})
+					.catch((err: unknown) => {
+						log.warn({ err, eventId: incomplete.id }, 'Failed to close stale ChargingEvent');
+					})
+			)
+		);
+		log.info(
+			{ count: incompletes.length, eventIds: incompletes.map((e) => e.id) },
+			'Closed stale incomplete ChargingEvent(s) (charger no longer charging)'
+		);
 	}
 
 	private async startSession(targetAmps: number): Promise<void> {

@@ -54,6 +54,7 @@ await client.setAmperageLimit(chargerId: number, amperage: number): Promise<void
 
 // Sessions
 await client.startChargingSession(deviceId: number, options?: StartSessionOptions): Promise<ChargingSession>
+await client.stopChargingSession(deviceId: number): Promise<void>  // stops active session by device ID, no session object needed (added 0.8.0)
 await client.getChargingSession(sessionId: number): Promise<ChargingSession>
 await client.getUserChargingStatus(): Promise<UserChargingStatus | null>
 ```
