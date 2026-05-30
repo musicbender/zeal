@@ -64,7 +64,7 @@ const mockPrisma = {
 	chargingEvent: {
 		create: vi.fn().mockResolvedValue({ id: 'event-1' }),
 		update: vi.fn().mockResolvedValue({}),
-		findFirst: vi.fn().mockResolvedValue(null),
+		findMany: vi.fn().mockResolvedValue([]),
 	},
 };
 
@@ -800,12 +800,14 @@ describe('SunkeepService', () => {
 
 		it('adopts an orphaned session using the incomplete DB event when the process restarts mid-charge', async () => {
 			const startedAt = new Date('2026-05-23T10:00:00Z');
-			mockPrisma.chargingEvent.findFirst.mockResolvedValueOnce({
-				id: 'event-orphan',
-				startedAt,
-				startAmps: 21,
-				peakSolarKw: 7.2,
-			});
+			mockPrisma.chargingEvent.findMany.mockResolvedValueOnce([
+				{
+					id: 'event-orphan',
+					startedAt,
+					startAmps: 21,
+					peakSolarKw: 7.2,
+				},
+			]);
 			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
 
 			service.enable(); // fresh process: state = IDLE, activeSession = null
@@ -838,12 +840,14 @@ describe('SunkeepService', () => {
 		});
 
 		it('resumes amp adjustment after adopting an orphaned session (regression: previous bug left amps stuck)', async () => {
-			mockPrisma.chargingEvent.findFirst.mockResolvedValueOnce({
-				id: 'event-orphan',
-				startedAt: new Date('2026-05-23T10:00:00Z'),
-				startAmps: 21,
-				peakSolarKw: 7.2,
-			});
+			mockPrisma.chargingEvent.findMany.mockResolvedValueOnce([
+				{
+					id: 'event-orphan',
+					startedAt: new Date('2026-05-23T10:00:00Z'),
+					startAmps: 21,
+					peakSolarKw: 7.2,
+				},
+			]);
 			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
 
 			service.enable();
@@ -869,12 +873,14 @@ describe('SunkeepService', () => {
 			// Simulate a session row left over from days ago. The charger has since
 			// started a new session, but we should NOT inherit the ancient startedAt.
 			const ancientStartedAt = new Date(NOON.getTime() - 72 * 60 * 60 * 1000); // 3 days before NOON
-			mockPrisma.chargingEvent.findFirst.mockResolvedValueOnce({
-				id: 'event-ancient',
-				startedAt: ancientStartedAt,
-				startAmps: 16,
-				peakSolarKw: 4.0,
-			});
+			mockPrisma.chargingEvent.findMany.mockResolvedValueOnce([
+				{
+					id: 'event-ancient',
+					startedAt: ancientStartedAt,
+					startAmps: 16,
+					peakSolarKw: 4.0,
+				},
+			]);
 			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
 
 			service.enable();
@@ -907,12 +913,14 @@ describe('SunkeepService', () => {
 
 		it('reuses an open event that is just under the 12h threshold (preserves startedAt)', async () => {
 			const recentStartedAt = new Date(NOON.getTime() - 11 * 60 * 60 * 1000); // 11h before NOON
-			mockPrisma.chargingEvent.findFirst.mockResolvedValueOnce({
-				id: 'event-recent',
-				startedAt: recentStartedAt,
-				startAmps: 21,
-				peakSolarKw: 7.0,
-			});
+			mockPrisma.chargingEvent.findMany.mockResolvedValueOnce([
+				{
+					id: 'event-recent',
+					startedAt: recentStartedAt,
+					startAmps: 21,
+					peakSolarKw: 7.0,
+				},
+			]);
 			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
 
 			service.enable();
@@ -934,7 +942,7 @@ describe('SunkeepService', () => {
 		});
 
 		it('creates a new ChargingEvent when charger is charging but DB has no incomplete event', async () => {
-			mockPrisma.chargingEvent.findFirst.mockResolvedValueOnce(null);
+			mockPrisma.chargingEvent.findMany.mockResolvedValueOnce([]);
 			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
 
 			service.enable();
@@ -955,12 +963,14 @@ describe('SunkeepService', () => {
 		});
 
 		it('closes a stale incomplete ChargingEvent when charger is not charging', async () => {
-			mockPrisma.chargingEvent.findFirst.mockResolvedValueOnce({
-				id: 'event-stale',
-				startedAt: new Date('2026-05-23T09:00:00Z'),
-				startAmps: 16,
-				peakSolarKw: 5.0,
-			});
+			mockPrisma.chargingEvent.findMany.mockResolvedValueOnce([
+				{
+					id: 'event-stale',
+					startedAt: new Date('2026-05-23T09:00:00Z'),
+					startAmps: 16,
+					peakSolarKw: 5.0,
+				},
+			]);
 
 			service.enable();
 			vi.setSystemTime(NOON);
@@ -979,6 +989,115 @@ describe('SunkeepService', () => {
 					data: expect.objectContaining({ stopReason: StopReason.UNKNOWN }),
 				})
 			);
+		});
+
+		it('closes ALL multiple orphaned open events when charger is not charging', async () => {
+			// Regression: previously only the most-recent open event was closed per tick.
+			// Now all stale open rows must be closed in a single pass.
+			mockPrisma.chargingEvent.findMany.mockResolvedValueOnce([
+				{
+					id: 'event-c',
+					startedAt: new Date('2026-05-23T09:30:00Z'),
+					startAmps: 24,
+					peakSolarKw: null,
+				},
+				{
+					id: 'event-b',
+					startedAt: new Date('2026-05-23T09:20:00Z'),
+					startAmps: 8,
+					peakSolarKw: null,
+				},
+				{
+					id: 'event-a',
+					startedAt: new Date('2026-05-23T09:10:00Z'),
+					startAmps: 15,
+					peakSolarKw: null,
+				},
+			]);
+
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({ chargingStatus: 'NOT_CHARGING' as HomeChargerStatus['chargingStatus'] })
+			);
+			mockPw.getData.mockResolvedValue(goodPwData());
+
+			await service.runTick();
+
+			// All three rows should be closed
+			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledTimes(3);
+			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
+				expect.objectContaining({
+					where: { id: 'event-a' },
+					data: expect.objectContaining({ stopReason: StopReason.UNKNOWN }),
+				})
+			);
+			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
+				expect.objectContaining({
+					where: { id: 'event-b' },
+					data: expect.objectContaining({ stopReason: StopReason.UNKNOWN }),
+				})
+			);
+			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
+				expect.objectContaining({
+					where: { id: 'event-c' },
+					data: expect.objectContaining({ stopReason: StopReason.UNKNOWN }),
+				})
+			);
+		});
+
+		it('closes extra orphaned open events during adoption, reusing only the freshest', async () => {
+			// Regression: multiple open rows accumulated from previous failed starts.
+			// During adoption the freshest should be reused; all older ones must be closed.
+			const freshStartedAt = new Date(NOON.getTime() - 30 * 60 * 1000); // 30 min ago
+			mockPrisma.chargingEvent.findMany.mockResolvedValueOnce([
+				{ id: 'event-fresh', startedAt: freshStartedAt, startAmps: 15, peakSolarKw: null },
+				{
+					id: 'event-old-1',
+					startedAt: new Date(NOON.getTime() - 60 * 60 * 1000),
+					startAmps: 8,
+					peakSolarKw: null,
+				},
+				{
+					id: 'event-old-2',
+					startedAt: new Date(NOON.getTime() - 90 * 60 * 1000),
+					startAmps: 15,
+					peakSolarKw: null,
+				},
+			]);
+			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
+
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 16,
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 5.0, loadKw: 4.5 }));
+
+			await service.runTick();
+
+			// The two older rows should be closed
+			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
+				expect.objectContaining({
+					where: { id: 'event-old-1' },
+					data: expect.objectContaining({ stopReason: StopReason.UNKNOWN }),
+				})
+			);
+			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
+				expect.objectContaining({
+					where: { id: 'event-old-2' },
+					data: expect.objectContaining({ stopReason: StopReason.UNKNOWN }),
+				})
+			);
+			// The freshest row should be reused (no create, no update for event-fresh)
+			expect(mockPrisma.chargingEvent.create).not.toHaveBeenCalled();
+			const updateCalls = (mockPrisma.chargingEvent.update as ReturnType<typeof vi.fn>).mock.calls;
+			expect(updateCalls.every((c: any[]) => c[0].where.id !== 'event-fresh')).toBe(true);
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+			expect(service.getStatus().activeSession?.sessionId).toBe(7777);
 		});
 
 		it('stops an auto-started session (getUserChargingStatus null) and enters WAITING; starts managed session next tick', async () => {
@@ -1019,12 +1138,14 @@ describe('SunkeepService', () => {
 
 		it('manualStartSession adopts an orphaned session instead of starting a new one', async () => {
 			const startedAt = new Date('2026-05-23T10:00:00Z');
-			mockPrisma.chargingEvent.findFirst.mockResolvedValueOnce({
-				id: 'event-orphan',
-				startedAt,
-				startAmps: 24,
-				peakSolarKw: 8.0,
-			});
+			mockPrisma.chargingEvent.findMany.mockResolvedValueOnce([
+				{
+					id: 'event-orphan',
+					startedAt,
+					startAmps: 24,
+					peakSolarKw: 8.0,
+				},
+			]);
 			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
 
 			service.enable();
