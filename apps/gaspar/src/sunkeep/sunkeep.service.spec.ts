@@ -1100,6 +1100,161 @@ describe('SunkeepService', () => {
 			expect(service.getStatus().activeSession?.sessionId).toBe(7777);
 		});
 
+		it('retries adoption next tick when session we started is not yet visible via getUserChargingStatus', async () => {
+			// After StartVerificationTimeoutError sets activeEventId but no activeSession,
+			// the next tick must NOT try to stop our own session just because
+			// getUserChargingStatus returns null. It should keep CHARGING state and
+			// retry adoption once the session propagates.
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+
+			// Tick 1: start session, verification times out but charger confirms charging
+			mockCp.getHomeChargerStatus.mockResolvedValueOnce(pluggedInStatus());
+			mockCp.startChargingSession.mockRejectedValueOnce(
+				new StartVerificationTimeoutError(42, 15000, 8, true)
+			);
+			await service.runTick();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+
+			// Tick 2: charger still reports CHARGING, user-status API still null
+			// → should NOT stop our session; should stay CHARGING
+			mockCp.getUserChargingStatus.mockResolvedValueOnce(null);
+			mockCp.getHomeChargerStatus.mockResolvedValueOnce(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 12,
+				})
+			);
+			await service.runTick();
+
+			expect(mockCp.stopChargingSession).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+			expect(service.getStatus().waitReason).toBeNull();
+		});
+
+		it('completes adoption on the tick when getUserChargingStatus starts returning the session', async () => {
+			// After the timeout path leaves us without activeSession, the session
+			// should be fully adopted once getUserChargingStatus propagates.
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+
+			// Tick 1: timeout path — activeEventId set, no activeSession
+			mockCp.getHomeChargerStatus.mockResolvedValueOnce(pluggedInStatus());
+			mockCp.startChargingSession.mockRejectedValueOnce(
+				new StartVerificationTimeoutError(42, 15000, 8, true)
+			);
+			await service.runTick();
+
+			// Tick 2: getUserChargingStatus now returns the session
+			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
+			mockCp.getHomeChargerStatus.mockResolvedValueOnce(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 12,
+				})
+			);
+			await service.runTick();
+
+			expect(service.getStatus().activeSession?.sessionId).toBe(7777);
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+		});
+
+		it('closes event and resets state when charger stops for an unconfirmed session (timeout path + external stop)', async () => {
+			// StartVerificationTimeoutError leaves activeEventId but no activeSession.
+			// If the charger then stops (user stopped via app), reconcile should close
+			// the event and let tick() re-evaluate conditions rather than getting stuck.
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+
+			// Tick 1: timeout path — state=CHARGING, activeEventId set, no activeSession
+			mockCp.getHomeChargerStatus.mockResolvedValueOnce(pluggedInStatus());
+			mockCp.startChargingSession.mockRejectedValueOnce(
+				new StartVerificationTimeoutError(42, 15000, 8, true)
+			);
+			await service.runTick();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+
+			// Tick 2: charger now confirms CHARGING (session propagated, adoption retries)
+			mockCp.getUserChargingStatus.mockResolvedValueOnce(null);
+			mockCp.getHomeChargerStatus.mockResolvedValueOnce(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 12,
+				})
+			);
+			await service.runTick();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+
+			// Tick 3: user stopped via app — charger now NOT_CHARGING; low excess so we'd wait
+			// (getUserChargingStatus is NOT called in Case 3 path — don't mock it here)
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 1.8, loadKw: 1.5 }));
+			mockCp.getHomeChargerStatus.mockResolvedValueOnce(
+				pluggedInStatus({
+					chargingStatus: 'NOT_CHARGING' as HomeChargerStatus['chargingStatus'],
+					isPluggedIn: true,
+				})
+			);
+			await service.runTick();
+
+			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
+				expect.objectContaining({
+					data: expect.objectContaining({ stopReason: StopReason.UNKNOWN }),
+				})
+			);
+			// State should reflect solar conditions, not be stuck on a stale reason
+			expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+			expect(service.getStatus().waitReason).toBe('Insufficient solar excess');
+		});
+
+		it('closes session and resets state when user stops charging via CP app while session is active', async () => {
+			// User stops charging manually via the CP app. The charger transitions to
+			// NOT_CHARGING while sunkeep still holds an activeSession. reconcileWithCharger
+			// should detect this and close the session so tick() can re-evaluate conditions.
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+
+			// Tick 1: normal session started
+			mockCp.getHomeChargerStatus.mockResolvedValueOnce(pluggedInStatus());
+			await service.runTick();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+
+			// Tick 2: charger confirms CHARGING (session running; chargerConfirmedCurrentSession set)
+			mockCp.getHomeChargerStatus.mockResolvedValueOnce(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 12,
+				})
+			);
+			await service.runTick();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+
+			// Tick 3: user stopped via app — charger NOT_CHARGING, still plugged in
+			// Low excess so tick() re-evaluates to "Insufficient solar excess"
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 1.8, loadKw: 1.5 }));
+			mockCp.getHomeChargerStatus.mockResolvedValueOnce(
+				pluggedInStatus({
+					chargingStatus: 'NOT_CHARGING' as HomeChargerStatus['chargingStatus'],
+					isPluggedIn: true,
+				})
+			);
+			await service.runTick();
+
+			expect(mockSession.stop).toHaveBeenCalled();
+			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
+				expect.objectContaining({
+					data: expect.objectContaining({ stopReason: StopReason.UNKNOWN }),
+				})
+			);
+			expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+			expect(service.getStatus().waitReason).toBe('Insufficient solar excess');
+			// Should NOT show a stale solar-window reason
+			expect(service.getStatus().waitReason).not.toBe('Outside solar window');
+		});
+
 		it('stops an auto-started session (getUserChargingStatus null) and enters WAITING; starts managed session next tick', async () => {
 			// Regression: charger auto-starts on plug-in. getUserChargingStatus returns
 			// null because the session is not API-initiated. Sunkeep should stop it and

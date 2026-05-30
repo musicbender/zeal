@@ -84,6 +84,10 @@ export class SunkeepService {
 	private waitReason: string | null = null;
 	private isDuringScheduledTime: boolean | null = null;
 	private chargerChargingStatus: HomeChargerStatus['chargingStatus'] | null = null;
+	// True once we observe the charger as CHARGING for the current session; reset on
+	// session stop and on new session start. Guards external-stop detection in
+	// reconcileWithCharger so it doesn't misfire before the charger status propagates.
+	private chargerConfirmedCurrentSession = false;
 
 	constructor(
 		private readonly chargePoint: IChargePointClient,
@@ -318,17 +322,21 @@ export class SunkeepService {
 		this.isDuringScheduledTime = chargerStatus.isDuringScheduledTime;
 		this.chargerChargingStatus = chargerStatus.chargingStatus;
 		this.lastPwData = pwData;
+		if (chargerStatus.chargingStatus === 'CHARGING' && (this.activeSession || this.activeEventId)) {
+			this.chargerConfirmedCurrentSession = true;
+		}
 
 		// Reconcile in-memory state with what the charger and database say.
 		// Handles process restarts that left a session running on the charger
 		// and/or an open ChargingEvent row in the DB.
 		await this.reconcileWithCharger(chargerStatus);
 
-		// Adoption failed — charger is delivering current but getUserChargingStatus
-		// returned null (session started by a schedule or via the ChargePoint app).
-		// Do not attempt to start a competing session; wait for the next tick to
-		// retry adoption once the session becomes visible in the API.
-		if (chargerStatus.chargingStatus === 'CHARGING' && !this.activeSession) {
+		// Adoption failed for an unknown session (no activeEventId means we didn't
+		// start it). Do not attempt to start a competing session; wait for the next
+		// tick to retry adoption or for the stop attempt to take effect.
+		// When activeEventId IS set, we started this session and are just waiting
+		// for getUserChargingStatus to propagate — continue in CHARGING state.
+		if (chargerStatus.chargingStatus === 'CHARGING' && !this.activeSession && !this.activeEventId) {
 			this.state = SunkeepState.WAITING;
 			this.waitReason = 'Charger busy';
 			return;
@@ -444,10 +452,45 @@ export class SunkeepService {
 			return;
 		}
 
-		// Case 2: Charger is NOT charging but the DB still has an open
-		// ChargingEvent (no stoppedAt). The session ended outside our awareness
-		// (e.g. crash between session.stop() and the DB update). Close the row
-		// so it doesn't linger as a phantom in-progress event.
+		// Case 2: Charger stopped externally while we still hold a session handle.
+		// Exclude DONE (tick's dedicated handler records CAR_FULL) and unplugged
+		// (tick's isPluggedIn check records UNPLUGGED) so those stop reasons are
+		// preserved; this branch handles manual stops via the ChargePoint app.
+		// Guard on chargerConfirmedCurrentSession so we don't misfire before the
+		// charger status reflects our newly-started session.
+		if (
+			!chargerIsCharging &&
+			this.activeSession &&
+			chargerStatus.isPluggedIn &&
+			chargerStatus.chargingStatus !== 'DONE' &&
+			this.chargerConfirmedCurrentSession
+		) {
+			log.info('Charger stopped while session was active — closing session record');
+			await this.stopActiveSession(StopReason.UNKNOWN);
+			this.state = SunkeepState.IDLE;
+			this.waitReason = null;
+			return;
+		}
+
+		// Case 3: Charger stopped and we have an open event but no session handle.
+		// Occurs when StartVerificationTimeoutError left an activeEventId without a
+		// session object and the charger has since stopped (e.g. user stopped via app).
+		// Guard on chargerConfirmedCurrentSession for the same reason as Case 2.
+		if (
+			!chargerIsCharging &&
+			!this.activeSession &&
+			this.activeEventId &&
+			this.chargerConfirmedCurrentSession
+		) {
+			log.info('Charger stopped for unconfirmed session — closing event record');
+			await this.stopActiveSession(StopReason.UNKNOWN);
+			this.state = SunkeepState.IDLE;
+			this.waitReason = null;
+			return;
+		}
+
+		// Case 4: Charger not charging and no active state — close any lingering DB
+		// events that outlived a prior process crash.
 		if (!chargerIsCharging && !this.activeSession) {
 			await this.closeStaleIncompleteEvent();
 		}
@@ -462,9 +505,18 @@ export class SunkeepService {
 			return;
 		}
 		if (!userStatus) {
-			// Charger is delivering current but the session isn't visible via the
-			// user API — most likely an auto-start triggered on plug-in. Stop it so
-			// sunkeep can establish its own managed session on the next tick.
+			if (this.activeEventId) {
+				// We started this session; the user-status API hasn't caught up yet.
+				// Keep CHARGING state and retry adoption on the next tick rather than
+				// trying to stop our own session (which would fail with error 165).
+				log.warn(
+					'Session we started is not yet visible via getUserChargingStatus — retrying adoption next tick'
+				);
+				this.state = SunkeepState.CHARGING;
+				return;
+			}
+			// Unknown session — most likely an auto-start triggered on plug-in.
+			// Stop it so sunkeep can establish its own managed session next tick.
 			log.warn(
 				'Charger reports CHARGING but getUserChargingStatus returned null — stopping auto-started session'
 			);
@@ -572,6 +624,7 @@ export class SunkeepService {
 		this.sessionStartedAt = startedAt;
 		this.state = SunkeepState.CHARGING;
 		this.waitReason = null;
+		this.chargerConfirmedCurrentSession = true;
 		log.info(
 			{
 				eventId,
@@ -645,6 +698,7 @@ export class SunkeepService {
 				this.peakSolarKw = this.lastPwData?.solarKw ?? 0;
 				this.sessionStartedAt = startedAt;
 				this.state = SunkeepState.CHARGING;
+				this.chargerConfirmedCurrentSession = false;
 				log.warn(
 					{ targetAmps, eventId: event.id, pollAttempts: err.pollAttempts },
 					'ChargePoint user-status poll timed out but charger reports CHARGING; treating as success'
@@ -667,6 +721,7 @@ export class SunkeepService {
 		this.peakSolarKw = this.lastPwData?.solarKw ?? 0;
 		this.sessionStartedAt = startedAt;
 		this.state = SunkeepState.CHARGING;
+		this.chargerConfirmedCurrentSession = false;
 		log.info(
 			{ targetAmps, sessionId: session.sessionId, eventId: event.id },
 			'Charging session started'
@@ -674,14 +729,20 @@ export class SunkeepService {
 	}
 
 	private async stopActiveSession(reason: StopReason): Promise<void> {
-		if (!this.activeSession || !this.activeEventId) return;
+		if (!this.activeEventId) return;
 
 		const session = this.activeSession;
 		const eventId = this.activeEventId;
 		const endAmps = this.currentAmps;
 
 		try {
-			await session.stop();
+			if (session) {
+				await session.stop();
+			} else {
+				// activeEventId set but no session handle (StartVerificationTimeoutError path) —
+				// stop by device ID as fallback; may 165 if charger already idle, which is fine.
+				await this.chargePoint.stopChargingSession(this.config.chargePointDeviceId);
+			}
 		} catch (err) {
 			log.warn({ err }, 'Error stopping ChargePoint session');
 		}
@@ -693,19 +754,20 @@ export class SunkeepService {
 					stoppedAt: new Date(),
 					stopReason: reason,
 					endAmps,
-					energyKwh: session.energyKwh,
+					energyKwh: session?.energyKwh ?? null,
 				},
 			});
 		} catch (err) {
 			log.error({ err }, 'Failed to update ChargingEvent on session stop');
 		}
 
-		log.info({ reason, sessionId: session.sessionId }, 'Charging session stopped');
+		log.info({ reason, sessionId: session?.sessionId ?? null }, 'Charging session stopped');
 		this.activeSession = null;
 		this.activeEventId = null;
 		this.currentAmps = 0;
 		this.peakSolarKw = 0;
 		this.sessionStartedAt = null;
 		this.lockedAmps = null;
+		this.chargerConfirmedCurrentSession = false;
 	}
 }
