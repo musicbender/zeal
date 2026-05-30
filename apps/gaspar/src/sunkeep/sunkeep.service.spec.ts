@@ -960,7 +960,13 @@ describe('SunkeepService', () => {
 			);
 		});
 
-		it('does not adopt when getUserChargingStatus returns null', async () => {
+		it('does not adopt or start session when getUserChargingStatus returns null; enters WAITING', async () => {
+			// Regression: charger is physically charging (started by a schedule or via
+			// the app) but getUserChargingStatus returns null. Previously sunkeep would
+			// fall through to startSession(), hit a 422 "charger in use", and set state
+			// to ERROR. Use ample excess (5 kW) so the bug path is actually reached —
+			// an earlier version of this test used 0.5 kW excess which exited before
+			// startSession via the "Insufficient solar excess" guard.
 			mockCp.getUserChargingStatus.mockResolvedValueOnce(null);
 			mockPrisma.chargingEvent.findFirst.mockResolvedValue(null);
 
@@ -971,12 +977,15 @@ describe('SunkeepService', () => {
 					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
 				})
 			);
-			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 6.0, loadKw: 5.5 }));
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 6.0, loadKw: 1.0 })); // 5 kW excess
 
 			await service.runTick();
 
 			expect(service.getStatus().activeSession).toBeNull();
+			expect(mockCp.startChargingSession).not.toHaveBeenCalled();
 			expect(mockPrisma.chargingEvent.create).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+			expect(service.getStatus().waitReason).toBe('Charger busy');
 		});
 
 		it('manualStartSession adopts an orphaned session instead of starting a new one', async () => {
