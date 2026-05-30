@@ -40,8 +40,7 @@ interface IChargePointClient {
 	getHomeChargerStatus(chargerId: number): Promise<HomeChargerStatus>;
 	setAmperageLimit(chargerId: number, amps: number): Promise<void>;
 	startChargingSession(deviceId: number): Promise<ChargingSession>;
-	// Optional until node-chargepoint ships stopChargingSession(deviceId)
-	stopChargingSession?(deviceId: number): Promise<void>;
+	stopChargingSession(deviceId: number): Promise<void>;
 	getHomeChargerTechnicalInfo(
 		chargerId: number
 	): Promise<{ softwareVersion: string; deviceIp: string }>;
@@ -466,20 +465,14 @@ export class SunkeepService {
 			// Charger is delivering current but the session isn't visible via the
 			// user API — most likely an auto-start triggered on plug-in. Stop it so
 			// sunkeep can establish its own managed session on the next tick.
-			if (this.chargePoint.stopChargingSession) {
-				log.warn(
-					'Charger reports CHARGING but getUserChargingStatus returned null — stopping auto-started session'
-				);
-				try {
-					await this.chargePoint.stopChargingSession(this.config.chargePointDeviceId);
-					log.info('Stopped auto-started session; managed session will start next tick');
-				} catch (err) {
-					log.warn({ err }, 'Failed to stop auto-started session — will retry next tick');
-				}
-			} else {
-				log.warn(
-					'Charger reports CHARGING but getUserChargingStatus returned null — skipping adoption (upgrade node-chargepoint for auto-stop)'
-				);
+			log.warn(
+				'Charger reports CHARGING but getUserChargingStatus returned null — stopping auto-started session'
+			);
+			try {
+				await this.chargePoint.stopChargingSession(this.config.chargePointDeviceId);
+				log.info('Stopped auto-started session; managed session will start next tick');
+			} catch (err) {
+				log.warn({ err }, 'Failed to stop auto-started session — will retry next tick');
 			}
 			return;
 		}

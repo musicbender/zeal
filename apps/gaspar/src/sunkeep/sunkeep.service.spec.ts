@@ -1017,30 +1017,6 @@ describe('SunkeepService', () => {
 			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
 		});
 
-		it('falls back to WAITING when getUserChargingStatus is null and stopChargingSession is unavailable', async () => {
-			const cpWithoutStop = { ...mockCp, stopChargingSession: undefined };
-			const svc = new SunkeepService(
-				cpWithoutStop as any,
-				mockPw as any,
-				mockPrisma as any,
-				testConfig
-			);
-			svc.enable();
-			vi.setSystemTime(NOON);
-			mockCp.getUserChargingStatus.mockResolvedValueOnce(null);
-			mockCp.getHomeChargerStatus.mockResolvedValue(
-				pluggedInStatus({
-					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
-				})
-			);
-			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 6.0, loadKw: 1.0 }));
-
-			await svc.runTick();
-
-			expect(mockCp.startChargingSession).not.toHaveBeenCalled();
-			expect(svc.getStatus().state).toBe(SunkeepState.WAITING);
-		});
-
 		it('manualStartSession adopts an orphaned session instead of starting a new one', async () => {
 			const startedAt = new Date('2026-05-23T10:00:00Z');
 			mockPrisma.chargingEvent.findFirst.mockResolvedValueOnce({
