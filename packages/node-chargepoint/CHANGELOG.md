@@ -1,6 +1,15 @@
-## [v0.7.0](https://github.com/musicbender/node-chargepoint/releases/tag/v0.7.0) — 2026-05-25
+## [v0.8.0](https://github.com/musicbender/node-chargepoint/releases/tag/v0.8.0) — 2026-05-30
 
-<!-- Release notes generated using configuration in .github/release.yml at v0.7.0 -->
+<!-- Release notes generated using configuration in .github/release.yml at v0.8.0 -->
+
+## What's Changed
+### New Features
+* Add stopChargingSession(deviceId) and ChargerBusyError by @musicbender in https://github.com/musicbender/node-chargepoint/pull/29
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.7.0...v0.8.0
+
+---
 
 ## What's Changed
 ### New Features
