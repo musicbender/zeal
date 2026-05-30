@@ -34,6 +34,14 @@ export class InvalidSession extends CommunicationError {
   }
 }
 
+export class ChargerBusyError extends CommunicationError {
+  constructor(message = 'Charger is busy.', body?: unknown) {
+    super(422, message, body);
+    this.name = 'ChargerBusyError';
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
 export class DatadomeCaptcha extends APIError {
   constructor(
     public readonly captchaUrl: string,

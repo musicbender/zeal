@@ -5,6 +5,7 @@ export { isWithinChargeScheduleWindow, getActiveScheduleWindow } from './utils.j
 
 export {
   APIError,
+  ChargerBusyError,
   CommunicationError,
   DatadomeCaptcha,
   InvalidSession,

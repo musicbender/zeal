@@ -250,14 +250,19 @@ if (status) {
 #### Starting and stopping a session
 
 ```typescript
-// Stop the current session
+// Start a new session on any device
+const newSession = await client.startChargingSession(deviceId);
+console.log(newSession.sessionId);
+
+// Stop by device ID — no session object needed
+await client.stopChargingSession(deviceId);
+
+// Or stop via a session object
 const session = await client.getChargingSession(status.sessionId);
 await session.stop();
-
-// Start a new session on any device
-const newSession = await client.startChargingSession(chargerId);
-console.log(newSession.sessionId);
 ```
+
+`stopChargingSession(deviceId)` is the device-level stop symmetric with `startChargingSession`. It stops the active session on the device without requiring you to fetch a session first. If the charger is currently busy (e.g. mid-handshake), a `ChargerBusyError` is thrown — see [Error Handling](docs/error-handling.md).
 
 ---
 

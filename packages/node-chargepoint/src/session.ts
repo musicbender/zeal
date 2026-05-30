@@ -1,5 +1,5 @@
 import type { ChargePoint } from './client.js';
-import { CommunicationError, StartVerificationTimeoutError } from './exceptions.js';
+import { ChargerBusyError, CommunicationError, StartVerificationTimeoutError } from './exceptions.js';
 import type { ChargingSessionUpdate, ChargingStatus, PowerUtility, StartSessionOptions, VehicleInfo } from './types.js';
 
 const sleep = (ms: number): Promise<void> =>
@@ -29,10 +29,21 @@ async function sendCommand(
   });
 
   if (!response.ok) {
-    const text = await response.text();
+    let cmdBody: unknown;
+    try {
+      cmdBody = await response.json();
+    } catch {
+      cmdBody = await response.text();
+    }
+    if (response.status === 422 && (cmdBody as RawObj)?.errorId === 89) {
+      const msg = typeof (cmdBody as RawObj)?.errorMessage === 'string'
+        ? (cmdBody as RawObj).errorMessage as string
+        : undefined;
+      throw new ChargerBusyError(msg, cmdBody);
+    }
     throw new CommunicationError(
       response.status,
-      `Failed to ${action} ChargePoint session: ${text}`,
+      `Failed to ${action} ChargePoint session: ${typeof cmdBody === 'string' ? cmdBody : JSON.stringify(cmdBody)}`,
     );
   }
 
@@ -63,6 +74,15 @@ async function sendCommand(
       if (typeof msg === 'string') errorMessage = msg;
     } catch {
       errorBody = undefined;
+    }
+
+    if (ackResponse.status === 422 && (errorBody as RawObj)?.errorId === 89) {
+      throw new ChargerBusyError(
+        typeof (errorBody as RawObj)?.errorMessage === 'string'
+          ? (errorBody as RawObj).errorMessage as string
+          : undefined,
+        errorBody,
+      );
     }
 
     if (attempt < 20) {
@@ -221,6 +241,10 @@ export class ChargingSession {
       this.outletNumber,
       this.sessionId,
     );
+  }
+
+  static async stopByDevice(deviceId: number, client: ChargePoint): Promise<void> {
+    await sendCommand(client, 'stop', deviceId);
   }
 
   static async start(

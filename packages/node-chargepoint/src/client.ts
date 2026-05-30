@@ -527,6 +527,10 @@ export class ChargePoint {
     return ChargingSession.start(deviceId, this, options);
   }
 
+  async stopChargingSession(deviceId: number): Promise<void> {
+    await ChargingSession.stopByDevice(deviceId, this);
+  }
+
   // ---------------------------------------------------------------------------
   // Stations
   // ---------------------------------------------------------------------------
