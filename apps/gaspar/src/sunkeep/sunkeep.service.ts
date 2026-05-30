@@ -82,6 +82,7 @@ export class SunkeepService {
 	private chargerAmps: number | null = null;
 	private waitReason: string | null = null;
 	private isDuringScheduledTime: boolean | null = null;
+	private chargerChargingStatus: HomeChargerStatus['chargingStatus'] | null = null;
 
 	constructor(
 		private readonly chargePoint: IChargePointClient,
@@ -131,7 +132,11 @@ export class SunkeepService {
 				? this.lastPwData.solarKw -
 					this.lastPwData.loadKw +
 					Math.min(0, this.lastPwData.batteryKw ?? 0) +
-					(this.activeSession ? (this.currentAmps * VOLTAGE) / 1000 : 0)
+					(this.activeSession
+						? (this.currentAmps * VOLTAGE) / 1000
+						: this.chargerChargingStatus === 'CHARGING' && this.chargerAmps
+							? (this.chargerAmps * VOLTAGE) / 1000
+							: 0)
 				: null,
 			loadKw: this.lastPwData?.loadKw ?? null,
 			batteryPct: this.lastPwData?.batteryPct ?? null,
@@ -196,6 +201,7 @@ export class SunkeepService {
 		]);
 		this.isPluggedIn = chargerStatus.isPluggedIn;
 		this.chargerAmps = chargerStatus.amperageLimit;
+		this.chargerChargingStatus = chargerStatus.chargingStatus;
 		this.lastPwData = pwData;
 		if (chargerStatus.chargingStatus === 'CHARGING') {
 			await this.reconcileWithCharger(chargerStatus);
@@ -309,6 +315,7 @@ export class SunkeepService {
 		this.isPluggedIn = chargerStatus.isPluggedIn;
 		this.chargerAmps = chargerStatus.amperageLimit;
 		this.isDuringScheduledTime = chargerStatus.isDuringScheduledTime;
+		this.chargerChargingStatus = chargerStatus.chargingStatus;
 		this.lastPwData = pwData;
 
 		// Reconcile in-memory state with what the charger and database say.
@@ -383,8 +390,15 @@ export class SunkeepService {
 
 		// Tesla load_power includes EV charging load; add it back so we measure solar excess
 		// available for the car rather than treating the car's own draw as a deficit.
-		const carKw = this.state === SunkeepState.CHARGING ? (this.currentAmps * VOLTAGE) / 1000 : 0;
-		const excessKw = pwData.solarKw - pwData.loadKw + carKw;
+		// When we have an adopted session use currentAmps (what we commanded); otherwise
+		// fall back to the charger's reported amperageLimit if it's actively charging.
+		const carAmps =
+			this.state === SunkeepState.CHARGING
+				? this.currentAmps
+				: chargerStatus.chargingStatus === 'CHARGING' && chargerStatus.amperageLimit
+					? chargerStatus.amperageLimit
+					: 0;
+		const excessKw = pwData.solarKw - pwData.loadKw + (carAmps * VOLTAGE) / 1000;
 
 		if (excessKw < MIN_EXCESS_KW) {
 			if (this.state === SunkeepState.CHARGING) {

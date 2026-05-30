@@ -151,6 +151,26 @@ describe('SunkeepService', () => {
 			service.enable();
 			expect(service.getStatus().excessKw).toBeNull();
 		});
+
+		it('adds car load when charger reports CHARGING but no active session (e.g. adoption failed)', async () => {
+			// The Tesla total load includes the car draw; when sunkeep has no adopted
+			// session it must still add back chargerAmps * 240V so the displayed excess
+			// reflects available solar, not (solar - total load including car).
+			mockCp.getUserChargingStatus.mockResolvedValueOnce(null);
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 15,
+				})
+			);
+			// Tesla load includes car at 15A (3.6 kW) + home (1.0 kW) = 4.6 kW
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 6.0, loadKw: 4.6 }));
+			await service.runTick();
+			// excess = 6.0 - 4.6 + min(0, 0) + (15 * 240 / 1000) = 1.4 + 3.6 = 5.0
+			expect(service.getStatus().excessKw).toBeCloseTo(5.0);
+		});
 	});
 
 	// --- Initial state ---
