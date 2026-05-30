@@ -1,39 +1,64 @@
 name: E2E Tests
 
-# Triggered by Vercel's GitHub integration when a deployment status changes.
+# Triggered by Vercel's GitHub integration when a deployment status changes,
+# or on pull_request to provide a required status check even when no preview
+# is created (i.e. portfolio app is not affected by the PR).
 on:
   deployment_status:
+  pull_request:
+    branches: [main]
 
 jobs:
   e2e:
     name: Playwright API tests
     runs-on: ubuntu-latest
 
-    # Only run when a Preview deployment succeeds
+    # For pull_request: always run so the required status check is satisfied.
+    # For deployment_status: only run on successful Preview deployments.
     if: |
-      github.event.deployment_status.state == 'success' &&
-      startsWith(github.event.deployment_status.environment, 'Preview')
+      github.event_name == 'pull_request' ||
+      (github.event.deployment_status.state == 'success' &&
+       startsWith(github.event.deployment_status.environment, 'Preview'))
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # On pull_request, check whether the portfolio app was affected. If not,
+      # the job exits here with success — no preview is needed and no tests run.
+      - name: Check if portfolio app changed
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q '^apps/portfolio'; then
+            echo "Portfolio changed — E2E tests will run against the Vercel preview deployment."
+          else
+            echo "Portfolio not affected — skipping E2E tests."
+          fi
 
       - name: Setup pnpm
+        if: github.event_name == 'deployment_status'
         uses: pnpm/action-setup@v4
 
       - name: Setup Node
+        if: github.event_name == 'deployment_status'
         uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: pnpm
 
       - name: Install dependencies
+        if: github.event_name == 'deployment_status'
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers
+        if: github.event_name == 'deployment_status'
         run: pnpm --filter portfolio-e2e install:browsers
 
       - name: Wait for deployment to be ready
+        if: github.event_name == 'deployment_status'
         run: |
           URL="${PORTFOLIO_BASE_URL}"
           echo "Waiting for $URL to be ready..."
@@ -53,6 +78,7 @@ jobs:
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
 
       - name: Run E2E tests against preview URL
+        if: github.event_name == 'deployment_status'
         working-directory: apps/portfolio-e2e
         run: pnpm test:e2e --project=api
         env:
