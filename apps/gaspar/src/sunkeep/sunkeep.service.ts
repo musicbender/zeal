@@ -1,6 +1,7 @@
 import { initLogger } from '@repo/logger/server';
 import {
 	InvalidSession,
+	NoActiveSessionError,
 	StartVerificationTimeoutError,
 	isWithinChargeScheduleWindow,
 	type ChargingSession,
@@ -524,7 +525,11 @@ export class SunkeepService {
 				await this.chargePoint.stopChargingSession(this.config.chargePointDeviceId);
 				log.info('Stopped auto-started session; managed session will start next tick');
 			} catch (err) {
-				log.warn({ err }, 'Failed to stop auto-started session — will retry next tick');
+				if (err instanceof NoActiveSessionError) {
+					log.info('Auto-started session already ended — no stop needed');
+				} else {
+					log.warn({ err }, 'Failed to stop auto-started session — will retry next tick');
+				}
 			}
 			return;
 		}
@@ -740,11 +745,15 @@ export class SunkeepService {
 				await session.stop();
 			} else {
 				// activeEventId set but no session handle (StartVerificationTimeoutError path) —
-				// stop by device ID as fallback; may 165 if charger already idle, which is fine.
+				// stop by device ID as fallback; expected to 165 if charger already idle (Case 3).
 				await this.chargePoint.stopChargingSession(this.config.chargePointDeviceId);
 			}
 		} catch (err) {
-			log.warn({ err }, 'Error stopping ChargePoint session');
+			if (err instanceof NoActiveSessionError) {
+				log.info('Session already ended on charger, skipping stop');
+			} else {
+				log.warn({ err }, 'Error stopping ChargePoint session');
+			}
 		}
 
 		try {
