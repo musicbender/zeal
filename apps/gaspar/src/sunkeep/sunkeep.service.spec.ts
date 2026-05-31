@@ -161,7 +161,9 @@ describe('SunkeepService', () => {
 			// The Tesla total load includes the car draw; when sunkeep has no adopted
 			// session it must still add back chargerAmps * 240V so the displayed excess
 			// reflects available solar, not (solar - total load including car).
-			mockCp.getUserChargingStatus.mockResolvedValueOnce(null);
+			// Simulate a transient getUserChargingStatus failure so adoption fails and
+			// the service enters WAITING with the charger still reporting CHARGING.
+			mockCp.getUserChargingStatus.mockRejectedValueOnce(new Error('transient API error'));
 			service.enable();
 			vi.setSystemTime(NOON);
 			mockCp.getHomeChargerStatus.mockResolvedValue(
@@ -1330,15 +1332,10 @@ describe('SunkeepService', () => {
 			expect(service.getStatus().waitReason).not.toBe('Outside solar window');
 		});
 
-		it('stops an auto-started session (getUserChargingStatus null) and enters WAITING; starts managed session next tick', async () => {
-			// Regression: charger auto-starts on plug-in. getUserChargingStatus returns
-			// null because the session is not API-initiated. Sunkeep should stop it and
-			// start its own managed session on the following tick.
-			// Use ample excess (5 kW) so the bug path is actually reached — an earlier
-			// version of this test used 0.5 kW excess which exited before startSession
-			// via the "Insufficient solar excess" guard.
-
-			// Tick 1: charger is auto-charging, adoption fails → stop it → WAITING
+		it('stops an auto-started session (getUserChargingStatus null) and starts managed session in the same tick', async () => {
+			// Charger auto-starts on plug-in. getUserChargingStatus returns null because
+			// the session is not API-initiated. Sunkeep should stop it and immediately
+			// start its own managed session without waiting for the next tick.
 			mockCp.getUserChargingStatus.mockResolvedValueOnce(null);
 			service.enable();
 			vi.setSystemTime(NOON);
@@ -1353,16 +1350,9 @@ describe('SunkeepService', () => {
 			await service.runTick();
 
 			expect(mockCp.stopChargingSession).toHaveBeenCalledWith(42);
-			expect(mockCp.startChargingSession).not.toHaveBeenCalled();
-			expect(mockPrisma.chargingEvent.create).not.toHaveBeenCalled();
-			expect(service.getStatus().activeSession).toBeNull();
-			expect(service.getStatus().state).toBe(SunkeepState.WAITING);
-
-			// Tick 2: charger is now idle (we stopped it) → sunkeep starts managed session
-			mockCp.getHomeChargerStatus.mockResolvedValueOnce(pluggedInStatus());
-			await service.runTick();
-
 			expect(mockCp.startChargingSession).toHaveBeenCalledWith(42);
+			expect(mockPrisma.chargingEvent.create).toHaveBeenCalled();
+			expect(service.getStatus().activeSession).not.toBeNull();
 			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
 		});
 

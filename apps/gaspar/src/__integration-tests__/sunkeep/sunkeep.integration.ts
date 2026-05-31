@@ -236,6 +236,21 @@ describe('Sunkeep integration tests', () => {
 		expect(events[0]!.peakSolarKw).toBe(7.0);
 	});
 
+	it('Auto-started session: stops it and starts managed session in one tick', async () => {
+		mockPw.setSufficientSolar();
+		// Simulate ChargePoint auto-starting when the car was plugged in (no API session)
+		mockCp.setAutoStarted(16);
+
+		const status = await poll();
+
+		expect(status.state).toBe(SunkeepState.CHARGING);
+		expect(status.activeSession).not.toBeNull();
+
+		const events = await prisma.chargingEvent.findMany({});
+		expect(events).toHaveLength(1);
+		expect(events[0]!.stoppedAt).toBeNull();
+	});
+
 	it('Car fully charged (DONE): stops session, state → WAITING', async () => {
 		mockCp.plugIn();
 		mockPw.setSufficientSolar();
