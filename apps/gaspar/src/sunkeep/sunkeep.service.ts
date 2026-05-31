@@ -210,6 +210,14 @@ export class SunkeepService {
 		this.chargerAmps = chargerStatus.amperageLimit;
 		this.chargerChargingStatus = chargerStatus.chargingStatus;
 		this.lastPwData = pwData;
+		if (chargerStatus.chargingStatus === 'DONE') {
+			// ChargePoint DONE state means the car hit its charge limit; the physical
+			// connector must be unplugged and replugged before a new session will start.
+			// Attempting startChargingSession here returns error 25 — skip it.
+			this.state = SunkeepState.WAITING;
+			this.waitReason = 'Car fully charged';
+			return;
+		}
 		if (chargerStatus.chargingStatus === 'CHARGING') {
 			await this.reconcileWithCharger(chargerStatus);
 			// Cast: TS narrowed state to non-CHARGING after the early return at the
@@ -752,7 +760,16 @@ export class SunkeepService {
 			// tick retries cleanly instead of landing in ERROR state and alarming dashboards.
 			if (err instanceof CommunicationError) {
 				this.state = SunkeepState.WAITING;
-				this.waitReason = 'ChargePoint start error';
+				let waitReason = 'ChargePoint start error';
+				try {
+					const payload = JSON.parse(err.message.slice(err.message.indexOf('{'))) as {
+						errorMessage?: string;
+					};
+					if (payload.errorMessage) waitReason = payload.errorMessage;
+				} catch {
+					// keep default
+				}
+				this.waitReason = waitReason;
 				return;
 			}
 			throw err;
