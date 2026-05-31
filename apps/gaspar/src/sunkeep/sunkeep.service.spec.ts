@@ -407,8 +407,8 @@ describe('SunkeepService', () => {
 		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
 		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
 		const cpError = new CommunicationError(
-			'Failed to start ChargePoint session: {"errorId":25,"errorCategory":"CHARGE","errorMessage":"Unable to start charging. Please try again after the vehicle charging has unplugged."}',
-			422
+			422,
+			'Failed to start ChargePoint session: {"errorId":25,"errorCategory":"CHARGE","errorMessage":"Unable to start charging. Please try again after the vehicle charging has unplugged."}'
 		);
 		mockCp.startChargingSession.mockRejectedValueOnce(cpError);
 
