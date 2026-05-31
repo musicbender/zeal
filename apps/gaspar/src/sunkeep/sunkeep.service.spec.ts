@@ -420,7 +420,9 @@ describe('SunkeepService', () => {
 
 		expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
 		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
-		expect(service.getStatus().waitReason).toBe('ChargePoint start error');
+		expect(service.getStatus().waitReason).toBe(
+			'Unable to start charging. Please try again after the vehicle charging has unplugged.'
+		);
 	});
 
 	it('stops ghost ChargePoint session then starts immediately (no second click needed)', async () => {
@@ -632,6 +634,19 @@ describe('SunkeepService', () => {
 		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 1.0, loadKw: 0.5 })); // 0.5 kW → 2A → clamped to 8A
 		await service.manualStartSession();
 		expect(mockCp.setAmperageLimit).toHaveBeenCalledWith(42, 8);
+	});
+
+	it('manualStartSession() sets WAITING/"Car fully charged" when charger is DONE', async () => {
+		service.enable();
+		mockCp.getHomeChargerStatus.mockResolvedValue(
+			pluggedInStatus({ chargingStatus: 'DONE' as HomeChargerStatus['chargingStatus'] })
+		);
+		mockPw.getData.mockResolvedValue(goodPwData());
+		await service.manualStartSession();
+
+		expect(mockCp.startChargingSession).not.toHaveBeenCalled();
+		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+		expect(service.getStatus().waitReason).toBe('Car fully charged');
 	});
 
 	it('manualStartSession() is a no-op when already CHARGING', async () => {
