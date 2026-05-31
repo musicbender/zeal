@@ -530,11 +530,13 @@ export class SunkeepService {
 				log.info('Stopped auto-started session; will start managed session this tick');
 			} catch (err) {
 				if (err instanceof NoActiveSessionError) {
-					log.info('Auto-started session already ended — no stop needed');
+					// The session is not stoppable via API (app-initiated or already settled).
+					// The charger may still be physically active; wait for it to clear.
+					log.info('Auto-started session not stoppable via API — waiting for charger to settle');
 				} else {
 					log.warn({ err }, 'Failed to stop auto-started session — will retry next tick');
-					return false;
 				}
+				return false;
 			}
 			return true;
 		}
