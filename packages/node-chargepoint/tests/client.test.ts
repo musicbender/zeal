@@ -7,6 +7,7 @@ import {
   DatadomeCaptcha,
   InvalidSession,
   LoginError,
+  NoActiveSessionError,
 } from '../src/exceptions.js';
 import {
   TEST_TOKEN,
@@ -327,5 +328,25 @@ describe('_request() error handling', () => {
 
     const client = await authenticatedClient();
     await expect(client.getVehicles()).rejects.toThrow(CommunicationError);
+  });
+});
+
+describe('ChargePoint.stopChargingSession()', () => {
+  it('throws NoActiveSessionError when ChargePoint reports errorId 165 (session already stopped)', async () => {
+    server.use(
+      http.post('https://account.chargepoint.com/v1/driver/station/stopSession', () =>
+        HttpResponse.json(
+          { errorId: 165, errorCategory: 'CHARGE', errorMessage: 'unable to find charging session' },
+          { status: 422 },
+        ),
+      ),
+    );
+
+    const client = await authenticatedClient();
+    const error = await client.stopChargingSession(TEST_DEVICE_ID).catch((e) => e);
+
+    expect(error).toBeInstanceOf(NoActiveSessionError);
+    expect(error.message).toBe('unable to find charging session');
+    expect(error.statusCode).toBe(422);
   });
 });

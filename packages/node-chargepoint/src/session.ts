@@ -1,5 +1,5 @@
 import type { ChargePoint } from './client.js';
-import { ChargerBusyError, CommunicationError, StartVerificationTimeoutError } from './exceptions.js';
+import { ChargerBusyError, CommunicationError, NoActiveSessionError, StartVerificationTimeoutError } from './exceptions.js';
 import type { ChargingSessionUpdate, ChargingStatus, PowerUtility, StartSessionOptions, VehicleInfo } from './types.js';
 
 const sleep = (ms: number): Promise<void> =>
@@ -13,7 +13,7 @@ async function sendCommand(
   deviceId: number,
   portNumber = 1,
   sessionId = 0,
-): Promise<void> {
+): Promise<RawObj | null> {
   const actionPath = action === 'start' ? 'startsession' : 'stopSession';
   const body: RawObj = { deviceId };
 
@@ -41,6 +41,12 @@ async function sendCommand(
         : undefined;
       throw new ChargerBusyError(msg, cmdBody);
     }
+    if (action === 'stop' && response.status === 422 && (cmdBody as RawObj)?.errorId === 165) {
+      const msg = typeof (cmdBody as RawObj)?.errorMessage === 'string'
+        ? (cmdBody as RawObj).errorMessage as string
+        : undefined;
+      throw new NoActiveSessionError(msg, cmdBody);
+    }
     throw new CommunicationError(
       response.status,
       `Failed to ${action} ChargePoint session: ${typeof cmdBody === 'string' ? cmdBody : JSON.stringify(cmdBody)}`,
@@ -65,7 +71,11 @@ async function sendCommand(
     lastStatus = ackResponse.status;
 
     if (ackResponse.status === 200) {
-      return;
+      try {
+        return (await ackResponse.json()) as RawObj;
+      } catch {
+        return null;
+      }
     }
 
     try {
@@ -78,6 +88,15 @@ async function sendCommand(
 
     if (ackResponse.status === 422 && (errorBody as RawObj)?.errorId === 89) {
       throw new ChargerBusyError(
+        typeof (errorBody as RawObj)?.errorMessage === 'string'
+          ? (errorBody as RawObj).errorMessage as string
+          : undefined,
+        errorBody,
+      );
+    }
+
+    if (action === 'stop' && ackResponse.status === 422 && (errorBody as RawObj)?.errorId === 165) {
+      throw new NoActiveSessionError(
         typeof (errorBody as RawObj)?.errorMessage === 'string'
           ? (errorBody as RawObj).errorMessage as string
           : undefined,
@@ -252,7 +271,24 @@ export class ChargingSession {
     client: ChargePoint,
     options?: StartSessionOptions,
   ): Promise<ChargingSession> {
-    await sendCommand(client, 'start', deviceId);
+    const startAckData = await sendCommand(client, 'start', deviceId);
+
+    // Some ChargePoint backends include the session_id in the start ack body.
+    // Use it directly when present — home charger sessions (HCPO API) don't
+    // appear in getUserChargingStatus, so this is the only reliable path.
+    const directSessionId =
+      typeof startAckData?.session_id === 'number' && startAckData.session_id > 0
+        ? startAckData.session_id
+        : typeof startAckData?.sessionId === 'number' && startAckData.sessionId > 0
+          ? startAckData.sessionId
+          : null;
+
+    if (directSessionId !== null) {
+      const session = new ChargingSession(directSessionId);
+      session._setClient(client);
+      await session.refresh();
+      return session;
+    }
 
     // The start ack confirms the cloud received the command, but the session
     // may take a moment to appear in the status API (same async IoT pattern

@@ -3,7 +3,7 @@ import { http, HttpResponse } from 'msw';
 import { server } from './setup.js';
 import { ChargePoint } from '../src/client.js';
 import { ChargingSession } from '../src/session.js';
-import { CommunicationError, StartVerificationTimeoutError } from '../src/exceptions.js';
+import { CommunicationError, NoActiveSessionError, StartVerificationTimeoutError } from '../src/exceptions.js';
 import { TEST_TOKEN, TEST_SESSION_ID, TEST_DEVICE_ID, TEST_USER_ID } from './handlers.js';
 
 async function authenticatedClient(): Promise<ChargePoint> {
@@ -73,6 +73,46 @@ describe('ChargingSession.stop()', () => {
     await session.refresh();
 
     await expect(session.stop()).resolves.not.toThrow();
+  });
+
+  it('throws NoActiveSessionError when initial stop command returns errorId 165', async () => {
+    server.use(
+      http.post('https://account.chargepoint.com/v1/driver/station/stopSession', () =>
+        HttpResponse.json(
+          { errorId: 165, errorCategory: 'CHARGE', errorMessage: 'unable to find charging session' },
+          { status: 422 },
+        ),
+      ),
+    );
+
+    const client = await authenticatedClient();
+    const session = new ChargingSession(TEST_SESSION_ID);
+    session._setClient(client);
+    await session.refresh();
+
+    const error = await session.stop().catch((e) => e);
+    expect(error).toBeInstanceOf(NoActiveSessionError);
+    expect(error.message).toBe('unable to find charging session');
+    expect(error.statusCode).toBe(422);
+  });
+
+  it('throws NoActiveSessionError when stop ack returns errorId 165', async () => {
+    server.use(
+      http.post('https://account.chargepoint.com/v1/driver/station/session/ack', () =>
+        HttpResponse.json(
+          { errorId: 165, errorMessage: 'unable to find charging session' },
+          { status: 422 },
+        ),
+      ),
+    );
+
+    const client = await authenticatedClient();
+    const session = new ChargingSession(TEST_SESSION_ID);
+    session._setClient(client);
+    await session.refresh();
+
+    const error = await session.stop().catch((e) => e);
+    expect(error).toBeInstanceOf(NoActiveSessionError);
   });
 
   it('throws CommunicationError after 20 failed ack attempts', async () => {
@@ -185,6 +225,32 @@ describe('ChargingSession.start()', () => {
 
     expect(error).toBeInstanceOf(StartVerificationTimeoutError);
     expect(error.chargerConfirmedCharging).toBe(true);
+  });
+
+  it('uses session ID from start ack body and skips getUserChargingStatus polling', async () => {
+    let userStatusCallCount = 0;
+
+    server.use(
+      http.post('https://account.chargepoint.com/v1/driver/station/session/ack', () =>
+        HttpResponse.json({ session_id: TEST_SESSION_ID }),
+      ),
+      http.post('https://mc.chargepoint.com/map-prod/v2', async ({ request }) => {
+        const body = await request.json() as Record<string, unknown>;
+        if ('user_status' in body) {
+          userStatusCallCount++;
+          return HttpResponse.json({ user_status: null });
+        }
+        return new HttpResponse(null, { status: 400 });
+      }),
+    );
+
+    const client = await authenticatedClient();
+    const session = await ChargingSession.start(TEST_DEVICE_ID, client);
+
+    expect(session).toBeInstanceOf(ChargingSession);
+    expect(session.sessionId).toBe(TEST_SESSION_ID);
+    expect(session.energyKwh).toBe(10.5);
+    expect(userStatusCallCount).toBe(0);
   });
 
   it('propagates sendCommand failure as CommunicationError, not StartVerificationTimeoutError', async () => {
