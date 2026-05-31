@@ -423,11 +423,11 @@ describe('SunkeepService', () => {
 		expect(service.getStatus().waitReason).toBe('ChargePoint start error');
 	});
 
-	it('stops a ghost ChargePoint session before starting and returns WAITING for next-tick retry', async () => {
+	it('stops ghost ChargePoint session then starts immediately (no second click needed)', async () => {
 		// ChargePoint has an active session record (from a prior failed start) but the
 		// hardware is not CHARGING, so reconcileWithCharger never adopted it.
-		// startSession must detect and stop it; otherwise every start attempt gets
-		// error 25 and the car never charges.
+		// startSession must detect, stop, and immediately retry — not defer to next tick —
+		// so that manual force-charge works on the first click.
 		service.enable();
 		vi.setSystemTime(NOON);
 		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
@@ -437,24 +437,25 @@ describe('SunkeepService', () => {
 		await service.runTick();
 
 		expect(mockCp.stopChargingSession).toHaveBeenCalledWith(42);
-		expect(mockCp.startChargingSession).not.toHaveBeenCalled();
-		expect(mockPrisma.chargingEvent.create).not.toHaveBeenCalled();
-		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
-		expect(service.getStatus().waitReason).toBe('ChargePoint start error');
+		expect(mockCp.startChargingSession).toHaveBeenCalledWith(42);
+		expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
+		expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
 	});
 
-	it('proceeds with start after ghost session stop clears (getUserChargingStatus returns null)', async () => {
-		// Next tick after the ghost was stopped: getUserChargingStatus returns null,
-		// so we proceed normally and the session starts.
+	it('returns WAITING when ghost session stop fails (non-NoActiveSessionError)', async () => {
 		service.enable();
 		vi.setSystemTime(NOON);
 		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
 		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
-		// getUserChargingStatus already returns null (default mock) → clean start
+		mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 55 });
+		mockCp.stopChargingSession.mockRejectedValueOnce(new CommunicationError(500, 'network error'));
+
 		await service.runTick();
 
-		expect(mockCp.startChargingSession).toHaveBeenCalledWith(42);
-		expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+		expect(mockCp.startChargingSession).not.toHaveBeenCalled();
+		expect(mockPrisma.chargingEvent.create).not.toHaveBeenCalled();
+		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+		expect(service.getStatus().waitReason).toBe('ChargePoint start error');
 	});
 
 	it('calculates correct amps: clamps to 8 at 1.5 kW excess', async () => {
