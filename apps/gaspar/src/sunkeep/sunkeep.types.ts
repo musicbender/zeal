@@ -1,3 +1,23 @@
+import type {
+	ChargingSession,
+	HomeChargerConfiguration,
+	HomeChargerStatus,
+	UserChargingStatus,
+} from 'node-chargepoint';
+
+export interface IChargePointClient {
+	getHomeChargerStatus(chargerId: number): Promise<HomeChargerStatus>;
+	setAmperageLimit(chargerId: number, amps: number): Promise<void>;
+	startChargingSession(deviceId: number): Promise<ChargingSession>;
+	stopChargingSession(deviceId: number): Promise<void>;
+	getHomeChargerTechnicalInfo(
+		chargerId: number
+	): Promise<{ softwareVersion: string; deviceIp: string }>;
+	getHomeChargerConfig(chargerId: number): Promise<HomeChargerConfiguration>;
+	getUserChargingStatus(): Promise<UserChargingStatus | null>;
+	getChargingSession(sessionId: number): Promise<ChargingSession>;
+}
+
 export enum SunkeepState {
 	DISABLED = 'DISABLED',
 	IDLE = 'IDLE',

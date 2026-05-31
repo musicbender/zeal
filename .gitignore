@@ -20,6 +20,10 @@ test-results/
 playwright/.cache/
 playwright-report/
 
+# Generated Prisma test client and SQLite test DB
+apps/gaspar/src/__generated__/
+apps/gaspar/prisma/test.db
+
 
 # Turbo
 .turbo

@@ -49,7 +49,31 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter gaspar prisma:generate
+      - run: pnpm --filter gaspar exec prisma generate --schema=prisma/schema.test.prisma
       - run: pnpm turbo typecheck --affected
+
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter gaspar prisma:generate
+      - run: pnpm --filter gaspar exec prisma generate --schema=prisma/schema.test.prisma
+      - run: pnpm turbo test:integration --affected
 
   test:
     name: Test

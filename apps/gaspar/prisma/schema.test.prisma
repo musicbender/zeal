@@ -1,0 +1,45 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/__generated__/test-client"
+}
+
+model Sensor {
+  id          String    @id @default(uuid())
+  name        String
+  type        String
+  isActive    Boolean
+  activeSince DateTime?
+  room        String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("sensor")
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("setting")
+}
+
+model ChargingEvent {
+  id          String    @id @default(uuid())
+  startedAt   DateTime  @default(now())
+  stoppedAt   DateTime?
+  stopReason  String?
+  startAmps   Int
+  endAmps     Int?
+  peakSolarKw Float?
+  energyKwh   Float?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("charging_event")
+}
