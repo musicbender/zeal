@@ -1,4 +1,4 @@
-import { StartVerificationTimeoutError, type HomeChargerStatus } from 'node-chargepoint';
+import { CommunicationError, StartVerificationTimeoutError, type HomeChargerStatus } from 'node-chargepoint';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SunkeepService } from './sunkeep.service.js';
 import { StopReason, SunkeepState } from './sunkeep.types.js';
@@ -396,6 +396,27 @@ describe('SunkeepService', () => {
 		expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
 		// State did not advance to CHARGING — we have no confirmation.
 		expect(service.getStatus().state).not.toBe(SunkeepState.CHARGING);
+	});
+
+	it('enters WAITING (not ERROR) when startChargingSession throws CommunicationError', async () => {
+		// ChargePoint errorId 25: "Unable to start charging. Please try again after the
+		// vehicle charging has unplugged." — a transient error that should not put
+		// sunkeep in ERROR state, which would alarm dashboards and hide the real cause.
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+		const cpError = new CommunicationError(
+			'Failed to start ChargePoint session: {"errorId":25,"errorCategory":"CHARGE","errorMessage":"Unable to start charging. Please try again after the vehicle charging has unplugged."}',
+			422
+		);
+		mockCp.startChargingSession.mockRejectedValueOnce(cpError);
+
+		await service.runTick();
+
+		expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
+		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+		expect(service.getStatus().waitReason).toBe('ChargePoint start error');
 	});
 
 	it('calculates correct amps: clamps to 8 at 1.5 kW excess', async () => {

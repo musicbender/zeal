@@ -1,5 +1,6 @@
 import { initLogger } from '@repo/logger/server';
 import {
+	CommunicationError,
 	InvalidSession,
 	NoActiveSessionError,
 	StartVerificationTimeoutError,
@@ -710,13 +711,20 @@ export class SunkeepService {
 				);
 				return;
 			}
-			// Either a hard failure or a timeout we can't confirm. Leave the row
-			// open so the next tick's reconcile resolves it (adopt if the start
-			// did take, close as UNKNOWN if it didn't).
+			// Leave the row open so the next tick's reconcile resolves it (adopt if
+			// the start did take, close as UNKNOWN if it didn't).
 			log.warn(
 				{ err, eventId: event.id, targetAmps },
 				'startChargingSession failed; leaving event open for next-tick reconcile'
 			);
+			// CommunicationError is a transient ChargePoint API error (e.g. errorId 25:
+			// "unable to start — try again after unplugging"). Go to WAITING so the next
+			// tick retries cleanly instead of landing in ERROR state and alarming dashboards.
+			if (err instanceof CommunicationError) {
+				this.state = SunkeepState.WAITING;
+				this.waitReason = 'ChargePoint start error';
+				return;
+			}
 			throw err;
 		}
 
