@@ -45,6 +45,14 @@ export class MockChargePointAdapter implements IChargePointClient {
 		this.state.activeSessionId = ++this.state.nextSessionId;
 	}
 
+	/** Simulate ChargePoint auto-starting on plug-in (no API session — getUserChargingStatus returns null). */
+	setAutoStarted(amps: number): void {
+		this.state.isPluggedIn = true;
+		this.state.chargingStatus = 'CHARGING';
+		this.state.amperageLimit = amps;
+		// activeSessionId intentionally left null so getUserChargingStatus returns null
+	}
+
 	async getHomeChargerStatus(chargerId: number): Promise<HomeChargerStatus> {
 		return {
 			chargerId,
