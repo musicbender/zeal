@@ -1,4 +1,8 @@
-import { CommunicationError, StartVerificationTimeoutError, type HomeChargerStatus } from 'node-chargepoint';
+import {
+	CommunicationError,
+	StartVerificationTimeoutError,
+	type HomeChargerStatus,
+} from 'node-chargepoint';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SunkeepService } from './sunkeep.service.js';
 import { StopReason, SunkeepState } from './sunkeep.types.js';
@@ -415,6 +419,41 @@ describe('SunkeepService', () => {
 		await service.runTick();
 
 		expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
+		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+		expect(service.getStatus().waitReason).toBe('ChargePoint start error');
+	});
+
+	it('stops ghost ChargePoint session then starts immediately (no second click needed)', async () => {
+		// ChargePoint has an active session record (from a prior failed start) but the
+		// hardware is not CHARGING, so reconcileWithCharger never adopted it.
+		// startSession must detect, stop, and immediately retry — not defer to next tick —
+		// so that manual force-charge works on the first click.
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+		mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 55 });
+
+		await service.runTick();
+
+		expect(mockCp.stopChargingSession).toHaveBeenCalledWith(42);
+		expect(mockCp.startChargingSession).toHaveBeenCalledWith(42);
+		expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
+		expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+	});
+
+	it('returns WAITING when ghost session stop fails (non-NoActiveSessionError)', async () => {
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+		mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 55 });
+		mockCp.stopChargingSession.mockRejectedValueOnce(new CommunicationError(500, 'network error'));
+
+		await service.runTick();
+
+		expect(mockCp.startChargingSession).not.toHaveBeenCalled();
+		expect(mockPrisma.chargingEvent.create).not.toHaveBeenCalled();
 		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
 		expect(service.getStatus().waitReason).toBe('ChargePoint start error');
 	});

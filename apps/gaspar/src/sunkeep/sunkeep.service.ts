@@ -675,6 +675,36 @@ export class SunkeepService {
 	}
 
 	private async startSession(targetAmps: number): Promise<void> {
+		// ChargePoint rejects startChargingSession with error 25 when a session already
+		// exists on their backend even though the hardware isn't actively CHARGING (ghost
+		// session). Detect and stop it first, then fall through to start immediately so
+		// manual force-charge doesn't require a second click.
+		try {
+			const existingStatus = await this.chargePoint.getUserChargingStatus();
+			if (existingStatus !== null) {
+				log.warn(
+					{ sessionId: existingStatus.sessionId },
+					'Found ghost ChargePoint session (not reflected on hardware) — stopping before start'
+				);
+				try {
+					await this.chargePoint.stopChargingSession(this.config.chargePointDeviceId);
+					log.info('Ghost session stopped; retrying start immediately');
+				} catch (stopErr) {
+					if (stopErr instanceof NoActiveSessionError) {
+						log.info('Ghost session already ended — proceeding with start');
+					} else {
+						log.warn({ err: stopErr }, 'Failed to stop ghost session — will retry next tick');
+						this.state = SunkeepState.WAITING;
+						this.waitReason = 'ChargePoint start error';
+						return;
+					}
+				}
+				// Ghost is gone — fall through to start below
+			}
+		} catch (err) {
+			log.warn({ err }, 'getUserChargingStatus check before start failed — proceeding anyway');
+		}
+
 		await this.chargePoint.setAmperageLimit(this.config.chargePointDeviceId, targetAmps);
 
 		// Persist the event row up-front so the attempt is always recorded.
