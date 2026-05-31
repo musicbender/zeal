@@ -1,6 +1,15 @@
-## [v0.8.0](https://github.com/musicbender/node-chargepoint/releases/tag/v0.8.0) — 2026-05-30
+## [v0.8.1](https://github.com/musicbender/node-chargepoint/releases/tag/v0.8.1) — 2026-05-31
 
-<!-- Release notes generated using configuration in .github/release.yml at v0.8.0 -->
+<!-- Release notes generated using configuration in .github/release.yml at v0.8.1 -->
+
+## What's Changed
+### Bug Fixes & Patches
+* fix(session): add NoActiveSessionError for errorId 165 and use start-ack session ID by @musicbender in https://github.com/musicbender/node-chargepoint/pull/30
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.8.0...v0.8.1
+
+---
 
 ## What's Changed
 ### New Features
