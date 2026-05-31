@@ -9,11 +9,7 @@ export default defineConfig({
 	},
 	test: {
 		environment: 'node',
-		include: ['src/__integration-tests__/**/*.integration.ts'],
+		include: ['src/__integration-tests__/**/*.e2e.ts'],
 		testTimeout: 30_000,
-		globalSetup: ['src/__integration-tests__/sunkeep/globalSetup.ts'],
-		env: {
-			DATABASE_URL: `file:${resolve(__dirname, 'prisma', 'test.db')}`,
-		},
 	},
 });

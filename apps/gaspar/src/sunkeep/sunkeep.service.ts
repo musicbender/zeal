@@ -6,13 +6,13 @@ import {
 	StartVerificationTimeoutError,
 	isWithinChargeScheduleWindow,
 	type ChargingSession,
-	type HomeChargerConfiguration,
 	type HomeChargerStatus,
 	type TimeString,
 	type UserChargingStatus,
 } from 'node-chargepoint';
 import type {
 	ActiveSessionSummary,
+	IChargePointClient,
 	IPowerwallAdapter,
 	PowerwallData,
 	SunkeepConfig,
@@ -36,19 +36,6 @@ const MAX_INCOMPLETE_EVENT_AGE_MS = 12 * 60 * 60 * 1000;
 function calcTargetAmps(excessKw: number): number {
 	const raw = Math.floor((excessKw * 1000) / VOLTAGE);
 	return Math.max(MIN_AMPS, Math.min(MAX_AMPS, raw));
-}
-
-interface IChargePointClient {
-	getHomeChargerStatus(chargerId: number): Promise<HomeChargerStatus>;
-	setAmperageLimit(chargerId: number, amps: number): Promise<void>;
-	startChargingSession(deviceId: number): Promise<ChargingSession>;
-	stopChargingSession(deviceId: number): Promise<void>;
-	getHomeChargerTechnicalInfo(
-		chargerId: number
-	): Promise<{ softwareVersion: string; deviceIp: string }>;
-	getHomeChargerConfig(chargerId: number): Promise<HomeChargerConfiguration>;
-	getUserChargingStatus(): Promise<UserChargingStatus | null>;
-	getChargingSession(sessionId: number): Promise<ChargingSession>;
 }
 
 interface IncompleteChargingEvent {

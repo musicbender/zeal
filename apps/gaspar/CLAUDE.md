@@ -7,7 +7,8 @@ Fastify REST API running on a Raspberry Pi (port 3000). Manages smart home senso
 ```bash
 pnpm --filter gaspar dev              # Dev server (tsx --watch)
 pnpm --filter gaspar test             # Unit tests (vitest)
-pnpm --filter gaspar test:e2e         # Integration tests (vitest)
+pnpm --filter gaspar test:integration  # Integration tests with mock adapters and SQLite DB (vitest)
+pnpm --filter gaspar test:e2e         # E2E tests against real ChargePoint/Tesla APIs — requires home credentials
 pnpm --filter gaspar prisma:generate  # Regenerate Prisma client after schema change
 pnpm --filter gaspar prisma:migrate   # Apply migrations locally
 ```
