@@ -1,4 +1,8 @@
-import { CommunicationError, StartVerificationTimeoutError, type HomeChargerStatus } from 'node-chargepoint';
+import {
+	CommunicationError,
+	StartVerificationTimeoutError,
+	type HomeChargerStatus,
+} from 'node-chargepoint';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SunkeepService } from './sunkeep.service.js';
 import { StopReason, SunkeepState } from './sunkeep.types.js';
@@ -417,6 +421,40 @@ describe('SunkeepService', () => {
 		expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
 		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
 		expect(service.getStatus().waitReason).toBe('ChargePoint start error');
+	});
+
+	it('stops a ghost ChargePoint session before starting and returns WAITING for next-tick retry', async () => {
+		// ChargePoint has an active session record (from a prior failed start) but the
+		// hardware is not CHARGING, so reconcileWithCharger never adopted it.
+		// startSession must detect and stop it; otherwise every start attempt gets
+		// error 25 and the car never charges.
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+		mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 55 });
+
+		await service.runTick();
+
+		expect(mockCp.stopChargingSession).toHaveBeenCalledWith(42);
+		expect(mockCp.startChargingSession).not.toHaveBeenCalled();
+		expect(mockPrisma.chargingEvent.create).not.toHaveBeenCalled();
+		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+		expect(service.getStatus().waitReason).toBe('ChargePoint start error');
+	});
+
+	it('proceeds with start after ghost session stop clears (getUserChargingStatus returns null)', async () => {
+		// Next tick after the ghost was stopped: getUserChargingStatus returns null,
+		// so we proceed normally and the session starts.
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+		// getUserChargingStatus already returns null (default mock) → clean start
+		await service.runTick();
+
+		expect(mockCp.startChargingSession).toHaveBeenCalledWith(42);
+		expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
 	});
 
 	it('calculates correct amps: clamps to 8 at 1.5 kW excess', async () => {
