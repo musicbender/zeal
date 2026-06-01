@@ -1,5 +1,6 @@
 import {
 	CommunicationError,
+	NoActiveSessionError,
 	StartVerificationTimeoutError,
 	type HomeChargerStatus,
 } from 'node-chargepoint';
@@ -1354,6 +1355,34 @@ describe('SunkeepService', () => {
 			expect(mockPrisma.chargingEvent.create).toHaveBeenCalled();
 			expect(service.getStatus().activeSession).not.toBeNull();
 			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+		});
+
+		it('enters WAITING when auto-started session is not stoppable via API (NoActiveSessionError)', async () => {
+			// Regression: when ChargePoint auto-starts via the app, stopChargingSession
+			// returns NoActiveSessionError because there is no API session to stop.
+			// The charger is still physically active, so startChargingSession would fail
+			// with ChargerBusyError. Sunkeep must go to WAITING instead of thrashing.
+			mockCp.getUserChargingStatus.mockResolvedValueOnce(null);
+			mockCp.stopChargingSession.mockRejectedValueOnce(
+				new NoActiveSessionError('no active session', {})
+			);
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValueOnce(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 15,
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 6.0, loadKw: 1.0 }));
+
+			await service.runTick();
+
+			expect(mockCp.stopChargingSession).toHaveBeenCalledWith(42);
+			expect(mockCp.startChargingSession).not.toHaveBeenCalled();
+			expect(mockPrisma.chargingEvent.create).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+			expect(service.getStatus().waitReason).toBe('Charger busy');
 		});
 
 		it('manualStartSession adopts an orphaned session instead of starting a new one', async () => {
