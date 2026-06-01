@@ -405,10 +405,10 @@ describe('SunkeepService', () => {
 		expect(service.getStatus().state).not.toBe(SunkeepState.CHARGING);
 	});
 
-	it('enters WAITING (not ERROR) when startChargingSession throws CommunicationError', async () => {
-		// ChargePoint errorId 25: "Unable to start charging. Please try again after the
-		// vehicle charging has unplugged." — a transient error that should not put
-		// sunkeep in ERROR state, which would alarm dashboards and hide the real cause.
+	it('enters WAITING with "Car fully charged" when startChargingSession throws CommunicationError errorId 25', async () => {
+		// errorId 25 means the Tesla's onboard charger rejected the start because the car is
+		// at its charge limit. Sunkeep must surface "Car fully charged" (same as the DONE path)
+		// rather than the raw ChargePoint error message, and must not enter ERROR state.
 		service.enable();
 		vi.setSystemTime(NOON);
 		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
@@ -423,9 +423,24 @@ describe('SunkeepService', () => {
 
 		expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
 		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
-		expect(service.getStatus().waitReason).toBe(
-			'Unable to start charging. Please try again after the vehicle charging has unplugged.'
+		expect(service.getStatus().waitReason).toBe('Car fully charged');
+	});
+
+	it('enters WAITING with extracted errorMessage for non-25 CommunicationErrors', async () => {
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+		const cpError = new CommunicationError(
+			422,
+			'Failed to start ChargePoint session: {"errorId":99,"errorCategory":"CHARGE","errorMessage":"Some other transient error"}'
 		);
+		mockCp.startChargingSession.mockRejectedValueOnce(cpError);
+
+		await service.runTick();
+
+		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+		expect(service.getStatus().waitReason).toBe('Some other transient error');
 	});
 
 	it('stops ghost ChargePoint session then starts immediately (no second click needed)', async () => {
