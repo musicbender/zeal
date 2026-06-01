@@ -754,17 +754,24 @@ export class SunkeepService {
 				{ err, eventId: event.id, targetAmps },
 				'startChargingSession failed; leaving event open for next-tick reconcile'
 			);
-			// CommunicationError is a transient ChargePoint API error (e.g. errorId 25:
-			// "unable to start — try again after unplugging"). Go to WAITING so the next
+			// CommunicationError is a transient ChargePoint API error. Go to WAITING so the next
 			// tick retries cleanly instead of landing in ERROR state and alarming dashboards.
+			// Error 25 ("unable to start — try again after unplugging") means the Tesla's
+			// onboard charger rejected the start because the car is at its charge limit —
+			// treat it as "Car fully charged" so the status is consistent with the DONE path.
 			if (err instanceof CommunicationError) {
 				this.state = SunkeepState.WAITING;
 				let waitReason = 'ChargePoint start error';
 				try {
 					const payload = JSON.parse(err.message.slice(err.message.indexOf('{'))) as {
+						errorId?: number;
 						errorMessage?: string;
 					};
-					if (payload.errorMessage) waitReason = payload.errorMessage;
+					if (payload.errorId === 25) {
+						waitReason = 'Car fully charged';
+					} else if (payload.errorMessage) {
+						waitReason = payload.errorMessage;
+					}
 				} catch {
 					// keep default
 				}
