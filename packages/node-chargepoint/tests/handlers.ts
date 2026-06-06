@@ -10,12 +10,14 @@ import chargerConfigFixture from './fixtures/charger-config.json' with { type: '
 import chargerScheduleFixture from './fixtures/charger-schedule.json' with { type: 'json' };
 import chargingStatusFixture from './fixtures/charging-status.json' with { type: 'json' };
 import sessionFixture from './fixtures/session.json' with { type: 'json' };
+import session99Fixture from './fixtures/session-99.json' with { type: 'json' };
 import stationFixture from './fixtures/station.json' with { type: 'json' };
 
 export const TEST_TOKEN = 'test-coulomb-sess';
 export const TEST_USER_ID = 1234567890;
 export const TEST_CHARGER_ID = 12345;
 export const TEST_SESSION_ID = 1;
+export const TEST_SESSION_ID_99 = 99;
 export const TEST_DEVICE_ID = 9001;
 export const TEST_ACK_ID = 'ack-12345';
 
@@ -145,6 +147,12 @@ export const handlers = [
   http.post(
     `https://cpapi.chargepoint.com/driver-bff/v1/sessions/${TEST_SESSION_ID}`,
     () => HttpResponse.json(sessionFixture),
+  ),
+
+  // Get session details (session 99 — home charger device-plane session)
+  http.post(
+    `https://cpapi.chargepoint.com/driver-bff/v1/sessions/${TEST_SESSION_ID_99}`,
+    () => HttpResponse.json(session99Fixture),
   ),
 
   // Station info

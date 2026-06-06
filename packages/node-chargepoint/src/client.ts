@@ -326,7 +326,7 @@ export class ChargePoint {
     const data = (await response.json()) as RawObj;
     // Real API nests amperage info under chargeAmperageSettings; fall back to flat fields for older shapes
     const amp = (data.chargeAmperageSettings ?? {}) as RawObj;
-    return {
+    const result: HomeChargerStatus = {
       chargerId, // not echoed by the API; inject from parameter
       brand: String(data.brand ?? ''),
       model: String(data.model ?? ''),
@@ -341,6 +341,21 @@ export class ChargePoint {
       amperageLimit: Number(amp.chargeLimit ?? data.amperageLimit ?? 0),
       possibleAmperageLimits: ((amp.possibleChargeLimit ?? data.possibleAmperageLimits ?? []) as number[]).map(Number),
     };
+
+    // Capture optional session-plane fields the device endpoint may include when charging
+    const rawSessionId = data.sessionId ?? data.session_id ?? data.activeSessionId;
+    if (rawSessionId !== undefined && rawSessionId !== null) {
+      const n = Number(rawSessionId);
+      if (n > 0) result.sessionId = n;
+    }
+    if (typeof data.energyKwh === 'number') result.energyKwh = data.energyKwh;
+    if (typeof data.powerKw === 'number') result.powerKw = data.powerKw;
+    const rawStart = data.sessionStartTime ?? data.session_start_time ?? data.startTime;
+    if (rawStart !== undefined && rawStart !== null) {
+      result.sessionStartTime = parseMsTimestamp(rawStart);
+    }
+
+    return result;
   }
 
   async getHomeChargerTechnicalInfo(chargerId: number): Promise<HomeChargerTechnicalInfo> {
@@ -521,6 +536,37 @@ export class ChargePoint {
     session._setClient(this);
     await session.refresh();
     return session;
+  }
+
+  /**
+   * Resolve the active charging session for a home charger regardless of how it was started
+   * (app tap-to-start, RFID, auto-start on plug-in, or this library's `startChargingSession`).
+   *
+   * Resolution order:
+   * 1. Device plane — `getHomeChargerStatus` session id field (populated when the device API
+   *    surfaces it).
+   * 2. Driver plane fallback — `getUserChargingStatus` (works for driver-authenticated sessions).
+   *
+   * Returns `null` when the charger is not actively charging or no session can be resolved.
+   */
+  async getHomeChargerSession(chargerId: number): Promise<ChargingSession | null> {
+    const status = await this.getHomeChargerStatus(chargerId);
+
+    if (status.chargingStatus !== 'CHARGING') {
+      return null;
+    }
+
+    if (status.sessionId !== undefined) {
+      return this.getChargingSession(status.sessionId);
+    }
+
+    // Device plane had no session id — try driver plane
+    const userStatus = await this.getUserChargingStatus();
+    if (userStatus) {
+      return this.getChargingSession(userStatus.sessionId);
+    }
+
+    return null;
   }
 
   async startChargingSession(deviceId: number, options?: StartSessionOptions): Promise<ChargingSession> {

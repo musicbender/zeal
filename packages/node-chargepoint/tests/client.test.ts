@@ -13,6 +13,7 @@ import {
   TEST_TOKEN,
   TEST_CHARGER_ID,
   TEST_SESSION_ID,
+  TEST_SESSION_ID_99,
   TEST_DEVICE_ID,
 } from './handlers.js';
 
@@ -242,6 +243,78 @@ describe('getChargingSession()', () => {
     expect(session.energyKwh).toBe(10.5);
     expect(session.startTime).toBeInstanceOf(Date);
     expect(session.updateData).toHaveLength(1);
+  });
+});
+
+describe('getHomeChargerSession()', () => {
+  it('returns a ChargingSession via device-plane session id when charger is CHARGING', async () => {
+    const chargerStatusCharging = (await import('./fixtures/charger-status-charging.json', { with: { type: 'json' } })).default;
+    server.use(
+      http.get(
+        `https://hcpoprodhcm.chargepoint.com/api/v1/configuration/users/1234567890/chargers/${TEST_CHARGER_ID}/status`,
+        () => HttpResponse.json(chargerStatusCharging),
+      ),
+    );
+
+    const client = await authenticatedClient();
+    const session = await client.getHomeChargerSession(TEST_CHARGER_ID);
+
+    expect(session).not.toBeNull();
+    expect(session?.sessionId).toBe(TEST_SESSION_ID_99);
+    expect(session?.energyKwh).toBe(8.3);
+    expect(session?.isHomeCharger).toBe(true);
+  });
+
+  it('returns null when charger is not CHARGING', async () => {
+    const client = await authenticatedClient();
+    // Default charger-status fixture has chargingStatus: NOT_CHARGING
+    const session = await client.getHomeChargerSession(TEST_CHARGER_ID);
+    expect(session).toBeNull();
+  });
+
+  it('falls back to driver plane when device plane has no sessionId', async () => {
+    server.use(
+      http.get(
+        `https://hcpoprodhcm.chargepoint.com/api/v1/configuration/users/1234567890/chargers/${TEST_CHARGER_ID}/status`,
+        () => HttpResponse.json({
+          brand: 'ChargePoint', model: 'CPH25', macAddress: 'AA:BB:CC:DD:EE:FF',
+          chargingStatus: 'CHARGING', isPluggedIn: true, isConnected: true,
+          isReminderEnabled: false, plugInReminderTime: '22:00',
+          hasUtilityInfo: false, isDuringScheduledTime: false,
+          chargeAmperageSettings: { chargeLimit: 32, inProgress: false, possibleChargeLimit: [16, 24, 32] },
+          // no sessionId field
+        }),
+      ),
+    );
+
+    const client = await authenticatedClient();
+    // Default charging-status fixture has session_id: 1
+    const session = await client.getHomeChargerSession(TEST_CHARGER_ID);
+
+    expect(session).not.toBeNull();
+    expect(session?.sessionId).toBe(TEST_SESSION_ID);
+  });
+
+  it('returns null when charger is CHARGING but neither plane yields a session', async () => {
+    server.use(
+      http.get(
+        `https://hcpoprodhcm.chargepoint.com/api/v1/configuration/users/1234567890/chargers/${TEST_CHARGER_ID}/status`,
+        () => HttpResponse.json({
+          brand: 'ChargePoint', model: 'CPH25', macAddress: 'AA:BB:CC:DD:EE:FF',
+          chargingStatus: 'CHARGING', isPluggedIn: true, isConnected: true,
+          isReminderEnabled: false, plugInReminderTime: '22:00',
+          hasUtilityInfo: false, isDuringScheduledTime: false,
+          chargeAmperageSettings: { chargeLimit: 32, inProgress: false, possibleChargeLimit: [16, 24, 32] },
+        }),
+      ),
+      http.post('https://mc.chargepoint.com/map-prod/v2', () =>
+        HttpResponse.json({ user_status: null }),
+      ),
+    );
+
+    const client = await authenticatedClient();
+    const session = await client.getHomeChargerSession(TEST_CHARGER_ID);
+    expect(session).toBeNull();
   });
 });
 

@@ -307,12 +307,23 @@ export class ChargingSession {
 
     if (!status) {
       let chargerConfirmedCharging = false;
+      let chargerSessionId: number | undefined;
       try {
         const chargerStatus = await client.getHomeChargerStatus(deviceId);
         chargerConfirmedCharging = chargerStatus.chargingStatus === 'CHARGING';
+        chargerSessionId = chargerStatus.sessionId;
       } catch {
         // Cross-check unavailable; proceed with what we know.
       }
+
+      // Device plane may supply a session id even when the driver plane does not
+      if (chargerConfirmedCharging && chargerSessionId !== undefined) {
+        const session = new ChargingSession(chargerSessionId);
+        session._setClient(client);
+        await session.refresh();
+        return session;
+      }
+
       throw new StartVerificationTimeoutError(deviceId, pollTimeoutMs, pollAttempts, chargerConfirmedCharging);
     }
 

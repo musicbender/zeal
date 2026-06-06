@@ -4,7 +4,7 @@ import { server } from './setup.js';
 import { ChargePoint } from '../src/client.js';
 import { ChargingSession } from '../src/session.js';
 import { CommunicationError, NoActiveSessionError, StartVerificationTimeoutError } from '../src/exceptions.js';
-import { TEST_TOKEN, TEST_SESSION_ID, TEST_DEVICE_ID, TEST_USER_ID } from './handlers.js';
+import { TEST_TOKEN, TEST_SESSION_ID, TEST_SESSION_ID_99, TEST_DEVICE_ID, TEST_USER_ID } from './handlers.js';
 
 async function authenticatedClient(): Promise<ChargePoint> {
   return ChargePoint.create('testuser', { coulombToken: TEST_TOKEN });
@@ -251,6 +251,31 @@ describe('ChargingSession.start()', () => {
     expect(session.sessionId).toBe(TEST_SESSION_ID);
     expect(session.energyKwh).toBe(10.5);
     expect(userStatusCallCount).toBe(0);
+  });
+
+  it('resolves via device-plane session id when driver-plane polling exhausts but charger reports CHARGING with sessionId', async () => {
+    server.use(
+      http.post('https://mc.chargepoint.com/map-prod/v2', () =>
+        HttpResponse.json({ user_status: null }),
+      ),
+      http.get(
+        `https://hcpoprodhcm.chargepoint.com/api/v1/configuration/users/${TEST_USER_ID}/chargers/${TEST_DEVICE_ID}/status`,
+        () => HttpResponse.json({
+          brand: 'ChargePoint', model: 'CPH25', macAddress: 'AA:BB:CC:DD:EE:FF',
+          chargingStatus: 'CHARGING', sessionId: TEST_SESSION_ID_99,
+          isPluggedIn: true, isConnected: true, isReminderEnabled: false,
+          plugInReminderTime: '22:00', hasUtilityInfo: false, isDuringScheduledTime: false,
+          chargeAmperageSettings: { chargeLimit: 32, inProgress: false, possibleChargeLimit: [16, 24, 32] },
+        }),
+      ),
+    );
+
+    const client = await authenticatedClient();
+    const session = await ChargingSession.start(TEST_DEVICE_ID, client, { pollTimeoutMs: 0 });
+
+    expect(session).toBeInstanceOf(ChargingSession);
+    expect(session.sessionId).toBe(TEST_SESSION_ID_99);
+    expect(session.energyKwh).toBe(8.3);
   });
 
   it('propagates sendCommand failure as CommunicationError, not StartVerificationTimeoutError', async () => {

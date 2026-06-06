@@ -234,6 +234,43 @@ if (!window) {
 
 ### Charging Status and Sessions
 
+#### Home charger sessions (recommended)
+
+`getHomeChargerSession(chargerId)` resolves the active session for a home charger regardless of
+how it was started — including sessions started manually in the ChargePoint app, auto-started on
+plug-in, or started via this library.
+
+```typescript
+const [chargerId] = await client.getHomeChargers();
+
+const session = await client.getHomeChargerSession(chargerId);
+if (session) {
+  console.log(session.chargingState);  // "CHARGING"
+  console.log(session.energyKwh);     // 6.42
+  console.log(session.powerKw);       // 7.2
+  await session.stop();
+}
+```
+
+Returns `null` when the charger is not actively charging or no session can be resolved.
+
+Resolution order:
+1. **Device plane** — reads the session id from `getHomeChargerStatus` when the device API
+   surfaces it (app-started, auto-started, and RFID sessions).
+2. **Driver plane fallback** — calls `getUserChargingStatus` for driver-authenticated sessions
+   (started via this library's `startChargingSession`).
+
+`getHomeChargerStatus` also surfaces optional live telemetry fields when the device API includes
+them: `sessionId`, `energyKwh`, `powerKw`, and `sessionStartTime`.
+
+> **Driver-plane vs device-plane identity:** `getUserChargingStatus()` is the *driver plane*
+> and is only populated for sessions bound to the current authenticated context (API-started
+> or driver-authenticated sessions). The *device plane* (`getHomeChargerStatus`) reflects the
+> physical charger state and surfaces sessions regardless of how they were started. Use
+> `getHomeChargerSession` as the primary path for home charger session management.
+
+#### Driver-plane status
+
 ```typescript
 const status = await client.getUserChargingStatus();
 if (status) {

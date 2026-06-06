@@ -128,6 +128,14 @@ export interface HomeChargerStatus {
   possibleAmperageLimits: number[];
   hasUtilityInfo: boolean;
   isDuringScheduledTime: boolean;
+  /** Present when the device plane reports an active session id. */
+  sessionId?: number;
+  /** Live energy delivered in the active session (kWh), when available from device plane. */
+  energyKwh?: number;
+  /** Live charge power (kW), when available from device plane. */
+  powerKw?: number;
+  /** Session start time, when available from device plane. */
+  sessionStartTime?: Date;
 }
 
 export interface HomeChargerTechnicalInfo {
