@@ -325,22 +325,16 @@ export class SunkeepService {
 
 		// Reconcile in-memory state with what the charger and database say.
 		// Handles process restarts that left a session running on the charger
-		// and/or an open ChargingEvent row in the DB.
-		const stoppedAutoSession = await this.reconcileWithCharger(chargerStatus);
+		// and/or an open ChargingEvent row in the DB, and adopts sessions started
+		// outside Sunkeep (ChargePoint app, auto-start on plug-in) so we manage them.
+		await this.reconcileWithCharger(chargerStatus);
 
-		// Adoption failed for an unknown session (no activeEventId means we didn't
-		// start it). Do not attempt to start a competing session; wait for the next
-		// tick to retry adoption or for the stop attempt to take effect.
-		// When activeEventId IS set, we started this session and are just waiting
-		// for getUserChargingStatus to propagate — continue in CHARGING state.
-		// When stoppedAutoSession is true, we just cleared an auto-started session and
-		// should proceed immediately to start a managed one rather than waiting a full tick.
-		if (
-			chargerStatus.chargingStatus === 'CHARGING' &&
-			!this.activeSession &&
-			!this.activeEventId &&
-			!stoppedAutoSession
-		) {
+		// Charger is delivering current but adoption did not take ownership this
+		// tick. This only happens on a transient ChargePoint API failure (e.g.
+		// getUserChargingStatus threw) — wait and retry adoption next tick rather
+		// than starting a competing session. A successful adoption always sets
+		// activeEventId (and usually activeSession), so this branch is skipped then.
+		if (chargerStatus.chargingStatus === 'CHARGING' && !this.activeSession && !this.activeEventId) {
 			this.state = SunkeepState.WAITING;
 			this.waitReason = 'Charger busy';
 			return;
@@ -445,15 +439,16 @@ export class SunkeepService {
 		}
 	}
 
-	private async reconcileWithCharger(chargerStatus: HomeChargerStatus): Promise<boolean> {
+	private async reconcileWithCharger(chargerStatus: HomeChargerStatus): Promise<void> {
 		const chargerIsCharging = chargerStatus.chargingStatus === 'CHARGING';
 
 		// Case 1: Charger is delivering current but we have no in-memory session.
-		// The session was almost certainly started by a prior process instance —
-		// adopt it so the state machine and excessKw calculation behave correctly.
+		// The session was started by a prior process instance, the ChargePoint app,
+		// or an auto-start on plug-in — adopt it so the state machine and excessKw
+		// calculation behave correctly and Sunkeep can manage its amperage.
 		if (chargerIsCharging && !this.activeSession) {
-			const stoppedAutoSession = await this.adoptOrphanedSession(chargerStatus);
-			return stoppedAutoSession;
+			await this.adoptOrphanedSession(chargerStatus);
+			return;
 		}
 
 		// Case 2: Charger stopped externally while we still hold a session handle.
@@ -473,7 +468,7 @@ export class SunkeepService {
 			await this.stopActiveSession(StopReason.UNKNOWN);
 			this.state = SunkeepState.IDLE;
 			this.waitReason = null;
-			return false;
+			return;
 		}
 
 		// Case 3: Charger stopped and we have an open event but no session handle.
@@ -490,7 +485,7 @@ export class SunkeepService {
 			await this.stopActiveSession(StopReason.UNKNOWN);
 			this.state = SunkeepState.IDLE;
 			this.waitReason = null;
-			return false;
+			return;
 		}
 
 		// Case 4: Charger not charging and no active state — close any lingering DB
@@ -498,57 +493,59 @@ export class SunkeepService {
 		if (!chargerIsCharging && !this.activeSession) {
 			await this.closeStaleIncompleteEvent();
 		}
-		return false;
 	}
 
-	private async adoptOrphanedSession(chargerStatus: HomeChargerStatus): Promise<boolean> {
+	private async adoptOrphanedSession(chargerStatus: HomeChargerStatus): Promise<void> {
 		let userStatus: UserChargingStatus | null;
 		try {
 			userStatus = await this.chargePoint.getUserChargingStatus();
 		} catch (err) {
 			log.warn({ err }, 'getUserChargingStatus failed during session adoption');
-			return false;
+			return;
 		}
-		if (!userStatus) {
-			if (this.activeEventId) {
-				// We started this session; the user-status API hasn't caught up yet.
-				// Keep CHARGING state and retry adoption on the next tick rather than
-				// trying to stop our own session (which would fail with error 165).
-				log.warn(
-					'Session we started is not yet visible via getUserChargingStatus — retrying adoption next tick'
-				);
-				this.state = SunkeepState.CHARGING;
-				return false;
-			}
-			// Unknown session — most likely an auto-start triggered on plug-in.
-			// Stop it and immediately proceed with a Sunkeep-managed session in the same tick.
-			log.warn(
-				'Charger reports CHARGING but getUserChargingStatus returned null — stopping auto-started session'
-			);
+
+		let session: ChargingSession | null = null;
+		if (userStatus) {
 			try {
-				await this.chargePoint.stopChargingSession(this.config.chargePointDeviceId);
-				log.info('Stopped auto-started session; will start managed session this tick');
+				session = await this.chargePoint.getChargingSession(userStatus.sessionId);
 			} catch (err) {
-				if (err instanceof NoActiveSessionError) {
-					// The session is not stoppable via API (app-initiated or already settled).
-					// The charger may still be physically active; wait for it to clear.
-					log.info('Auto-started session not stoppable via API — waiting for charger to settle');
-				} else {
-					log.warn({ err }, 'Failed to stop auto-started session — will retry next tick');
-				}
-				return false;
+				log.warn({ err, sessionId: userStatus.sessionId }, 'getChargingSession failed');
+				return;
 			}
-			return true;
+		} else if (this.activeEventId) {
+			// We started this session; the user-status API hasn't caught up yet.
+			// Keep CHARGING state and retry adoption on the next tick rather than
+			// creating a duplicate event or trying to stop our own session.
+			log.warn(
+				'Session we started is not yet visible via getUserChargingStatus — retrying adoption next tick'
+			);
+			this.state = SunkeepState.CHARGING;
+			return;
+		} else {
+			// Charger is delivering current but the session is not visible via the
+			// user-status API: started from the ChargePoint app, an auto-start on
+			// plug-in, or simple propagation lag. Amperage is controlled at the
+			// charger via setAmperageLimit regardless of who owns the session, so
+			// adopt it without a session handle and let the normal tick logic manage
+			// amps from solar excess. This replaces the old stop-and-restart, which
+			// left app-started sessions (not stoppable via API) stuck on "Charger
+			// busy" and never adjusting.
+			log.info(
+				'Charger CHARGING with no API-visible session — adopting without a session handle to manage amperage'
+			);
 		}
 
-		let session: ChargingSession;
-		try {
-			session = await this.chargePoint.getChargingSession(userStatus.sessionId);
-		} catch (err) {
-			log.warn({ err, sessionId: userStatus.sessionId }, 'getChargingSession failed');
-			return false;
-		}
+		await this.finalizeAdoption(chargerStatus, session);
+	}
 
+	// Resolve the DB ChargingEvent row (reuse a fresh one, close stale/extra rows,
+	// or create a new one) and move into CHARGING state. The session handle may be
+	// null when the charger is charging but no API-visible session exists; amperage
+	// is still managed via setAmperageLimit on the device.
+	private async finalizeAdoption(
+		chargerStatus: HomeChargerStatus,
+		session: ChargingSession | null
+	): Promise<void> {
 		const amps = chargerStatus.amperageLimit;
 		const incompletes = await this.prisma.chargingEvent
 			.findMany({ where: { stoppedAt: null }, orderBy: { startedAt: 'desc' } })
@@ -640,13 +637,13 @@ export class SunkeepService {
 		log.info(
 			{
 				eventId,
-				sessionId: session.sessionId,
+				sessionId: session?.sessionId ?? null,
 				amps,
 				recoveredFromDb: isFresh,
+				adoptedWithoutHandle: session === null,
 			},
 			'Adopted in-progress charging session'
 		);
-		return false;
 	}
 
 	private async closeStaleIncompleteEvent(): Promise<void> {
