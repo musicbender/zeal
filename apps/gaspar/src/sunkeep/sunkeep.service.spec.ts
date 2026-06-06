@@ -68,6 +68,7 @@ const mockPrisma = {
 	chargingEvent: {
 		create: vi.fn().mockResolvedValue({ id: 'event-1' }),
 		update: vi.fn().mockResolvedValue({}),
+		delete: vi.fn().mockResolvedValue({}),
 		findMany: vi.fn().mockResolvedValue([]),
 	},
 };
@@ -421,8 +422,47 @@ describe('SunkeepService', () => {
 		await service.runTick();
 
 		expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
+		// The optimistically-created row must be deleted, not left open — otherwise the
+		// next tick's reconcile closes it as a bogus UNKNOWN "session".
+		expect(mockPrisma.chargingEvent.delete).toHaveBeenCalledWith({ where: { id: 'event-1' } });
 		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
 		expect(service.getStatus().waitReason).toBe('Car fully charged');
+	});
+
+	it('does not re-attempt a start (no churning event rows) after a car-full rejection until unplugged', async () => {
+		// Reproduces the real-world bug: a full car for which ChargePoint reports
+		// NOT_CHARGING (rather than DONE). Without the carReportedFull guard, every
+		// 10-minute tick would create a fresh event row, attempt a start, get error 25,
+		// and orphan the row — producing one junk ~10-minute "session" per tick.
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+		const cpError = new CommunicationError(
+			422,
+			'Failed to start ChargePoint session: {"errorId":25,"errorCategory":"CHARGE","errorMessage":"Unable to start charging."}'
+		);
+		// Only the first tick should reach startChargingSession; the guard must prevent
+		// any further attempts, so a single one-shot rejection is all that's needed.
+		mockCp.startChargingSession.mockRejectedValueOnce(cpError);
+
+		await service.runTick(); // first tick: attempts start, gets error 25, deletes row
+		await service.runTick(); // subsequent ticks: must short-circuit, no new attempt
+		await service.runTick();
+
+		expect(mockCp.startChargingSession).toHaveBeenCalledOnce();
+		expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
+		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+		expect(service.getStatus().waitReason).toBe('Car fully charged');
+
+		// Unplugging clears the guard so a later plug-in gets a fresh attempt.
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus({ isPluggedIn: false }));
+		await service.runTick();
+		expect(service.getStatus().state).toBe(SunkeepState.IDLE);
+
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+		await service.runTick();
+		expect(mockCp.startChargingSession).toHaveBeenCalledTimes(2);
 	});
 
 	it('enters WAITING with extracted errorMessage for non-25 CommunicationErrors', async () => {

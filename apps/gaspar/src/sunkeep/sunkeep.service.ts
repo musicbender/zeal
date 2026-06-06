@@ -48,6 +48,7 @@ interface IncompleteChargingEvent {
 interface IPrismaChargingEvent {
 	create(args: { data: Record<string, unknown> }): Promise<{ id: string }>;
 	update(args: { where: { id: string }; data: Record<string, unknown> }): Promise<unknown>;
+	delete(args: { where: { id: string } }): Promise<unknown>;
 	findMany(args: {
 		where: { stoppedAt: null };
 		orderBy: { startedAt: 'asc' | 'desc' };
@@ -77,6 +78,13 @@ export class SunkeepService {
 	// session stop and on new session start. Guards external-stop detection in
 	// reconcileWithCharger so it doesn't misfire before the charger status propagates.
 	private chargerConfirmedCurrentSession = false;
+	// True once a start attempt was rejected with ChargePoint error 25 (car at its
+	// charge limit) while the charger reports a non-DONE status. ChargePoint does not
+	// always surface 'DONE' for a full car — when it reports 'NOT_CHARGING' instead,
+	// tick() would otherwise sail past the DONE handler and re-attempt a start every
+	// poll, creating a junk ChargingEvent row each time. This flag short-circuits those
+	// attempts until the car is unplugged (or the charger reports CHARGING again).
+	private carReportedFull = false;
 
 	constructor(
 		private readonly chargePoint: IChargePointClient,
@@ -322,6 +330,11 @@ export class SunkeepService {
 		if (chargerStatus.chargingStatus === 'CHARGING' && (this.activeSession || this.activeEventId)) {
 			this.chargerConfirmedCurrentSession = true;
 		}
+		// The charger is delivering current again, so any prior "car full" rejection is
+		// stale — clear the guard so normal management resumes.
+		if (chargerStatus.chargingStatus === 'CHARGING') {
+			this.carReportedFull = false;
+		}
 
 		// Reconcile in-memory state with what the charger and database say.
 		// Handles process restarts that left a session running on the charger
@@ -352,6 +365,17 @@ export class SunkeepService {
 			return;
 		}
 
+		// Car previously rejected a start with error 25 (at its charge limit) and the
+		// charger reports a non-DONE status. Don't re-attempt a start (which would create
+		// a junk ChargingEvent row every tick) — hold in WAITING until the car is
+		// unplugged (handled in the !isPluggedIn branch below) or starts charging again
+		// (handled at the top of tick).
+		if (chargerStatus.isPluggedIn && this.carReportedFull) {
+			this.state = SunkeepState.WAITING;
+			this.waitReason = 'Car fully charged';
+			return;
+		}
+
 		const inSolarWindow = isWithinChargeScheduleWindow({
 			startTime: this.config.solarWindowStart as TimeString,
 			endTime: this.config.solarWindowEnd as TimeString,
@@ -370,6 +394,9 @@ export class SunkeepService {
 			if (this.state === SunkeepState.CHARGING) {
 				await this.stopActiveSession(StopReason.UNPLUGGED);
 			}
+			// Unplugging clears the "car full" guard: the next plug-in may be a
+			// different charge state and deserves a fresh start attempt.
+			this.carReportedFull = false;
 			this.state = SunkeepState.IDLE;
 			this.waitReason = null;
 			return;
@@ -766,6 +793,19 @@ export class SunkeepService {
 					};
 					if (payload.errorId === 25) {
 						waitReason = 'Car fully charged';
+						// The start was definitively rejected (car at charge limit), so no
+						// charging happened — drop the event row we optimistically created
+						// instead of leaving it open for next-tick reconcile to close as a
+						// bogus UNKNOWN "session". Set the guard so we stop re-attempting.
+						this.carReportedFull = true;
+						await this.prisma.chargingEvent
+							.delete({ where: { id: event.id } })
+							.catch((delErr: unknown) => {
+								log.warn(
+									{ err: delErr, eventId: event.id },
+									'Failed to delete event row after car-full (error 25) start rejection'
+								);
+							});
 					} else if (payload.errorMessage) {
 						waitReason = payload.errorMessage;
 					}
