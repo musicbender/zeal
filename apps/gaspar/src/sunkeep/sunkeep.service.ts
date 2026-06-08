@@ -368,6 +368,37 @@ export class SunkeepService {
 			this.carReportedFull = false;
 		}
 
+		const inSolarWindow = isWithinChargeScheduleWindow({
+			startTime: this.config.solarWindowStart as TimeString,
+			endTime: this.config.solarWindowEnd as TimeString,
+		});
+
+		// The charger is delivering current but Sunkeep does not own this session yet
+		// (auto-start on plug-in, ChargePoint app, etc.). If our solar policy says we
+		// should not be charging right now, stop the charger WITHOUT adopting it. Adopting
+		// here would create a ChargingEvent that the gates below immediately close, which
+		// spammed a junk row on every tick while the car kept auto-restarting the session.
+		// Forced sessions are always owned (activeEventId set), so they never reach here.
+		if (
+			chargerStatus.chargingStatus === 'CHARGING' &&
+			!this.activeSession &&
+			!this.activeEventId &&
+			!this.forced
+		) {
+			// Only reject-without-adopting when there is no open event to reuse. A forced
+			// session (or a managed session mid-flight across a restart) always has an open
+			// row — defer to reconcile so it reuses that row and restores the forced flag
+			// rather than being stopped here. The junk-creation case is precisely "no open
+			// row to reuse" (adoption would CREATE one).
+			const reject = this.evaluateSolarPolicy(chargerStatus, pwData, inSolarWindow);
+			if (reject && !(await this.hasReusableChargingEvent())) {
+				await this.stopExternalCharger(reject.waitReason);
+				this.state = SunkeepState.WAITING;
+				this.waitReason = reject.waitReason;
+				return;
+			}
+		}
+
 		// Reconcile in-memory state with what the charger and database say.
 		// Handles process restarts that left a session running on the charger
 		// and/or an open ChargingEvent row in the DB, and adopts sessions started
@@ -408,12 +439,11 @@ export class SunkeepService {
 			return;
 		}
 
-		const inSolarWindow = isWithinChargeScheduleWindow({
-			startTime: this.config.solarWindowStart as TimeString,
-			endTime: this.config.solarWindowEnd as TimeString,
-		});
 		// A forced session charges at any hour — skip the solar-window/night-safety,
-		// no-solar, battery-threshold, and insufficient-excess gates below.
+		// no-solar, battery-threshold, and insufficient-excess gates below. These gates
+		// mirror evaluateSolarPolicy() above but additionally close an owned session and
+		// transition state, so a session adopted on a prior tick is stopped here exactly
+		// once (one legit event close) before becoming unowned and handled above.
 		if (!this.forced && !inSolarWindow) {
 			if (this.state === SunkeepState.CHARGING) {
 				await this.stopActiveSession(StopReason.NIGHT_SAFETY);
@@ -504,6 +534,63 @@ export class SunkeepService {
 		} else {
 			this.waitReason = null;
 			await this.startSession(targetAmps);
+		}
+	}
+
+	// Returns a reason when Sunkeep's solar policy says we should not be charging right
+	// now, or null when charging is allowed. Used to reject an externally-started session
+	// before adopting it. Mirrors the inline gates in tick() (which additionally manage an
+	// owned session's state); keep the thresholds here in sync with those.
+	private evaluateSolarPolicy(
+		chargerStatus: HomeChargerStatus,
+		pwData: PowerwallData,
+		inSolarWindow: boolean
+	): { waitReason: string } | null {
+		if (!inSolarWindow) return { waitReason: 'Outside solar window' };
+		if (pwData.solarKw === 0) return { waitReason: 'No solar production' };
+		if (pwData.batteryPct < this.config.soeThreshold)
+			return { waitReason: 'Battery below threshold' };
+		const carAmps =
+			chargerStatus.chargingStatus === 'CHARGING' && chargerStatus.amperageLimit
+				? chargerStatus.amperageLimit
+				: 0;
+		const excessKw = pwData.solarKw - pwData.loadKw + (carAmps * VOLTAGE) / 1000;
+		if (excessKw < MIN_EXCESS_KW) return { waitReason: 'Insufficient solar excess' };
+		return null;
+	}
+
+	// True when an open (unstopped) ChargingEvent exists that is fresh enough to reuse.
+	// Used to decide whether an externally-started session should be stopped without
+	// adoption (no reusable row) or handed to reconcile to reuse (e.g. a forced session
+	// whose flag must be restored after a restart).
+	private async hasReusableChargingEvent(): Promise<boolean> {
+		const incompletes = await this.prisma.chargingEvent
+			.findMany({ where: { stoppedAt: null }, orderBy: { startedAt: 'desc' } })
+			.catch((err: unknown) => {
+				log.warn(
+					{ err },
+					'Failed to check for reusable ChargingEvent before external-charge reject'
+				);
+				return null;
+			});
+		const freshest = incompletes?.[0];
+		if (!freshest) return false;
+		return Date.now() - freshest.startedAt.getTime() <= MAX_INCOMPLETE_EVENT_AGE_MS;
+	}
+
+	// Stop a charging session that began outside Sunkeep when our policy is not met,
+	// without adopting it or writing a ChargingEvent. Best-effort: a charger that is
+	// already idle (NoActiveSessionError) is treated as success.
+	private async stopExternalCharger(reason: string): Promise<void> {
+		try {
+			await this.chargePoint.stopChargingSession(this.config.chargePointDeviceId);
+			log.info({ reason }, 'Stopped externally-started charging (Sunkeep policy not met)');
+		} catch (err) {
+			if (err instanceof NoActiveSessionError) {
+				log.info('Externally-started charging already stopped');
+			} else {
+				log.warn({ err }, 'Failed to stop externally-started charging');
+			}
 		}
 	}
 

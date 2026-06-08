@@ -1475,10 +1475,10 @@ describe('SunkeepService', () => {
 	// --- Force charging ---
 
 	describe('force charging', () => {
-		it('adopts an auto-started session and stops it when the Powerwall is below threshold', async () => {
-			// ChargePoint auto-starts charging on plug-in; Sunkeep adopts the session,
-			// then stops it because the Powerwall is below the start threshold.
-			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
+		it('stops an auto-started session below threshold without creating a junk event', async () => {
+			// ChargePoint auto-starts charging on plug-in while the Powerwall is below the
+			// start threshold. Sunkeep must stop the charger WITHOUT adopting it or writing
+			// a ChargingEvent — adopting then immediately stopping spammed a row per tick.
 			service.enable();
 			vi.setSystemTime(NOON);
 			mockCp.getHomeChargerStatus.mockResolvedValue(
@@ -1491,16 +1491,51 @@ describe('SunkeepService', () => {
 
 			await service.runTick();
 
-			// The adopted session is stopped (via session handle or device id) and the
-			// event is closed with BATTERY_DEPLETED.
-			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
-				expect.objectContaining({
-					data: expect.objectContaining({ stopReason: StopReason.BATTERY_DEPLETED }),
-				})
-			);
+			expect(mockCp.stopChargingSession).toHaveBeenCalledWith(42);
+			expect(mockPrisma.chargingEvent.create).not.toHaveBeenCalled();
+			expect(mockPrisma.chargingEvent.update).not.toHaveBeenCalled();
 			expect(service.getStatus().state).toBe(SunkeepState.WAITING);
 			expect(service.getStatus().waitReason).toBe('Battery below threshold');
 			expect(service.getStatus().forced).toBe(false);
+		});
+
+		it('does not create events across repeated ticks while the car auto-charges below threshold', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 24,
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 80 }));
+
+			await service.runTick();
+			await service.runTick();
+			await service.runTick();
+
+			expect(mockPrisma.chargingEvent.create).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+			expect(service.getStatus().waitReason).toBe('Battery below threshold');
+		});
+
+		it('stops an externally-started session outside the solar window without an event', async () => {
+			service.enable();
+			vi.setSystemTime(NIGHT);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 24,
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData());
+
+			await service.runTick();
+
+			expect(mockCp.stopChargingSession).toHaveBeenCalledWith(42);
+			expect(mockPrisma.chargingEvent.create).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+			expect(service.getStatus().waitReason).toBe('Outside solar window');
 		});
 
 		it('manualStartSession marks the session forced and exempts it from the battery threshold', async () => {
@@ -1588,9 +1623,18 @@ describe('SunkeepService', () => {
 
 		it('restores the forced flag when adopting a forced session after a restart', async () => {
 			const startedAt = new Date('2026-05-23T10:00:00Z');
-			mockPrisma.chargingEvent.findMany.mockResolvedValueOnce([
-				{ id: 'event-forced', startedAt, startAmps: 16, peakSolarKw: 8.0, forced: true },
-			]);
+			const forcedEvent = {
+				id: 'event-forced',
+				startedAt,
+				startAmps: 16,
+				peakSolarKw: 8.0,
+				forced: true,
+			};
+			// findMany is read twice: once by hasReusableChargingEvent (to defer to
+			// reconcile) and once by finalizeAdoption (to reuse the row).
+			mockPrisma.chargingEvent.findMany
+				.mockResolvedValueOnce([forcedEvent])
+				.mockResolvedValueOnce([forcedEvent]);
 			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
 
 			service.enable();
