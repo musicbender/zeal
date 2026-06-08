@@ -51,7 +51,14 @@ function EventRow({ event }: { event: ChargingEventSummary }) {
 
 	return (
 		<tr>
-			<td className={styles.td}>{formatDate(event.startedAt)}</td>
+			<td className={styles.td}>
+				{formatDate(event.startedAt)}
+				{event.forced && (
+					<Badge color="purple" size="1" variant="soft" ml="2">
+						Forced
+					</Badge>
+				)}
+			</td>
 			<td className={styles.td}>
 				{isRunning ? <span className={styles.running}>{duration}</span> : duration}
 			</td>

@@ -101,6 +101,7 @@ export interface SunkeepStatus {
 	gridStatus: string | null;
 	lastTeslaAt: string | null;
 	waitReason: string | null;
+	forced: boolean;
 }
 
 export interface SunkeepMeta {

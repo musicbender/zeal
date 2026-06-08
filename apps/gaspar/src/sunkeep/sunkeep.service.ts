@@ -43,6 +43,7 @@ interface IncompleteChargingEvent {
 	startedAt: Date;
 	startAmps: number;
 	peakSolarKw: number | null;
+	forced: boolean;
 }
 
 interface IPrismaChargingEvent {
@@ -85,6 +86,13 @@ export class SunkeepService {
 	// poll, creating a junk ChargingEvent row each time. This flag short-circuits those
 	// attempts until the car is unplugged (or the charger reports CHARGING again).
 	private carReportedFull = false;
+	// True when the current session was deliberately force-started from fiendlord-keep
+	// (POST /sunkeep/charge/start). A forced session bypasses the solar/battery policy
+	// gates in tick() — solar window, no-solar, battery-below-threshold, and
+	// insufficient-excess — and charges until unplugged, the car is full, or it is
+	// manually stopped/disabled. Persisted on the ChargingEvent row so it survives a
+	// process restart (restored during adoption) and is recorded in history.
+	private forced = false;
 
 	constructor(
 		private readonly chargePoint: IChargePointClient,
@@ -150,6 +158,7 @@ export class SunkeepService {
 			gridStatus: this.lastPwData?.gridStatus ?? null,
 			lastTeslaAt: this.lastPwData?.lastTeslaAt ?? null,
 			waitReason: this.state === SunkeepState.WAITING ? this.waitReason : null,
+			forced: this.forced,
 		};
 	}
 
@@ -217,11 +226,34 @@ export class SunkeepService {
 			await this.reconcileWithCharger(chargerStatus);
 			// Cast: TS narrowed state to non-CHARGING after the early return at the
 			// top of this method, but reconcile may have mutated it via adoption.
-			if ((this.state as SunkeepState) === SunkeepState.CHARGING) return;
+			if ((this.state as SunkeepState) === SunkeepState.CHARGING) {
+				// The charger had already auto-started (e.g. on plug-in) and we just
+				// adopted it. The user explicitly clicked Force Start, so mark the
+				// adopted session forced — otherwise the next tick's battery/solar
+				// gates would stop it.
+				await this.markSessionForced();
+				return;
+			}
 		}
+		// A deliberate force-start: bypass the solar/battery policy gates on subsequent
+		// ticks until the car is unplugged/full or the session is stopped.
+		this.forced = true;
 		const excessKw = pwData.solarKw - pwData.loadKw;
 		const targetAmps = calcTargetAmps(excessKw);
 		await this.startSession(targetAmps);
+	}
+
+	// Mark the in-flight session as force-charged and persist the flag onto its
+	// ChargingEvent row so it survives a restart and is recorded in history.
+	private async markSessionForced(): Promise<void> {
+		this.forced = true;
+		const eventId = this.activeEventId;
+		if (!eventId) return;
+		await this.prisma.chargingEvent
+			.update({ where: { id: eventId }, data: { forced: true } })
+			.catch((err: unknown) => {
+				log.warn({ err, eventId }, 'Failed to persist forced flag on ChargingEvent');
+			});
 	}
 
 	async lockAmps(amps: number): Promise<void> {
@@ -380,7 +412,9 @@ export class SunkeepService {
 			startTime: this.config.solarWindowStart as TimeString,
 			endTime: this.config.solarWindowEnd as TimeString,
 		});
-		if (!inSolarWindow) {
+		// A forced session charges at any hour — skip the solar-window/night-safety,
+		// no-solar, battery-threshold, and insufficient-excess gates below.
+		if (!this.forced && !inSolarWindow) {
 			if (this.state === SunkeepState.CHARGING) {
 				await this.stopActiveSession(StopReason.NIGHT_SAFETY);
 			}
@@ -402,7 +436,7 @@ export class SunkeepService {
 			return;
 		}
 
-		if (pwData.solarKw === 0) {
+		if (!this.forced && pwData.solarKw === 0) {
 			if (this.state === SunkeepState.CHARGING) {
 				await this.stopActiveSession(StopReason.NIGHT_SAFETY);
 			}
@@ -411,8 +445,15 @@ export class SunkeepService {
 			return;
 		}
 
-		if (pwData.batteryPct < this.config.soeThreshold) {
+		if (!this.forced && pwData.batteryPct < this.config.soeThreshold) {
 			if (this.state === SunkeepState.CHARGING) {
+				// We adopted a session the charger auto-started (e.g. on plug-in) but the
+				// Powerwall is below the start threshold — stop it. Force-charged sessions
+				// skip this gate (this.forced short-circuits above).
+				log.info(
+					{ batteryPct: pwData.batteryPct, soeThreshold: this.config.soeThreshold },
+					'Charger is charging but Powerwall is below threshold — stopping session'
+				);
 				await this.stopActiveSession(StopReason.BATTERY_DEPLETED);
 				this.state = SunkeepState.WAITING;
 			} else {
@@ -434,7 +475,7 @@ export class SunkeepService {
 					: 0;
 		const excessKw = pwData.solarKw - pwData.loadKw + (carAmps * VOLTAGE) / 1000;
 
-		if (excessKw < MIN_EXCESS_KW) {
+		if (!this.forced && excessKw < MIN_EXCESS_KW) {
 			if (this.state === SunkeepState.CHARGING) {
 				await this.stopActiveSession(StopReason.SOLAR_DROPPED);
 				this.state = SunkeepState.WAITING;
@@ -613,10 +654,15 @@ export class SunkeepService {
 		let eventId: string;
 		let startedAt: Date;
 		let peakSolarKw: number;
+		// Restore the forced flag from a reused row so a force-charged session that
+		// outlived a process restart stays exempt from the policy gates. A freshly
+		// created row (externally-started session) is never forced.
+		let forcedFlag: boolean;
 		if (isFresh && freshest) {
 			eventId = freshest.id;
 			startedAt = freshest.startedAt;
 			peakSolarKw = freshest.peakSolarKw ?? this.lastPwData?.solarKw ?? 0;
+			forcedFlag = freshest.forced ?? false;
 		} else {
 			// Either no DB row exists, or the existing one is too old to plausibly
 			// belong to the currently-active ChargePoint session. Close the stale
@@ -651,6 +697,7 @@ export class SunkeepService {
 			eventId = event.id;
 			startedAt = now;
 			peakSolarKw = this.lastPwData?.solarKw ?? 0;
+			forcedFlag = false;
 		}
 
 		this.activeSession = session;
@@ -658,6 +705,7 @@ export class SunkeepService {
 		this.currentAmps = amps;
 		this.peakSolarKw = peakSolarKw;
 		this.sessionStartedAt = startedAt;
+		this.forced = forcedFlag;
 		this.state = SunkeepState.CHARGING;
 		this.waitReason = null;
 		this.chargerConfirmedCurrentSession = true;
@@ -668,6 +716,7 @@ export class SunkeepService {
 				amps,
 				recoveredFromDb: isFresh,
 				adoptedWithoutHandle: session === null,
+				forced: forcedFlag,
 			},
 			'Adopted in-progress charging session'
 		);
@@ -747,6 +796,7 @@ export class SunkeepService {
 			data: {
 				startAmps: targetAmps,
 				peakSolarKw: this.lastPwData?.solarKw ?? null,
+				forced: this.forced,
 			},
 		});
 		const startedAt = new Date();
@@ -798,6 +848,10 @@ export class SunkeepService {
 						// instead of leaving it open for next-tick reconcile to close as a
 						// bogus UNKNOWN "session". Set the guard so we stop re-attempting.
 						this.carReportedFull = true;
+						// No session exists, so this force-start did not take — drop the
+						// forced flag to keep the invariant "no active session ⇒ not forced"
+						// and avoid poisoning a later automated start.
+						this.forced = false;
 						await this.prisma.chargingEvent
 							.delete({ where: { id: event.id } })
 							.catch((delErr: unknown) => {
@@ -832,7 +886,11 @@ export class SunkeepService {
 	}
 
 	private async stopActiveSession(reason: StopReason): Promise<void> {
-		if (!this.activeEventId) return;
+		if (!this.activeEventId) {
+			// No session to close, but make sure a stale forced flag can't survive.
+			this.forced = false;
+			return;
+		}
 
 		const session = this.activeSession;
 		const eventId = this.activeEventId;
@@ -876,5 +934,6 @@ export class SunkeepService {
 		this.sessionStartedAt = null;
 		this.lockedAmps = null;
 		this.chargerConfirmedCurrentSession = false;
+		this.forced = false;
 	}
 }

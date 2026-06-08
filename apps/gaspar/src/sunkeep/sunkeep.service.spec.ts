@@ -1472,6 +1472,147 @@ describe('SunkeepService', () => {
 		});
 	});
 
+	// --- Force charging ---
+
+	describe('force charging', () => {
+		it('adopts an auto-started session and stops it when the Powerwall is below threshold', async () => {
+			// ChargePoint auto-starts charging on plug-in; Sunkeep adopts the session,
+			// then stops it because the Powerwall is below the start threshold.
+			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 16,
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 75 }));
+
+			await service.runTick();
+
+			// The adopted session is stopped (via session handle or device id) and the
+			// event is closed with BATTERY_DEPLETED.
+			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
+				expect.objectContaining({
+					data: expect.objectContaining({ stopReason: StopReason.BATTERY_DEPLETED }),
+				})
+			);
+			expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+			expect(service.getStatus().waitReason).toBe('Battery below threshold');
+			expect(service.getStatus().forced).toBe(false);
+		});
+
+		it('manualStartSession marks the session forced and exempts it from the battery threshold', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+
+			await service.manualStartSession();
+
+			expect(service.getStatus().forced).toBe(true);
+			expect(mockPrisma.chargingEvent.create).toHaveBeenCalledWith(
+				expect.objectContaining({ data: expect.objectContaining({ forced: true }) })
+			);
+
+			// Powerwall drops well below threshold — a forced session must NOT stop.
+			mockSession.stop.mockClear();
+			mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 50 }));
+			await service.runTick();
+
+			expect(mockSession.stop).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+			expect(service.getStatus().forced).toBe(true);
+		});
+
+		it('keeps a forced session charging outside the solar window', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+			mockPw.getData.mockResolvedValue(goodPwData());
+			await service.manualStartSession();
+			expect(service.getStatus().forced).toBe(true);
+
+			vi.setSystemTime(NIGHT);
+			mockSession.stop.mockClear();
+			await service.runTick();
+
+			expect(mockSession.stop).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+		});
+
+		it('Force Start on an already auto-charging session adopts it and marks it forced', async () => {
+			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 16,
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 60 }));
+
+			await service.manualStartSession();
+
+			expect(mockCp.startChargingSession).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+			expect(service.getStatus().forced).toBe(true);
+			// The forced flag is persisted onto the adopted event row.
+			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
+				expect.objectContaining({ data: { forced: true } })
+			);
+
+			// The next tick (still below threshold) must not stop it.
+			mockSession.stop.mockClear();
+			await service.runTick();
+			expect(mockSession.stop).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+		});
+
+		it('clears the forced flag when the session stops', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+			mockPw.getData.mockResolvedValue(goodPwData());
+			await service.manualStartSession();
+			expect(service.getStatus().forced).toBe(true);
+
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus({ isPluggedIn: false }));
+			await service.runTick();
+
+			expect(service.getStatus().state).toBe(SunkeepState.IDLE);
+			expect(service.getStatus().forced).toBe(false);
+		});
+
+		it('restores the forced flag when adopting a forced session after a restart', async () => {
+			const startedAt = new Date('2026-05-23T10:00:00Z');
+			mockPrisma.chargingEvent.findMany.mockResolvedValueOnce([
+				{ id: 'event-forced', startedAt, startAmps: 16, peakSolarKw: 8.0, forced: true },
+			]);
+			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
+
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 16,
+				})
+			);
+			// Below threshold: a non-forced adoption would stop, but the restored
+			// forced flag must keep it charging.
+			mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 70 }));
+
+			await service.runTick();
+
+			expect(mockSession.stop).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+			expect(service.getStatus().forced).toBe(true);
+		});
+	});
+
 	// --- isPluggedIn tracking ---
 
 	it('tracks isPluggedIn in status after tick', async () => {
