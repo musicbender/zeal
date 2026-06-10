@@ -28,6 +28,12 @@ const MIN_AMPS = 8;
 const MAX_AMPS = 32;
 const VOLTAGE = 240;
 const MIN_EXCESS_KW = 1.5;
+// Number of consecutive ticks the charger must report a non-charging status before we
+// treat an owned session as externally stopped. ChargePoint occasionally returns a single
+// not-charging poll for a session that is still live (e.g. right after an amperage
+// change); closing on the first observation tore the event down and the next tick rebuilt
+// it, churning ~10-minute "unknown" rows. Requiring two observations debounces that blip.
+const EXTERNAL_STOP_CONFIRM_TICKS = 2;
 // Open ChargingEvent rows older than this are assumed to belong to a prior
 // session that ended outside our awareness — when adopting, we close them
 // and start a fresh row rather than show a misleading multi-day duration.
@@ -93,6 +99,11 @@ export class SunkeepService {
 	// manually stopped/disabled. Persisted on the ChargingEvent row so it survives a
 	// process restart (restored during adoption) and is recorded in history.
 	private forced = false;
+	// Count of consecutive ticks the charger has reported a non-charging status while we
+	// still own a confirmed session. Reset to 0 whenever the charger reports CHARGING or
+	// the session is closed. Used to debounce transient not-charging polls before closing
+	// an owned session as an external stop (see EXTERNAL_STOP_CONFIRM_TICKS).
+	private notChargingStreak = 0;
 
 	constructor(
 		private readonly chargePoint: IChargePointClient,
@@ -363,9 +374,12 @@ export class SunkeepService {
 			this.chargerConfirmedCurrentSession = true;
 		}
 		// The charger is delivering current again, so any prior "car full" rejection is
-		// stale — clear the guard so normal management resumes.
+		// stale — clear the guard so normal management resumes. A CHARGING poll also clears
+		// the external-stop debounce streak: whatever made an earlier poll read not-charging
+		// was transient.
 		if (chargerStatus.chargingStatus === 'CHARGING') {
 			this.carReportedFull = false;
+			this.notChargingStreak = 0;
 		}
 
 		const inSolarWindow = isWithinChargeScheduleWindow({
@@ -395,6 +409,31 @@ export class SunkeepService {
 				await this.stopExternalCharger(reject.waitReason);
 				this.state = SunkeepState.WAITING;
 				this.waitReason = reject.waitReason;
+				return;
+			}
+		}
+
+		// Debounce a transient not-charging poll for a session we own. ChargePoint sometimes
+		// reports a single NOT_CHARGING status for a session that is still live (notably right
+		// after an amperage change). Closing on the first observation tore the event down and
+		// the next tick rebuilt it, churning "unknown" rows every ~10 minutes. Hold for one
+		// tick before letting reconcile close it; a real external stop is confirmed by the
+		// next not-charging poll. DONE and unplugged are excluded — they have dedicated
+		// handlers below that close with a specific reason.
+		const ownsConfirmedSession =
+			this.chargerConfirmedCurrentSession &&
+			(this.activeSession !== null || this.activeEventId !== null);
+		const chargerReportsStopped =
+			chargerStatus.chargingStatus !== 'CHARGING' &&
+			chargerStatus.chargingStatus !== 'DONE' &&
+			chargerStatus.isPluggedIn;
+		if (ownsConfirmedSession && chargerReportsStopped) {
+			this.notChargingStreak += 1;
+			if (this.notChargingStreak < EXTERNAL_STOP_CONFIRM_TICKS) {
+				log.info(
+					{ streak: this.notChargingStreak, chargingStatus: chargerStatus.chargingStatus },
+					'Charger reports not charging for an owned session — holding one tick before closing'
+				);
 				return;
 			}
 		}
@@ -1022,5 +1061,6 @@ export class SunkeepService {
 		this.lockedAmps = null;
 		this.chargerConfirmedCurrentSession = false;
 		this.forced = false;
+		this.notChargingStreak = 0;
 	}
 }
