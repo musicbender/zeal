@@ -57,10 +57,26 @@ describe('TeslaEnergyClient', () => {
 		]);
 
 		await client.getData();
+		// Bust the short-lived live_status cache so the second call re-fetches data.
+		(client as unknown as { liveStatusCache: unknown }).liveStatusCache = null;
 		await client.getData();
 
 		// token fetched once, live_status fetched twice = 3 total
 		expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3);
+	});
+
+	it('serves cached live_status within the TTL instead of re-fetching', async () => {
+		mockFetch([
+			{ ok: true, body: TOKEN_RESPONSE },
+			{ ok: true, body: LIVE_STATUS_RESPONSE },
+		]);
+
+		const a = await client.getData();
+		const b = await client.getData(); // within TTL → cached, no second live_status fetch
+
+		expect(b).toEqual(a);
+		// 1 token + 1 live_status only
+		expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
 	});
 
 	it('throws TeslaAuthError on login_required and circuit-breaks subsequent calls', async () => {
@@ -124,8 +140,9 @@ describe('TeslaEnergyClient', () => {
 		]);
 
 		await client.getData();
-		// Force expiry
+		// Force token expiry and bust the live_status cache so the next call re-fetches both.
 		(client as unknown as { tokenExpiresAt: number }).tokenExpiresAt = Date.now() - 1;
+		(client as unknown as { liveStatusCache: unknown }).liveStatusCache = null;
 		await client.getData();
 
 		const calls = vi.mocked(fetch).mock.calls;

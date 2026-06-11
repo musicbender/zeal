@@ -76,6 +76,11 @@ export interface SunkeepConfig {
 	solarWindowEnd: string;
 	sunkeepEnabled: boolean;
 	soeThreshold: number;
+	// Hysteresis deadband (percentage points) below soeThreshold. Charging starts at
+	// soeThreshold but, once running, is not stopped for low battery until it drops below
+	// (soeThreshold - soeHysteresis). Avoids on/off flapping when the battery hovers at
+	// the threshold. Optional; the service applies a default when omitted.
+	soeHysteresis?: number;
 }
 
 export interface ActiveSessionSummary {
@@ -101,6 +106,7 @@ export interface SunkeepStatus {
 	gridStatus: string | null;
 	lastTeslaAt: string | null;
 	waitReason: string | null;
+	forced: boolean;
 }
 
 export interface SunkeepMeta {

@@ -54,16 +54,26 @@ interface LiveStatusResponse {
 
 const AUTH_BASE = 'https://auth.tesla.com';
 const FLEET_BASE = 'https://fleet-api.prd.na.vn.cloud.tesla.com';
+// Serve a recent successful live_status read instead of re-hitting Tesla. The scheduler
+// ticks every 10 minutes, so this never stales a scheduled poll; it only collapses bursts
+// of manual /sunkeep/poll calls into one upstream request, which avoids Tesla 429s.
+const LIVE_STATUS_TTL_MS = 30_000;
 
 export class TeslaEnergyClient implements IPowerwallAdapter {
 	private accessToken: string | null = null;
 	private tokenExpiresAt = 0;
 	private fatalError: TeslaAuthError | null = null;
 	private refreshPromise: Promise<void> | null = null;
+	private liveStatusCache: { data: PowerwallData; at: number } | null = null;
 
 	constructor(private readonly config: TeslaClientConfig) {}
 
 	async getData(): Promise<PowerwallData> {
+		const cached = this.liveStatusCache;
+		if (cached && Date.now() - cached.at < LIVE_STATUS_TTL_MS) {
+			return cached.data;
+		}
+
 		await this.refreshIfNeeded();
 
 		const res = await fetch(
@@ -91,7 +101,7 @@ export class TeslaEnergyClient implements IPowerwallAdapter {
 			throw new Error(`Tesla live_status unexpected shape: ${JSON.stringify(body)}`);
 		}
 
-		return {
+		const data: PowerwallData = {
 			batteryPct: percentage_charged,
 			solarKw: solar_power / 1000,
 			loadKw: load_power / 1000,
@@ -100,6 +110,10 @@ export class TeslaEnergyClient implements IPowerwallAdapter {
 			gridStatus: grid_status ?? null,
 			lastTeslaAt: timestamp ?? null,
 		};
+		// Cache only successful reads; failures fall through so callers see the error and
+		// the next call retries the upstream.
+		this.liveStatusCache = { data, at: Date.now() };
+		return data;
 	}
 
 	async getSiteInfo(): Promise<TeslaSiteInfo> {
