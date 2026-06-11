@@ -34,6 +34,8 @@ const MIN_EXCESS_KW = 1.5;
 // change); closing on the first observation tore the event down and the next tick rebuilt
 // it, churning ~10-minute "unknown" rows. Requiring two observations debounces that blip.
 const EXTERNAL_STOP_CONFIRM_TICKS = 2;
+// Default hysteresis deadband (percentage points) when config.soeHysteresis is unset.
+const DEFAULT_SOE_HYSTERESIS = 3;
 // Open ChargingEvent rows older than this are assumed to belong to a prior
 // session that ended outside our awareness — when adopting, we close them
 // and start a fresh row rather than show a misleading multi-day duration.
@@ -201,11 +203,15 @@ export class SunkeepService {
 				this.state = SunkeepState.DISABLED;
 				return;
 			}
-			log.error({ err }, 'Sunkeep tick error');
-			if (this.state === SunkeepState.CHARGING) {
-				await this.stopActiveSession(StopReason.ERROR);
-			}
-			this.state = SunkeepState.ERROR;
+			// Any other error (transient Tesla 5xx/429/timeout, ChargePoint comms, network)
+			// must not tear down an active session. Tesla's API is flaky enough that closing
+			// the session on a single failed poll repeatedly interrupted charging and churned
+			// "error" events. Keep the current state and session and retry next tick;
+			// management resumes once the upstream recovers.
+			log.warn(
+				{ err },
+				'Sunkeep tick failed — keeping current state and session, will retry next tick'
+			);
 		}
 	}
 
@@ -514,13 +520,17 @@ export class SunkeepService {
 			return;
 		}
 
-		if (!this.forced && pwData.batteryPct < this.config.soeThreshold) {
+		// Hysteresis: start charging at soeThreshold, but once charging don't stop until the
+		// battery drops below (soeThreshold - soeHysteresis). Avoids on/off flapping when the
+		// battery hovers right at the threshold.
+		const batteryFloor = this.batteryFloor(this.state === SunkeepState.CHARGING);
+		if (!this.forced && pwData.batteryPct < batteryFloor) {
 			if (this.state === SunkeepState.CHARGING) {
 				// We adopted a session the charger auto-started (e.g. on plug-in) but the
-				// Powerwall is below the start threshold — stop it. Force-charged sessions
-				// skip this gate (this.forced short-circuits above).
+				// Powerwall has fallen below the floor — stop it. Force-charged sessions skip
+				// this gate (this.forced short-circuits above).
 				log.info(
-					{ batteryPct: pwData.batteryPct, soeThreshold: this.config.soeThreshold },
+					{ batteryPct: pwData.batteryPct, batteryFloor },
 					'Charger is charging but Powerwall is below threshold — stopping session'
 				);
 				await this.stopActiveSession(StopReason.BATTERY_DEPLETED);
@@ -576,10 +586,20 @@ export class SunkeepService {
 		}
 	}
 
+	// Effective battery floor for the threshold gate. When a session is already running we
+	// apply the hysteresis deadband (soeThreshold - soeHysteresis) so charging isn't stopped
+	// the instant the battery dips below the start threshold; when deciding whether to start
+	// fresh we require the full soeThreshold.
+	private batteryFloor(charging: boolean): number {
+		const hysteresis = this.config.soeHysteresis ?? DEFAULT_SOE_HYSTERESIS;
+		return charging ? this.config.soeThreshold - hysteresis : this.config.soeThreshold;
+	}
+
 	// Returns a reason when Sunkeep's solar policy says we should not be charging right
 	// now, or null when charging is allowed. Used to reject an externally-started session
-	// before adopting it. Mirrors the inline gates in tick() (which additionally manage an
-	// owned session's state); keep the thresholds here in sync with those.
+	// before adopting it. The charger is actively charging in this context, so the battery
+	// check uses the hysteresis floor (continue-charging threshold) to match the inline
+	// gates in tick().
 	private evaluateSolarPolicy(
 		chargerStatus: HomeChargerStatus,
 		pwData: PowerwallData,
@@ -587,7 +607,7 @@ export class SunkeepService {
 	): { waitReason: string } | null {
 		if (!inSolarWindow) return { waitReason: 'Outside solar window' };
 		if (pwData.solarKw === 0) return { waitReason: 'No solar production' };
-		if (pwData.batteryPct < this.config.soeThreshold)
+		if (pwData.batteryPct < this.batteryFloor(true))
 			return { waitReason: 'Battery below threshold' };
 		const carAmps =
 			chargerStatus.chargingStatus === 'CHARGING' && chargerStatus.amperageLimit
@@ -707,11 +727,12 @@ export class SunkeepService {
 				return;
 			}
 		} else if (this.activeEventId) {
-			// We started this session; the user-status API hasn't caught up yet.
-			// Keep CHARGING state and retry adoption on the next tick rather than
-			// creating a duplicate event or trying to stop our own session.
-			log.warn(
-				'Session we started is not yet visible via getUserChargingStatus — retrying adoption next tick'
+			// We own this session but it isn't visible via the user-status API. For
+			// app/auto-started sessions this is the normal steady state (it never becomes
+			// visible), so this fires every tick — keep it at debug to avoid log spam. The
+			// session keeps CHARGING and the tick's manage block adjusts amperage.
+			log.debug(
+				'Owned session not visible via getUserChargingStatus — managing via charger amperage'
 			);
 			this.state = SunkeepState.CHARGING;
 			return;

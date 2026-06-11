@@ -1687,6 +1687,87 @@ describe('SunkeepService', () => {
 		});
 	});
 
+	// --- Transient-error resilience ---
+
+	describe('transient error resilience', () => {
+		it('keeps the session charging when a tick fails with a transient Tesla error', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+			mockPw.getData.mockResolvedValue(goodPwData());
+			await service.runTick();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+
+			// Tesla live_status fails transiently on the next tick — must not tear down.
+			mockPw.getData.mockRejectedValueOnce(new Error('Tesla live_status failed: 503 — timeout'));
+			await service.runTick();
+
+			expect(mockSession.stop).not.toHaveBeenCalled();
+			expect(mockPrisma.chargingEvent.update).not.toHaveBeenCalledWith(
+				expect.objectContaining({
+					data: expect.objectContaining({ stopReason: StopReason.ERROR }),
+				})
+			);
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+
+			// Recovers and resumes management on the next successful tick.
+			mockPw.getData.mockResolvedValue(goodPwData());
+			await service.runTick();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+		});
+	});
+
+	// --- Battery threshold hysteresis ---
+
+	describe('battery threshold hysteresis', () => {
+		it('keeps charging when battery dips below the start threshold but stays within the band', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+			mockPw.getData.mockResolvedValue(goodPwData());
+			await service.runTick(); // start CHARGING (battery 99)
+
+			// threshold 95, default hysteresis 3 → floor 92. 93 is below start but above floor.
+			mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 93 }));
+			await service.runTick();
+
+			expect(mockSession.stop).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+		});
+
+		it('stops charging once battery falls below the hysteresis floor', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+			mockPw.getData.mockResolvedValue(goodPwData());
+			await service.runTick(); // start CHARGING
+
+			mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 91 })); // below floor 92
+			await service.runTick();
+
+			expect(mockSession.stop).toHaveBeenCalled();
+			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
+				expect.objectContaining({
+					data: expect.objectContaining({ stopReason: StopReason.BATTERY_DEPLETED }),
+				})
+			);
+			expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+		});
+
+		it('does not start a fresh session until battery reaches the full threshold', async () => {
+			// Not charging + battery at 93 (within the band but below start) must not start.
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+			mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 93 }));
+			await service.runTick();
+
+			expect(mockCp.startChargingSession).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+			expect(service.getStatus().waitReason).toBe('Battery below threshold');
+		});
+	});
+
 	// --- External-stop debounce ---
 
 	describe('external-stop debounce', () => {
