@@ -144,6 +144,7 @@ export function SunkeepControls({ status, onAction }: SunkeepControlsProps) {
 	const badgeColor = stateColor(status?.state);
 	const stateLabel = status?.state ?? 'Unavailable';
 	const isLocked = status?.lockedAmps != null;
+	const isForced = status?.forced === true;
 	const isCharging = status?.state === 'CHARGING';
 	const isDisabled = !status || status.state === 'DISABLED';
 	const isLockUnchanged =
@@ -184,6 +185,11 @@ export function SunkeepControls({ status, onAction }: SunkeepControlsProps) {
 						{isLocked && (
 							<Badge color="orange" variant="soft" size="1">
 								Locked
+							</Badge>
+						)}
+						{isForced && (
+							<Badge color="purple" variant="soft" size="1">
+								Forced
 							</Badge>
 						)}
 						{elapsed && (

@@ -28,6 +28,14 @@ const MIN_AMPS = 8;
 const MAX_AMPS = 32;
 const VOLTAGE = 240;
 const MIN_EXCESS_KW = 1.5;
+// Number of consecutive ticks the charger must report a non-charging status before we
+// treat an owned session as externally stopped. ChargePoint occasionally returns a single
+// not-charging poll for a session that is still live (e.g. right after an amperage
+// change); closing on the first observation tore the event down and the next tick rebuilt
+// it, churning ~10-minute "unknown" rows. Requiring two observations debounces that blip.
+const EXTERNAL_STOP_CONFIRM_TICKS = 2;
+// Default hysteresis deadband (percentage points) when config.soeHysteresis is unset.
+const DEFAULT_SOE_HYSTERESIS = 3;
 // Open ChargingEvent rows older than this are assumed to belong to a prior
 // session that ended outside our awareness — when adopting, we close them
 // and start a fresh row rather than show a misleading multi-day duration.
@@ -43,6 +51,7 @@ interface IncompleteChargingEvent {
 	startedAt: Date;
 	startAmps: number;
 	peakSolarKw: number | null;
+	forced: boolean;
 }
 
 interface IPrismaChargingEvent {
@@ -85,6 +94,18 @@ export class SunkeepService {
 	// poll, creating a junk ChargingEvent row each time. This flag short-circuits those
 	// attempts until the car is unplugged (or the charger reports CHARGING again).
 	private carReportedFull = false;
+	// True when the current session was deliberately force-started from fiendlord-keep
+	// (POST /sunkeep/charge/start). A forced session bypasses the solar/battery policy
+	// gates in tick() — solar window, no-solar, battery-below-threshold, and
+	// insufficient-excess — and charges until unplugged, the car is full, or it is
+	// manually stopped/disabled. Persisted on the ChargingEvent row so it survives a
+	// process restart (restored during adoption) and is recorded in history.
+	private forced = false;
+	// Count of consecutive ticks the charger has reported a non-charging status while we
+	// still own a confirmed session. Reset to 0 whenever the charger reports CHARGING or
+	// the session is closed. Used to debounce transient not-charging polls before closing
+	// an owned session as an external stop (see EXTERNAL_STOP_CONFIRM_TICKS).
+	private notChargingStreak = 0;
 
 	constructor(
 		private readonly chargePoint: IChargePointClient,
@@ -150,6 +171,7 @@ export class SunkeepService {
 			gridStatus: this.lastPwData?.gridStatus ?? null,
 			lastTeslaAt: this.lastPwData?.lastTeslaAt ?? null,
 			waitReason: this.state === SunkeepState.WAITING ? this.waitReason : null,
+			forced: this.forced,
 		};
 	}
 
@@ -181,11 +203,15 @@ export class SunkeepService {
 				this.state = SunkeepState.DISABLED;
 				return;
 			}
-			log.error({ err }, 'Sunkeep tick error');
-			if (this.state === SunkeepState.CHARGING) {
-				await this.stopActiveSession(StopReason.ERROR);
-			}
-			this.state = SunkeepState.ERROR;
+			// Any other error (transient Tesla 5xx/429/timeout, ChargePoint comms, network)
+			// must not tear down an active session. Tesla's API is flaky enough that closing
+			// the session on a single failed poll repeatedly interrupted charging and churned
+			// "error" events. Keep the current state and session and retry next tick;
+			// management resumes once the upstream recovers.
+			log.warn(
+				{ err },
+				'Sunkeep tick failed — keeping current state and session, will retry next tick'
+			);
 		}
 	}
 
@@ -217,11 +243,34 @@ export class SunkeepService {
 			await this.reconcileWithCharger(chargerStatus);
 			// Cast: TS narrowed state to non-CHARGING after the early return at the
 			// top of this method, but reconcile may have mutated it via adoption.
-			if ((this.state as SunkeepState) === SunkeepState.CHARGING) return;
+			if ((this.state as SunkeepState) === SunkeepState.CHARGING) {
+				// The charger had already auto-started (e.g. on plug-in) and we just
+				// adopted it. The user explicitly clicked Force Start, so mark the
+				// adopted session forced — otherwise the next tick's battery/solar
+				// gates would stop it.
+				await this.markSessionForced();
+				return;
+			}
 		}
+		// A deliberate force-start: bypass the solar/battery policy gates on subsequent
+		// ticks until the car is unplugged/full or the session is stopped.
+		this.forced = true;
 		const excessKw = pwData.solarKw - pwData.loadKw;
 		const targetAmps = calcTargetAmps(excessKw);
 		await this.startSession(targetAmps);
+	}
+
+	// Mark the in-flight session as force-charged and persist the flag onto its
+	// ChargingEvent row so it survives a restart and is recorded in history.
+	private async markSessionForced(): Promise<void> {
+		this.forced = true;
+		const eventId = this.activeEventId;
+		if (!eventId) return;
+		await this.prisma.chargingEvent
+			.update({ where: { id: eventId }, data: { forced: true } })
+			.catch((err: unknown) => {
+				log.warn({ err, eventId }, 'Failed to persist forced flag on ChargingEvent');
+			});
 	}
 
 	async lockAmps(amps: number): Promise<void> {
@@ -331,9 +380,68 @@ export class SunkeepService {
 			this.chargerConfirmedCurrentSession = true;
 		}
 		// The charger is delivering current again, so any prior "car full" rejection is
-		// stale — clear the guard so normal management resumes.
+		// stale — clear the guard so normal management resumes. A CHARGING poll also clears
+		// the external-stop debounce streak: whatever made an earlier poll read not-charging
+		// was transient.
 		if (chargerStatus.chargingStatus === 'CHARGING') {
 			this.carReportedFull = false;
+			this.notChargingStreak = 0;
+		}
+
+		const inSolarWindow = isWithinChargeScheduleWindow({
+			startTime: this.config.solarWindowStart as TimeString,
+			endTime: this.config.solarWindowEnd as TimeString,
+		});
+
+		// The charger is delivering current but Sunkeep does not own this session yet
+		// (auto-start on plug-in, ChargePoint app, etc.). If our solar policy says we
+		// should not be charging right now, stop the charger WITHOUT adopting it. Adopting
+		// here would create a ChargingEvent that the gates below immediately close, which
+		// spammed a junk row on every tick while the car kept auto-restarting the session.
+		// Forced sessions are always owned (activeEventId set), so they never reach here.
+		if (
+			chargerStatus.chargingStatus === 'CHARGING' &&
+			!this.activeSession &&
+			!this.activeEventId &&
+			!this.forced
+		) {
+			// Only reject-without-adopting when there is no open event to reuse. A forced
+			// session (or a managed session mid-flight across a restart) always has an open
+			// row — defer to reconcile so it reuses that row and restores the forced flag
+			// rather than being stopped here. The junk-creation case is precisely "no open
+			// row to reuse" (adoption would CREATE one).
+			const reject = this.evaluateSolarPolicy(chargerStatus, pwData, inSolarWindow);
+			if (reject && !(await this.hasReusableChargingEvent())) {
+				await this.stopExternalCharger(reject.waitReason);
+				this.state = SunkeepState.WAITING;
+				this.waitReason = reject.waitReason;
+				return;
+			}
+		}
+
+		// Debounce a transient not-charging poll for a session we own. ChargePoint sometimes
+		// reports a single NOT_CHARGING status for a session that is still live (notably right
+		// after an amperage change). Closing on the first observation tore the event down and
+		// the next tick rebuilt it, churning "unknown" rows every ~10 minutes. Hold for one
+		// tick before letting reconcile close it; a real external stop is confirmed by the
+		// next not-charging poll. DONE and unplugged are excluded — they have dedicated
+		// handlers below that close with a specific reason.
+		const ownsConfirmedSession =
+			this.chargerConfirmedCurrentSession &&
+			(this.activeSession !== null || this.activeEventId !== null);
+		const chargerReportsStopped =
+			chargerStatus.chargingStatus !== 'CHARGING' &&
+			chargerStatus.chargingStatus !== 'DONE' &&
+			chargerStatus.isPluggedIn;
+		if (ownsConfirmedSession && chargerReportsStopped) {
+			this.notChargingStreak += 1;
+			if (this.notChargingStreak < EXTERNAL_STOP_CONFIRM_TICKS) {
+				log.info(
+					{ streak: this.notChargingStreak, chargingStatus: chargerStatus.chargingStatus },
+					'Charger reports not charging for an owned session — holding one tick before closing'
+				);
+				return;
+			}
 		}
 
 		// Reconcile in-memory state with what the charger and database say.
@@ -376,11 +484,12 @@ export class SunkeepService {
 			return;
 		}
 
-		const inSolarWindow = isWithinChargeScheduleWindow({
-			startTime: this.config.solarWindowStart as TimeString,
-			endTime: this.config.solarWindowEnd as TimeString,
-		});
-		if (!inSolarWindow) {
+		// A forced session charges at any hour — skip the solar-window/night-safety,
+		// no-solar, battery-threshold, and insufficient-excess gates below. These gates
+		// mirror evaluateSolarPolicy() above but additionally close an owned session and
+		// transition state, so a session adopted on a prior tick is stopped here exactly
+		// once (one legit event close) before becoming unowned and handled above.
+		if (!this.forced && !inSolarWindow) {
 			if (this.state === SunkeepState.CHARGING) {
 				await this.stopActiveSession(StopReason.NIGHT_SAFETY);
 			}
@@ -402,7 +511,7 @@ export class SunkeepService {
 			return;
 		}
 
-		if (pwData.solarKw === 0) {
+		if (!this.forced && pwData.solarKw === 0) {
 			if (this.state === SunkeepState.CHARGING) {
 				await this.stopActiveSession(StopReason.NIGHT_SAFETY);
 			}
@@ -411,8 +520,19 @@ export class SunkeepService {
 			return;
 		}
 
-		if (pwData.batteryPct < this.config.soeThreshold) {
+		// Hysteresis: start charging at soeThreshold, but once charging don't stop until the
+		// battery drops below (soeThreshold - soeHysteresis). Avoids on/off flapping when the
+		// battery hovers right at the threshold.
+		const batteryFloor = this.batteryFloor(this.state === SunkeepState.CHARGING);
+		if (!this.forced && pwData.batteryPct < batteryFloor) {
 			if (this.state === SunkeepState.CHARGING) {
+				// We adopted a session the charger auto-started (e.g. on plug-in) but the
+				// Powerwall has fallen below the floor — stop it. Force-charged sessions skip
+				// this gate (this.forced short-circuits above).
+				log.info(
+					{ batteryPct: pwData.batteryPct, batteryFloor },
+					'Charger is charging but Powerwall is below threshold — stopping session'
+				);
 				await this.stopActiveSession(StopReason.BATTERY_DEPLETED);
 				this.state = SunkeepState.WAITING;
 			} else {
@@ -434,7 +554,7 @@ export class SunkeepService {
 					: 0;
 		const excessKw = pwData.solarKw - pwData.loadKw + (carAmps * VOLTAGE) / 1000;
 
-		if (excessKw < MIN_EXCESS_KW) {
+		if (!this.forced && excessKw < MIN_EXCESS_KW) {
 			if (this.state === SunkeepState.CHARGING) {
 				await this.stopActiveSession(StopReason.SOLAR_DROPPED);
 				this.state = SunkeepState.WAITING;
@@ -463,6 +583,73 @@ export class SunkeepService {
 		} else {
 			this.waitReason = null;
 			await this.startSession(targetAmps);
+		}
+	}
+
+	// Effective battery floor for the threshold gate. When a session is already running we
+	// apply the hysteresis deadband (soeThreshold - soeHysteresis) so charging isn't stopped
+	// the instant the battery dips below the start threshold; when deciding whether to start
+	// fresh we require the full soeThreshold.
+	private batteryFloor(charging: boolean): number {
+		const hysteresis = this.config.soeHysteresis ?? DEFAULT_SOE_HYSTERESIS;
+		return charging ? this.config.soeThreshold - hysteresis : this.config.soeThreshold;
+	}
+
+	// Returns a reason when Sunkeep's solar policy says we should not be charging right
+	// now, or null when charging is allowed. Used to reject an externally-started session
+	// before adopting it. The charger is actively charging in this context, so the battery
+	// check uses the hysteresis floor (continue-charging threshold) to match the inline
+	// gates in tick().
+	private evaluateSolarPolicy(
+		chargerStatus: HomeChargerStatus,
+		pwData: PowerwallData,
+		inSolarWindow: boolean
+	): { waitReason: string } | null {
+		if (!inSolarWindow) return { waitReason: 'Outside solar window' };
+		if (pwData.solarKw === 0) return { waitReason: 'No solar production' };
+		if (pwData.batteryPct < this.batteryFloor(true))
+			return { waitReason: 'Battery below threshold' };
+		const carAmps =
+			chargerStatus.chargingStatus === 'CHARGING' && chargerStatus.amperageLimit
+				? chargerStatus.amperageLimit
+				: 0;
+		const excessKw = pwData.solarKw - pwData.loadKw + (carAmps * VOLTAGE) / 1000;
+		if (excessKw < MIN_EXCESS_KW) return { waitReason: 'Insufficient solar excess' };
+		return null;
+	}
+
+	// True when an open (unstopped) ChargingEvent exists that is fresh enough to reuse.
+	// Used to decide whether an externally-started session should be stopped without
+	// adoption (no reusable row) or handed to reconcile to reuse (e.g. a forced session
+	// whose flag must be restored after a restart).
+	private async hasReusableChargingEvent(): Promise<boolean> {
+		const incompletes = await this.prisma.chargingEvent
+			.findMany({ where: { stoppedAt: null }, orderBy: { startedAt: 'desc' } })
+			.catch((err: unknown) => {
+				log.warn(
+					{ err },
+					'Failed to check for reusable ChargingEvent before external-charge reject'
+				);
+				return null;
+			});
+		const freshest = incompletes?.[0];
+		if (!freshest) return false;
+		return Date.now() - freshest.startedAt.getTime() <= MAX_INCOMPLETE_EVENT_AGE_MS;
+	}
+
+	// Stop a charging session that began outside Sunkeep when our policy is not met,
+	// without adopting it or writing a ChargingEvent. Best-effort: a charger that is
+	// already idle (NoActiveSessionError) is treated as success.
+	private async stopExternalCharger(reason: string): Promise<void> {
+		try {
+			await this.chargePoint.stopChargingSession(this.config.chargePointDeviceId);
+			log.info({ reason }, 'Stopped externally-started charging (Sunkeep policy not met)');
+		} catch (err) {
+			if (err instanceof NoActiveSessionError) {
+				log.info('Externally-started charging already stopped');
+			} else {
+				log.warn({ err }, 'Failed to stop externally-started charging');
+			}
 		}
 	}
 
@@ -540,11 +727,12 @@ export class SunkeepService {
 				return;
 			}
 		} else if (this.activeEventId) {
-			// We started this session; the user-status API hasn't caught up yet.
-			// Keep CHARGING state and retry adoption on the next tick rather than
-			// creating a duplicate event or trying to stop our own session.
-			log.warn(
-				'Session we started is not yet visible via getUserChargingStatus — retrying adoption next tick'
+			// We own this session but it isn't visible via the user-status API. For
+			// app/auto-started sessions this is the normal steady state (it never becomes
+			// visible), so this fires every tick — keep it at debug to avoid log spam. The
+			// session keeps CHARGING and the tick's manage block adjusts amperage.
+			log.debug(
+				'Owned session not visible via getUserChargingStatus — managing via charger amperage'
 			);
 			this.state = SunkeepState.CHARGING;
 			return;
@@ -613,10 +801,15 @@ export class SunkeepService {
 		let eventId: string;
 		let startedAt: Date;
 		let peakSolarKw: number;
+		// Restore the forced flag from a reused row so a force-charged session that
+		// outlived a process restart stays exempt from the policy gates. A freshly
+		// created row (externally-started session) is never forced.
+		let forcedFlag: boolean;
 		if (isFresh && freshest) {
 			eventId = freshest.id;
 			startedAt = freshest.startedAt;
 			peakSolarKw = freshest.peakSolarKw ?? this.lastPwData?.solarKw ?? 0;
+			forcedFlag = freshest.forced ?? false;
 		} else {
 			// Either no DB row exists, or the existing one is too old to plausibly
 			// belong to the currently-active ChargePoint session. Close the stale
@@ -651,6 +844,7 @@ export class SunkeepService {
 			eventId = event.id;
 			startedAt = now;
 			peakSolarKw = this.lastPwData?.solarKw ?? 0;
+			forcedFlag = false;
 		}
 
 		this.activeSession = session;
@@ -658,6 +852,7 @@ export class SunkeepService {
 		this.currentAmps = amps;
 		this.peakSolarKw = peakSolarKw;
 		this.sessionStartedAt = startedAt;
+		this.forced = forcedFlag;
 		this.state = SunkeepState.CHARGING;
 		this.waitReason = null;
 		this.chargerConfirmedCurrentSession = true;
@@ -668,6 +863,7 @@ export class SunkeepService {
 				amps,
 				recoveredFromDb: isFresh,
 				adoptedWithoutHandle: session === null,
+				forced: forcedFlag,
 			},
 			'Adopted in-progress charging session'
 		);
@@ -747,6 +943,7 @@ export class SunkeepService {
 			data: {
 				startAmps: targetAmps,
 				peakSolarKw: this.lastPwData?.solarKw ?? null,
+				forced: this.forced,
 			},
 		});
 		const startedAt = new Date();
@@ -798,6 +995,10 @@ export class SunkeepService {
 						// instead of leaving it open for next-tick reconcile to close as a
 						// bogus UNKNOWN "session". Set the guard so we stop re-attempting.
 						this.carReportedFull = true;
+						// No session exists, so this force-start did not take — drop the
+						// forced flag to keep the invariant "no active session ⇒ not forced"
+						// and avoid poisoning a later automated start.
+						this.forced = false;
 						await this.prisma.chargingEvent
 							.delete({ where: { id: event.id } })
 							.catch((delErr: unknown) => {
@@ -832,7 +1033,11 @@ export class SunkeepService {
 	}
 
 	private async stopActiveSession(reason: StopReason): Promise<void> {
-		if (!this.activeEventId) return;
+		if (!this.activeEventId) {
+			// No session to close, but make sure a stale forced flag can't survive.
+			this.forced = false;
+			return;
+		}
 
 		const session = this.activeSession;
 		const eventId = this.activeEventId;
@@ -876,5 +1081,7 @@ export class SunkeepService {
 		this.sessionStartedAt = null;
 		this.lockedAmps = null;
 		this.chargerConfirmedCurrentSession = false;
+		this.forced = false;
+		this.notChargingStreak = 0;
 	}
 }

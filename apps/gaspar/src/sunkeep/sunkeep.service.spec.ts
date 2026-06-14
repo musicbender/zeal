@@ -1331,6 +1331,23 @@ describe('SunkeepService', () => {
 			);
 			await service.runTick();
 
+			// First not-charging poll is debounced — the session is held, not yet closed.
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+			expect(mockPrisma.chargingEvent.update).not.toHaveBeenCalledWith(
+				expect.objectContaining({
+					data: expect.objectContaining({ stopReason: StopReason.UNKNOWN }),
+				})
+			);
+
+			// Tick 4: still NOT_CHARGING — external stop confirmed, close as UNKNOWN.
+			mockCp.getHomeChargerStatus.mockResolvedValueOnce(
+				pluggedInStatus({
+					chargingStatus: 'NOT_CHARGING' as HomeChargerStatus['chargingStatus'],
+					isPluggedIn: true,
+				})
+			);
+			await service.runTick();
+
 			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
 				expect.objectContaining({
 					data: expect.objectContaining({ stopReason: StopReason.UNKNOWN }),
@@ -1367,6 +1384,19 @@ describe('SunkeepService', () => {
 			// Tick 3: user stopped via app — charger NOT_CHARGING, still plugged in
 			// Low excess so tick() re-evaluates to "Insufficient solar excess"
 			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 1.8, loadKw: 1.5 }));
+			mockCp.getHomeChargerStatus.mockResolvedValueOnce(
+				pluggedInStatus({
+					chargingStatus: 'NOT_CHARGING' as HomeChargerStatus['chargingStatus'],
+					isPluggedIn: true,
+				})
+			);
+			await service.runTick();
+
+			// First not-charging poll is debounced — session held, not stopped yet.
+			expect(mockSession.stop).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+
+			// Tick 4: still NOT_CHARGING — external stop confirmed, close as UNKNOWN.
 			mockCp.getHomeChargerStatus.mockResolvedValueOnce(
 				pluggedInStatus({
 					chargingStatus: 'NOT_CHARGING' as HomeChargerStatus['chargingStatus'],
@@ -1469,6 +1499,348 @@ describe('SunkeepService', () => {
 			expect(mockCp.startChargingSession).not.toHaveBeenCalled();
 			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
 			expect(service.getStatus().activeSession?.sessionId).toBe(7777);
+		});
+	});
+
+	// --- Force charging ---
+
+	describe('force charging', () => {
+		it('stops an auto-started session below threshold without creating a junk event', async () => {
+			// ChargePoint auto-starts charging on plug-in while the Powerwall is below the
+			// start threshold. Sunkeep must stop the charger WITHOUT adopting it or writing
+			// a ChargingEvent — adopting then immediately stopping spammed a row per tick.
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 16,
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 75 }));
+
+			await service.runTick();
+
+			expect(mockCp.stopChargingSession).toHaveBeenCalledWith(42);
+			expect(mockPrisma.chargingEvent.create).not.toHaveBeenCalled();
+			expect(mockPrisma.chargingEvent.update).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+			expect(service.getStatus().waitReason).toBe('Battery below threshold');
+			expect(service.getStatus().forced).toBe(false);
+		});
+
+		it('does not create events across repeated ticks while the car auto-charges below threshold', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 24,
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 80 }));
+
+			await service.runTick();
+			await service.runTick();
+			await service.runTick();
+
+			expect(mockPrisma.chargingEvent.create).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+			expect(service.getStatus().waitReason).toBe('Battery below threshold');
+		});
+
+		it('stops an externally-started session outside the solar window without an event', async () => {
+			service.enable();
+			vi.setSystemTime(NIGHT);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 24,
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData());
+
+			await service.runTick();
+
+			expect(mockCp.stopChargingSession).toHaveBeenCalledWith(42);
+			expect(mockPrisma.chargingEvent.create).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+			expect(service.getStatus().waitReason).toBe('Outside solar window');
+		});
+
+		it('manualStartSession marks the session forced and exempts it from the battery threshold', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+
+			await service.manualStartSession();
+
+			expect(service.getStatus().forced).toBe(true);
+			expect(mockPrisma.chargingEvent.create).toHaveBeenCalledWith(
+				expect.objectContaining({ data: expect.objectContaining({ forced: true }) })
+			);
+
+			// Powerwall drops well below threshold — a forced session must NOT stop.
+			mockSession.stop.mockClear();
+			mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 50 }));
+			await service.runTick();
+
+			expect(mockSession.stop).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+			expect(service.getStatus().forced).toBe(true);
+		});
+
+		it('keeps a forced session charging outside the solar window', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+			mockPw.getData.mockResolvedValue(goodPwData());
+			await service.manualStartSession();
+			expect(service.getStatus().forced).toBe(true);
+
+			vi.setSystemTime(NIGHT);
+			mockSession.stop.mockClear();
+			await service.runTick();
+
+			expect(mockSession.stop).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+		});
+
+		it('Force Start on an already auto-charging session adopts it and marks it forced', async () => {
+			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 16,
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 60 }));
+
+			await service.manualStartSession();
+
+			expect(mockCp.startChargingSession).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+			expect(service.getStatus().forced).toBe(true);
+			// The forced flag is persisted onto the adopted event row.
+			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
+				expect.objectContaining({ data: { forced: true } })
+			);
+
+			// The next tick (still below threshold) must not stop it.
+			mockSession.stop.mockClear();
+			await service.runTick();
+			expect(mockSession.stop).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+		});
+
+		it('clears the forced flag when the session stops', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+			mockPw.getData.mockResolvedValue(goodPwData());
+			await service.manualStartSession();
+			expect(service.getStatus().forced).toBe(true);
+
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus({ isPluggedIn: false }));
+			await service.runTick();
+
+			expect(service.getStatus().state).toBe(SunkeepState.IDLE);
+			expect(service.getStatus().forced).toBe(false);
+		});
+
+		it('restores the forced flag when adopting a forced session after a restart', async () => {
+			const startedAt = new Date('2026-05-23T10:00:00Z');
+			const forcedEvent = {
+				id: 'event-forced',
+				startedAt,
+				startAmps: 16,
+				peakSolarKw: 8.0,
+				forced: true,
+			};
+			// findMany is read twice: once by hasReusableChargingEvent (to defer to
+			// reconcile) and once by finalizeAdoption (to reuse the row).
+			mockPrisma.chargingEvent.findMany
+				.mockResolvedValueOnce([forcedEvent])
+				.mockResolvedValueOnce([forcedEvent]);
+			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
+
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 16,
+				})
+			);
+			// Below threshold: a non-forced adoption would stop, but the restored
+			// forced flag must keep it charging.
+			mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 70 }));
+
+			await service.runTick();
+
+			expect(mockSession.stop).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+			expect(service.getStatus().forced).toBe(true);
+		});
+	});
+
+	// --- Transient-error resilience ---
+
+	describe('transient error resilience', () => {
+		it('keeps the session charging when a tick fails with a transient Tesla error', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+			mockPw.getData.mockResolvedValue(goodPwData());
+			await service.runTick();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+
+			// Tesla live_status fails transiently on the next tick — must not tear down.
+			mockPw.getData.mockRejectedValueOnce(new Error('Tesla live_status failed: 503 — timeout'));
+			await service.runTick();
+
+			expect(mockSession.stop).not.toHaveBeenCalled();
+			expect(mockPrisma.chargingEvent.update).not.toHaveBeenCalledWith(
+				expect.objectContaining({
+					data: expect.objectContaining({ stopReason: StopReason.ERROR }),
+				})
+			);
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+
+			// Recovers and resumes management on the next successful tick.
+			mockPw.getData.mockResolvedValue(goodPwData());
+			await service.runTick();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+		});
+	});
+
+	// --- Battery threshold hysteresis ---
+
+	describe('battery threshold hysteresis', () => {
+		it('keeps charging when battery dips below the start threshold but stays within the band', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+			mockPw.getData.mockResolvedValue(goodPwData());
+			await service.runTick(); // start CHARGING (battery 99)
+
+			// threshold 95, default hysteresis 3 → floor 92. 93 is below start but above floor.
+			mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 93 }));
+			await service.runTick();
+
+			expect(mockSession.stop).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+		});
+
+		it('stops charging once battery falls below the hysteresis floor', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+			mockPw.getData.mockResolvedValue(goodPwData());
+			await service.runTick(); // start CHARGING
+
+			mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 91 })); // below floor 92
+			await service.runTick();
+
+			expect(mockSession.stop).toHaveBeenCalled();
+			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
+				expect.objectContaining({
+					data: expect.objectContaining({ stopReason: StopReason.BATTERY_DEPLETED }),
+				})
+			);
+			expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+		});
+
+		it('does not start a fresh session until battery reaches the full threshold', async () => {
+			// Not charging + battery at 93 (within the band but below start) must not start.
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+			mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 93 }));
+			await service.runTick();
+
+			expect(mockCp.startChargingSession).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+			expect(service.getStatus().waitReason).toBe('Battery below threshold');
+		});
+	});
+
+	// --- External-stop debounce ---
+
+	describe('external-stop debounce', () => {
+		it('does not close a session on a single transient NOT_CHARGING poll, then resumes when CHARGING returns', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+
+			// Start and confirm a session.
+			mockCp.getHomeChargerStatus.mockResolvedValueOnce(pluggedInStatus());
+			await service.runTick();
+			mockCp.getHomeChargerStatus.mockResolvedValueOnce(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 12,
+				})
+			);
+			await service.runTick();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+
+			// Transient NOT_CHARGING blip (e.g. right after an amp change) — held, not closed.
+			mockCp.getHomeChargerStatus.mockResolvedValueOnce(
+				pluggedInStatus({ chargingStatus: 'NOT_CHARGING' as HomeChargerStatus['chargingStatus'] })
+			);
+			await service.runTick();
+			expect(mockSession.stop).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+
+			// Charger reports CHARGING again — streak resets, no event was ever closed.
+			mockCp.getHomeChargerStatus.mockResolvedValueOnce(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 12,
+				})
+			);
+			await service.runTick();
+			expect(mockSession.stop).not.toHaveBeenCalled();
+			expect(mockPrisma.chargingEvent.update).not.toHaveBeenCalledWith(
+				expect.objectContaining({
+					data: expect.objectContaining({ stopReason: StopReason.UNKNOWN }),
+				})
+			);
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+		});
+
+		it('closes the session after two consecutive NOT_CHARGING polls', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+
+			mockCp.getHomeChargerStatus.mockResolvedValueOnce(pluggedInStatus());
+			await service.runTick();
+			mockCp.getHomeChargerStatus.mockResolvedValueOnce(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 12,
+				})
+			);
+			await service.runTick();
+
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({ chargingStatus: 'NOT_CHARGING' as HomeChargerStatus['chargingStatus'] })
+			);
+			await service.runTick(); // held
+			expect(mockSession.stop).not.toHaveBeenCalled();
+			await service.runTick(); // confirmed → closed
+
+			expect(mockSession.stop).toHaveBeenCalled();
+			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
+				expect.objectContaining({
+					data: expect.objectContaining({ stopReason: StopReason.UNKNOWN }),
+				})
+			);
 		});
 	});
 

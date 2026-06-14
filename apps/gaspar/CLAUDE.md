@@ -73,21 +73,22 @@ pnpm --filter gaspar prisma:migrate
 
 ## Environment Variables
 
-| Var                     | Description                                                  |
-| ----------------------- | ------------------------------------------------------------ |
-| `DATABASE_URL`          | Neon Postgres URL in prod; `file:./prisma/dev.db` locally    |
-| `TESLA_CLIENT_ID`       | Tesla OAuth app client ID                                    |
-| `TESLA_CLIENT_SECRET`   | Tesla OAuth app client secret                                |
-| `TESLA_REFRESH_TOKEN`   | Long-lived refresh token                                     |
-| `TESLA_ENERGY_SITE_ID`  | Numeric energy site ID (static)                              |
-| `CHARGEPOINT_USERNAME`  | ChargePoint account email                                    |
-| `CHARGEPOINT_PASSWORD`  | ChargePoint account password                                 |
-| `CHARGEPOINT_TOKEN`     | Saved coulombToken (optional — re-authenticates if missing)  |
-| `CHARGEPOINT_DEVICE_ID` | Numeric home charger device ID                               |
-| `SUNKEEP_ENABLED`       | Set to `false` to disable automation (default: enabled)      |
-| `SUNKEEP_SOE_THRESHOLD` | Battery % threshold before automation starts (default: `95`) |
-| `SOLAR_WINDOW_START`    | Start of solar window (default: `06:00`)                     |
-| `SOLAR_WINDOW_END`      | End of solar window (default: `20:00`)                       |
+| Var                      | Description                                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`           | Neon Postgres URL in prod; `file:./prisma/dev.db` locally                                                     |
+| `TESLA_CLIENT_ID`        | Tesla OAuth app client ID                                                                                     |
+| `TESLA_CLIENT_SECRET`    | Tesla OAuth app client secret                                                                                 |
+| `TESLA_REFRESH_TOKEN`    | Long-lived refresh token                                                                                      |
+| `TESLA_ENERGY_SITE_ID`   | Numeric energy site ID (static)                                                                               |
+| `CHARGEPOINT_USERNAME`   | ChargePoint account email                                                                                     |
+| `CHARGEPOINT_PASSWORD`   | ChargePoint account password                                                                                  |
+| `CHARGEPOINT_TOKEN`      | Saved coulombToken (optional — re-authenticates if missing)                                                   |
+| `CHARGEPOINT_DEVICE_ID`  | Numeric home charger device ID                                                                                |
+| `SUNKEEP_ENABLED`        | Set to `false` to disable automation (default: enabled)                                                       |
+| `SUNKEEP_SOE_THRESHOLD`  | Battery % threshold before automation starts (default: `95`)                                                  |
+| `SUNKEEP_SOE_HYSTERESIS` | Deadband % below threshold; once charging, don't stop until battery < (threshold − hysteresis) (default: `3`) |
+| `SOLAR_WINDOW_START`     | Start of solar window (default: `06:00`)                                                                      |
+| `SOLAR_WINDOW_END`       | End of solar window (default: `20:00`)                                                                        |
 
 ## Skills
 

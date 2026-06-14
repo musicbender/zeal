@@ -69,6 +69,7 @@ export interface SunkeepStatus {
 	gridStatus: string | null;
 	lastTeslaAt: string | null;
 	waitReason: string | null;
+	forced: boolean;
 }
 
 export interface SunkeepMeta {
@@ -99,6 +100,7 @@ export interface ChargingEventSummary {
 	endAmps: number | null;
 	peakSolarKw: number | null;
 	energyKwh: number | null;
+	forced: boolean;
 }
 
 export interface ChargingEventsPage {

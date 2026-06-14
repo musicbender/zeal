@@ -20,5 +20,6 @@ export function readSunkeepConfig(): SunkeepConfig {
 		solarWindowEnd: process.env.SOLAR_WINDOW_END ?? '20:00',
 		sunkeepEnabled: process.env.SUNKEEP_ENABLED !== 'false',
 		soeThreshold: Number(process.env.SUNKEEP_SOE_THRESHOLD ?? '95'),
+		soeHysteresis: Number(process.env.SUNKEEP_SOE_HYSTERESIS ?? '3'),
 	};
 }
