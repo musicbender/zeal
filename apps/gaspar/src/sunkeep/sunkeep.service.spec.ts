@@ -1,4 +1,5 @@
 import {
+	ChargerBusyError,
 	CommunicationError,
 	StartVerificationTimeoutError,
 	type HomeChargerStatus,
@@ -463,6 +464,57 @@ describe('SunkeepService', () => {
 		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
 		await service.runTick();
 		expect(mockCp.startChargingSession).toHaveBeenCalledTimes(2);
+	});
+
+	it('enters WAITING with "Charger busy" and drops the row when startChargingSession throws ChargerBusyError', async () => {
+		// ChargePoint error 89: the charger refused the start because the connector is in
+		// use by another user or needs to be re-seated. The start did not take, so Sunkeep
+		// must surface "Charger busy" and delete the optimistically-created event row rather
+		// than leaving it open (which next-tick reconcile would close as a junk UNKNOWN row).
+		// The busy message has no embedded JSON, so the generic CommunicationError parse path
+		// would otherwise mislabel it as "ChargePoint start error" and orphan the row.
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+		const cpError = new ChargerBusyError(
+			'Failed to start charging. May be in use by another user or return plug and try again.',
+			{
+				errorId: 89,
+				errorCategory: 'CHARGE',
+				errorMessage:
+					'Failed to start charging. May be in use by another user or return plug and try again.',
+			}
+		);
+		mockCp.startChargingSession.mockRejectedValueOnce(cpError);
+
+		await service.runTick();
+
+		expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
+		expect(mockPrisma.chargingEvent.delete).toHaveBeenCalledWith({ where: { id: 'event-1' } });
+		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+		expect(service.getStatus().waitReason).toBe('Charger busy');
+	});
+
+	it('retries the start on the next tick after a ChargerBusyError (transient, not car-full)', async () => {
+		// Unlike error 25 (car full), a busy charger is transient: Sunkeep must not set the
+		// carReportedFull guard, so the next tick re-attempts the start once conditions still
+		// hold. The second attempt succeeds and the service reaches CHARGING.
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+		mockCp.startChargingSession
+			.mockRejectedValueOnce(new ChargerBusyError())
+			.mockResolvedValueOnce(mockSession);
+
+		await service.runTick(); // first tick: busy, drops row, WAITING
+		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+		expect(service.getStatus().waitReason).toBe('Charger busy');
+
+		await service.runTick(); // second tick: retries and succeeds
+		expect(mockCp.startChargingSession).toHaveBeenCalledTimes(2);
+		expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
 	});
 
 	it('enters WAITING with extracted errorMessage for non-25 CommunicationErrors', async () => {

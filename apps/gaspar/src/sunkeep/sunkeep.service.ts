@@ -1,5 +1,6 @@
 import { initLogger } from '@repo/logger/server';
 import {
+	ChargerBusyError,
 	CommunicationError,
 	InvalidSession,
 	NoActiveSessionError,
@@ -987,6 +988,32 @@ export class SunkeepService {
 					{ targetAmps, eventId: event.id, pollAttempts: err.pollAttempts },
 					'ChargePoint user-status poll timed out but charger reports CHARGING; treating as success'
 				);
+				return;
+			}
+			// ChargerBusyError (ChargePoint error 89) means the charger refused the start —
+			// the connector is in use by another user or needs to be re-seated ("return plug
+			// and try again"). The start definitively did not take, so unlike a generic
+			// CommunicationError there is no session for next-tick reconcile to adopt; the
+			// optimistically-created row would only be closed as a junk ~10-minute UNKNOWN
+			// "session". Drop the row and wait. The condition is transient (unlike error 25's
+			// car-full), so we do NOT set carReportedFull and we leave `forced` intact — a
+			// forced session retries on the next tick, and an automated one re-evaluates the
+			// solar policy and retries when conditions still hold.
+			if (err instanceof ChargerBusyError) {
+				log.warn(
+					{ err, eventId: event.id, targetAmps },
+					'startChargingSession rejected: charger busy — dropping event row, will retry next tick'
+				);
+				this.state = SunkeepState.WAITING;
+				this.waitReason = 'Charger busy';
+				await this.prisma.chargingEvent
+					.delete({ where: { id: event.id } })
+					.catch((delErr: unknown) => {
+						log.warn(
+							{ err: delErr, eventId: event.id },
+							'Failed to delete event row after charger-busy (error 89) start rejection'
+						);
+					});
 				return;
 			}
 			// Leave the row open so the next tick's reconcile resolves it (adopt if
