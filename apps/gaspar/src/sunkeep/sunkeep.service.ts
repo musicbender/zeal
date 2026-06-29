@@ -145,6 +145,18 @@ export class SunkeepService {
 				}
 			: null;
 
+		// When we own the session (CHARGING state), use currentAmps — what we last commanded.
+		// Falls back to the charger's reported amps when the charger is active but sunkeep
+		// isn't in CHARGING state (transient), or 0 when not charging.
+		const carKw =
+			this.lastPwData != null
+				? this.state === SunkeepState.CHARGING
+					? (this.currentAmps * VOLTAGE) / 1000
+					: this.chargerChargingStatus === 'CHARGING' && this.chargerAmps
+						? (this.chargerAmps * VOLTAGE) / 1000
+						: 0
+				: null;
+
 		return {
 			state: this.state,
 			enabled: this.state !== SunkeepState.DISABLED,
@@ -162,6 +174,7 @@ export class SunkeepService {
 							: 0)
 				: null,
 			loadKw: this.lastPwData?.loadKw ?? null,
+			carKw,
 			batteryPct: this.lastPwData?.batteryPct ?? null,
 			batteryKw: this.lastPwData?.batteryKw ?? null,
 			lockedAmps: this.lockedAmps,

@@ -93,16 +93,13 @@ function batteryRateBadge(
 	return { label: 'Idle', color: 'yellow' };
 }
 
-const VOLTAGE = 240;
-
 export function SunkeepEnergyPanel({ status, batteryCapacityKwh }: SunkeepEnergyPanelProps) {
 	const excessKw = status?.excessKw ?? null;
 	const batteryPct = status?.batteryPct ?? null;
 	const batteryKw = status?.batteryKw ?? null;
 	const gridKw = status?.gridKw ?? null;
 	const loadKw = status?.loadKw ?? null;
-	const carKw =
-		status?.activeSession != null ? (status.activeSession.currentAmps * VOLTAGE) / 1000 : 0;
+	const carKw = status?.carKw ?? 0;
 	const houseKw = loadKw != null ? loadKw - carKw : null;
 
 	const batteryNote = (() => {

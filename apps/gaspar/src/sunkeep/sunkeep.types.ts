@@ -97,6 +97,7 @@ export interface SunkeepStatus {
 	solarKw: number | null;
 	excessKw: number | null;
 	loadKw: number | null;
+	carKw: number | null;
 	batteryPct: number | null;
 	batteryKw: number | null;
 	lockedAmps: number | null;
