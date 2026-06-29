@@ -35,7 +35,7 @@ const MIN_EXCESS_KW = 1.5;
 // it, churning ~10-minute "unknown" rows. Requiring two observations debounces that blip.
 const EXTERNAL_STOP_CONFIRM_TICKS = 2;
 // Default hysteresis deadband (percentage points) when config.soeHysteresis is unset.
-const DEFAULT_SOE_HYSTERESIS = 3;
+const DEFAULT_SOE_HYSTERESIS = 15;
 // Open ChargingEvent rows older than this are assumed to belong to a prior
 // session that ended outside our awareness — when adopting, we close them
 // and start a fresh row rather than show a misleading multi-day duration.
@@ -664,6 +664,13 @@ export class SunkeepService {
 				log.warn({ err }, 'Failed to stop externally-started charging');
 			}
 		}
+		// Belt-and-suspenders: reduce to minimum amps in case the stop command was not heeded
+		// by the hardware (ChargePoint API/hardware desync).
+		await this.chargePoint
+			.setAmperageLimit(this.config.chargePointDeviceId, MIN_AMPS)
+			.catch((err: unknown) => {
+				log.warn({ err }, 'Failed to set minimum amps after external stop attempt');
+			});
 	}
 
 	private async reconcileWithCharger(chargerStatus: HomeChargerStatus): Promise<void> {
@@ -1056,21 +1063,55 @@ export class SunkeepService {
 		const eventId = this.activeEventId;
 		const endAmps = this.currentAmps;
 
-		try {
-			if (session) {
+		// Two independent stop mechanisms: session-handle stop (by session ID) and
+		// device-level stop (by device ID). They hit different ChargePoint API endpoints.
+		// When we have a handle, try it first; if it reports no active session, the device
+		// endpoint may still respond — try that next. This covers the case where the ChargePoint
+		// cloud loses track of a session by ID but still knows the device is charging.
+		let chargerStopConfirmed = false;
+
+		if (session) {
+			try {
 				await session.stop();
-			} else {
-				// activeEventId set but no session handle (StartVerificationTimeoutError path) —
-				// stop by device ID as fallback; expected to 165 if charger already idle (Case 3).
-				await this.chargePoint.stopChargingSession(this.config.chargePointDeviceId);
-			}
-		} catch (err) {
-			if (err instanceof NoActiveSessionError) {
-				log.info('Session already ended on charger, skipping stop');
-			} else {
-				log.warn({ err }, 'Error stopping ChargePoint session');
+				chargerStopConfirmed = true;
+			} catch (err) {
+				if (err instanceof NoActiveSessionError) {
+					log.info('Session stop (by ID) returned no-active-session — trying device-level stop');
+				} else {
+					log.warn({ err }, 'Session stop (by ID) failed — trying device-level stop');
+				}
 			}
 		}
+
+		if (!chargerStopConfirmed) {
+			try {
+				await this.chargePoint.stopChargingSession(this.config.chargePointDeviceId);
+				chargerStopConfirmed = true;
+			} catch (err) {
+				if (err instanceof NoActiveSessionError) {
+					log.info(
+						'Device-level stop also returned no-active-session — charger may already be idle'
+					);
+				} else {
+					log.warn({ err }, 'Device-level stop also failed');
+				}
+			}
+		}
+
+		if (!chargerStopConfirmed) {
+			// Both mechanisms failed — the ChargePoint API/hardware may be desynced.
+			// Set minimum amps so the charger cannot continue at high current.
+			log.warn(
+				'Both stop mechanisms failed or reported no active session; setting minimum amps as fallback'
+			);
+		}
+		// Belt-and-suspenders: set amps to minimum regardless of stop outcome. The ChargePoint API
+		// occasionally reports NoActiveSessionError for a session the hardware is still running.
+		await this.chargePoint
+			.setAmperageLimit(this.config.chargePointDeviceId, MIN_AMPS)
+			.catch((err: unknown) => {
+				log.warn({ err }, 'Failed to set minimum amps after session stop');
+			});
 
 		try {
 			await this.prisma.chargingEvent.update({
