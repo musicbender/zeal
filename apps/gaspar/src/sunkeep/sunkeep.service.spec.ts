@@ -614,7 +614,7 @@ describe('SunkeepService', () => {
 		mockPw.getData.mockResolvedValue(goodPwData());
 		await service.runTick(); // start CHARGING
 
-		mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 80 }));
+		mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 79 })); // below floor 80 (95 - 15 hysteresis)
 		await service.runTick();
 
 		expect(mockSession.stop).toHaveBeenCalled();
@@ -669,6 +669,24 @@ describe('SunkeepService', () => {
 		service.enable();
 		await service.manualStopSession();
 		expect(mockSession.stop).not.toHaveBeenCalled();
+	});
+
+	it('falls back to device-level stop when session.stop() reports no-active-session', async () => {
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+		mockPw.getData.mockResolvedValue(goodPwData());
+		await service.runTick(); // start CHARGING with a session handle
+
+		const { NoActiveSessionError } = await import('node-chargepoint');
+		mockSession.stop.mockRejectedValueOnce(new NoActiveSessionError());
+
+		await service.manualStopSession();
+
+		expect(mockSession.stop).toHaveBeenCalled();
+		// Device-level stop must be attempted as a second mechanism
+		expect(mockCp.stopChargingSession).toHaveBeenCalledWith(42);
+		expect(service.getStatus().state).toBe(SunkeepState.IDLE);
 	});
 
 	// --- Manual start ---
@@ -1538,7 +1556,7 @@ describe('SunkeepService', () => {
 					amperageLimit: 24,
 				})
 			);
-			mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 80 }));
+			mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 79 })); // below floor 80 (95 - 15 hysteresis)
 
 			await service.runTick();
 			await service.runTick();
@@ -1727,7 +1745,7 @@ describe('SunkeepService', () => {
 			mockPw.getData.mockResolvedValue(goodPwData());
 			await service.runTick(); // start CHARGING (battery 99)
 
-			// threshold 95, default hysteresis 3 → floor 92. 93 is below start but above floor.
+			// threshold 95, default hysteresis 15 → floor 80. 93 is below start but above floor.
 			mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 93 }));
 			await service.runTick();
 
@@ -1742,7 +1760,7 @@ describe('SunkeepService', () => {
 			mockPw.getData.mockResolvedValue(goodPwData());
 			await service.runTick(); // start CHARGING
 
-			mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 91 })); // below floor 92
+			mockPw.getData.mockResolvedValue(goodPwData({ batteryPct: 79 })); // below floor 80 (95 - 15 hysteresis)
 			await service.runTick();
 
 			expect(mockSession.stop).toHaveBeenCalled();
