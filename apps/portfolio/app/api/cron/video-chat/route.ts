@@ -46,9 +46,9 @@ export async function GET(req: Request): Promise<Response> {
 			allowed_mentions: { parse: ['everyone'] },
 			embeds: [
 				createEmbed('announcement')
-					.setTitle('⚔️ Family Council')
+					.setTitle('Video chat time! Now!')
 					.setDescription(
-						`The hour of the family council is upon us. Warriors do not linger. They assemble.\n\n[Join the war room](${MEET_LINK})`
+						`The hour of the family council is upon us. Warriors do not linger. They assemble.\n\n[Join the chat](${MEET_LINK})`
 					)
 					.toJSON(),
 			],
