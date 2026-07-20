@@ -1,6 +1,15 @@
-## [v0.10.0](https://github.com/musicbender/node-chargepoint/releases/tag/v0.10.0) — 2026-07-20
+## [v0.11.0](https://github.com/musicbender/node-chargepoint/releases/tag/v0.11.0) — 2026-07-20
 
-<!-- Release notes generated using configuration in .github/release.yml at v0.10.0 -->
+<!-- Release notes generated using configuration in .github/release.yml at v0.11.0 -->
+
+## What's Changed
+### New Features
+* Add VehicleNotReadyError for charge limit and vehicle state issues by @musicbender in https://github.com/musicbender/node-chargepoint/pull/36
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.10.0...v0.11.0
+
+---
 
 ## What's Changed
 ### New Features
