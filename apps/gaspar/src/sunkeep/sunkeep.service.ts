@@ -1,10 +1,12 @@
 import { initLogger } from '@repo/logger/server';
 import {
+	ChargerBusyError,
 	CommunicationError,
 	InvalidSession,
 	NoActiveSessionError,
 	StartVerificationTimeoutError,
 	UnresolvedSessionError,
+	VehicleNotReadyError,
 	isWithinChargeScheduleWindow,
 	type ChargingSession,
 	type HomeChargerStatus,
@@ -999,51 +1001,73 @@ export class SunkeepService {
 				);
 				return;
 			}
+			// VehicleNotReadyError (ChargePoint error 25) means the Tesla's onboard charger
+			// rejected the start because the car is at its charge limit — treat it as "Car
+			// fully charged" so the status is consistent with the DONE path. The start was
+			// definitively rejected, so no charging happened — drop the event row we
+			// optimistically created instead of leaving it open for next-tick reconcile to
+			// close as a bogus UNKNOWN "session". Set the guard so we stop re-attempting.
+			if (err instanceof VehicleNotReadyError) {
+				log.warn(
+					{ err, eventId: event.id, targetAmps },
+					'startChargingSession rejected: vehicle not ready (car at charge limit) — dropping event row'
+				);
+				this.state = SunkeepState.WAITING;
+				this.waitReason = 'Car fully charged';
+				this.carReportedFull = true;
+				// No session exists, so this force-start did not take — drop the forced flag
+				// to keep the invariant "no active session ⇒ not forced" and avoid poisoning a
+				// later automated start.
+				this.forced = false;
+				await this.prisma.chargingEvent
+					.delete({ where: { id: event.id } })
+					.catch((delErr: unknown) => {
+						log.warn(
+							{ err: delErr, eventId: event.id },
+							'Failed to delete event row after vehicle-not-ready (error 25) start rejection'
+						);
+					});
+				return;
+			}
+			// ChargerBusyError (ChargePoint error 89) means the charger refused the start —
+			// the connector is in use by another user or needs to be re-seated ("return plug
+			// and try again"). The start definitively did not take, so unlike a generic
+			// CommunicationError there is no session for next-tick reconcile to adopt; the
+			// optimistically-created row would only be closed as a junk ~10-minute UNKNOWN
+			// "session". Drop the row and wait. The condition is transient (unlike
+			// VehicleNotReadyError's car-full), so we do NOT set carReportedFull and we leave
+			// `forced` intact — a forced session retries on the next tick, and an automated
+			// one re-evaluates the solar policy and retries when conditions still hold.
+			if (err instanceof ChargerBusyError) {
+				log.warn(
+					{ err, eventId: event.id, targetAmps },
+					'startChargingSession rejected: charger busy — dropping event row, will retry next tick'
+				);
+				this.state = SunkeepState.WAITING;
+				this.waitReason = 'Charger busy';
+				await this.prisma.chargingEvent
+					.delete({ where: { id: event.id } })
+					.catch((delErr: unknown) => {
+						log.warn(
+							{ err: delErr, eventId: event.id },
+							'Failed to delete event row after charger-busy (error 89) start rejection'
+						);
+					});
+				return;
+			}
 			// Leave the row open so the next tick's reconcile resolves it (adopt if
 			// the start did take, close as UNKNOWN if it didn't).
 			log.warn(
 				{ err, eventId: event.id, targetAmps },
 				'startChargingSession failed; leaving event open for next-tick reconcile'
 			);
-			// CommunicationError is a transient ChargePoint API error. Go to WAITING so the next
-			// tick retries cleanly instead of landing in ERROR state and alarming dashboards.
-			// Error 25 ("unable to start — try again after unplugging") means the Tesla's
-			// onboard charger rejected the start because the car is at its charge limit —
-			// treat it as "Car fully charged" so the status is consistent with the DONE path.
+			// Any other CommunicationError is a transient ChargePoint API error. Go to WAITING
+			// so the next tick retries cleanly instead of landing in ERROR state and alarming
+			// dashboards. node-chargepoint >=0.11 always surfaces a clean human-readable
+			// message here (no JSON parsing needed).
 			if (err instanceof CommunicationError) {
 				this.state = SunkeepState.WAITING;
-				let waitReason = 'ChargePoint start error';
-				try {
-					const payload = JSON.parse(err.message.slice(err.message.indexOf('{'))) as {
-						errorId?: number;
-						errorMessage?: string;
-					};
-					if (payload.errorId === 25) {
-						waitReason = 'Car fully charged';
-						// The start was definitively rejected (car at charge limit), so no
-						// charging happened — drop the event row we optimistically created
-						// instead of leaving it open for next-tick reconcile to close as a
-						// bogus UNKNOWN "session". Set the guard so we stop re-attempting.
-						this.carReportedFull = true;
-						// No session exists, so this force-start did not take — drop the
-						// forced flag to keep the invariant "no active session ⇒ not forced"
-						// and avoid poisoning a later automated start.
-						this.forced = false;
-						await this.prisma.chargingEvent
-							.delete({ where: { id: event.id } })
-							.catch((delErr: unknown) => {
-								log.warn(
-									{ err: delErr, eventId: event.id },
-									'Failed to delete event row after car-full (error 25) start rejection'
-								);
-							});
-					} else if (payload.errorMessage) {
-						waitReason = payload.errorMessage;
-					}
-				} catch {
-					// keep default
-				}
-				this.waitReason = waitReason;
+				this.waitReason = err.message;
 				return;
 			}
 			throw err;
