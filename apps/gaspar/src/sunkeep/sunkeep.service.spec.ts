@@ -689,11 +689,11 @@ describe('SunkeepService', () => {
 		expect(service.getStatus().state).toBe(SunkeepState.IDLE);
 	});
 
-	it('stops by the resolved real session id instead of the device-level sessionId:0 stop', async () => {
-		// When the session-handle stop reports no-active-session, sunkeep must resolve the
-		// live session id (getUserChargingStatus) and stop THAT real session — not fall back
-		// to the device-level stopChargingSession, which sends sessionId 0 and is rejected
-		// with error 165 (leaving the charger running at the amp floor).
+	it('clamps to minimum amps and still closes the record when the session id cannot be resolved', async () => {
+		// node-chargepoint's stopChargingSession throws UnresolvedSessionError when it cannot
+		// resolve the live session id over REST (e.g. a CPH50 that only surfaces auto-started
+		// sessions over WebSocket). Sunkeep must not throw — it closes the event record and
+		// falls back to the MIN_AMPS clamp.
 		service.enable();
 		vi.setSystemTime(NOON);
 		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
@@ -701,18 +701,20 @@ describe('SunkeepService', () => {
 		mockCp.getUserChargingStatus.mockResolvedValueOnce(null); // ghost-session check at start
 		await service.runTick(); // start CHARGING with a session handle
 
-		const { NoActiveSessionError } = await import('node-chargepoint');
+		const { NoActiveSessionError, UnresolvedSessionError } = await import('node-chargepoint');
 		mockSession.stop.mockRejectedValueOnce(new NoActiveSessionError());
-		const resolvedSession = { sessionId: 7777, stop: vi.fn().mockResolvedValue(undefined) };
-		mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
-		mockCp.getChargingSession.mockResolvedValueOnce(resolvedSession as any);
+		mockCp.stopChargingSession.mockRejectedValueOnce(new UnresolvedSessionError(42));
+		mockCp.setAmperageLimit.mockClear();
 
 		await service.manualStopSession();
 
-		expect(mockCp.getChargingSession).toHaveBeenCalledWith(7777);
-		expect(resolvedSession.stop).toHaveBeenCalled();
-		// The real-id stop succeeded, so the device-level sessionId:0 stop must NOT be used.
-		expect(mockCp.stopChargingSession).not.toHaveBeenCalled();
+		// Belt-and-suspenders MIN_AMPS clamp is still applied.
+		expect(mockCp.setAmperageLimit).toHaveBeenCalledWith(42, 8);
+		expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({ stopReason: StopReason.MANUAL }),
+			})
+		);
 		expect(service.getStatus().state).toBe(SunkeepState.IDLE);
 	});
 
@@ -1613,10 +1615,10 @@ describe('SunkeepService', () => {
 			expect(service.getStatus().waitReason).toBe('Outside solar window');
 		});
 
-		it('stops a policy-rejected external session by its real id when one is visible', async () => {
-			// When an externally-started session IS visible via getUserChargingStatus, the
-			// reject path must stop it by its real session id rather than the device-level
-			// sessionId:0 stop (which ChargePoint rejects with error 165).
+		it('clamps to minimum amps in the reject path when the session id cannot be resolved', async () => {
+			// A policy-rejected external session whose id node-chargepoint cannot resolve over
+			// REST (UnresolvedSessionError) must not throw: sunkeep still reaches WAITING and
+			// clamps to MIN_AMPS as the remaining mitigation.
 			service.enable();
 			vi.setSystemTime(NIGHT); // outside solar window → reject without adopting
 			mockCp.getHomeChargerStatus.mockResolvedValue(
@@ -1626,15 +1628,13 @@ describe('SunkeepService', () => {
 				})
 			);
 			mockPw.getData.mockResolvedValue(goodPwData());
-			const resolvedSession = { sessionId: 7777, stop: vi.fn().mockResolvedValue(undefined) };
-			mockCp.getUserChargingStatus.mockResolvedValueOnce({ sessionId: 7777 });
-			mockCp.getChargingSession.mockResolvedValueOnce(resolvedSession as any);
+			const { UnresolvedSessionError } = await import('node-chargepoint');
+			mockCp.stopChargingSession.mockRejectedValueOnce(new UnresolvedSessionError(42));
 
 			await service.runTick();
 
-			expect(mockCp.getChargingSession).toHaveBeenCalledWith(7777);
-			expect(resolvedSession.stop).toHaveBeenCalled();
-			expect(mockCp.stopChargingSession).not.toHaveBeenCalled();
+			expect(mockCp.stopChargingSession).toHaveBeenCalledWith(42);
+			expect(mockCp.setAmperageLimit).toHaveBeenCalledWith(42, 8);
 			expect(mockPrisma.chargingEvent.create).not.toHaveBeenCalled();
 			expect(service.getStatus().state).toBe(SunkeepState.WAITING);
 			expect(service.getStatus().waitReason).toBe('Outside solar window');
