@@ -1,3 +1,5 @@
+import type { ChargePointCommandErrorBody } from './types.js';
+
 export class APIError extends Error {
   constructor(message: string) {
     super(message);
@@ -35,9 +37,17 @@ export class InvalidSession extends CommunicationError {
 }
 
 export class ChargerBusyError extends CommunicationError {
-  constructor(message = 'Charger is busy.', body?: unknown) {
+  constructor(message = 'Charger is busy.', body?: ChargePointCommandErrorBody) {
     super(422, message, body);
     this.name = 'ChargerBusyError';
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
+export class VehicleNotReadyError extends CommunicationError {
+  constructor(message = 'Vehicle is not ready to charge — it may be at its charge limit. Unplug and reconnect, or try again shortly.', body?: ChargePointCommandErrorBody) {
+    super(422, message, body);
+    this.name = 'VehicleNotReadyError';
     Object.setPrototypeOf(this, new.target.prototype);
   }
 }

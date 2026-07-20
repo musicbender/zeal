@@ -13,12 +13,14 @@ export {
   NoActiveSessionError,
   StartVerificationTimeoutError,
   UnresolvedSessionError,
+  VehicleNotReadyError,
 } from './exceptions.js';
 
 export type {
   Account,
   AccountBalance,
   APIEndpoints,
+  ChargePointCommandErrorBody,
   ChargePointOptions,
   ChargeSchedule,
   ChargingStatus,

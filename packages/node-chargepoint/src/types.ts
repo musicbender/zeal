@@ -230,6 +230,13 @@ export interface ChargingSessionUpdate {
   timestamp: Date;
 }
 
+/** Error body shape returned by the ChargePoint start/stop session command endpoints. */
+export interface ChargePointCommandErrorBody {
+  errorId: number;
+  errorCategory?: string;
+  errorMessage: string;
+}
+
 export interface VehicleInfo {
   vehicleId: number;
   batteryCapacity: number;

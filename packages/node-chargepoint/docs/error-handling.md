@@ -4,6 +4,7 @@
 import {
   ChargePoint,
   ChargerBusyError,
+  VehicleNotReadyError,
   LoginError,
   InvalidSession,
   DatadomeCaptcha,
@@ -22,8 +23,10 @@ try {
     console.error('Bot protection triggered:', err.captchaUrl);
   } else if (err instanceof ChargerBusyError) {
     console.error('Charger is busy — try again shortly');
+  } else if (err instanceof VehicleNotReadyError) {
+    console.error('Vehicle not ready to charge:', err.body?.errorMessage);
   } else if (err instanceof CommunicationError) {
-    console.error(`API error ${err.statusCode}:`, err.message);
+    console.error(`API error ${err.statusCode}:`, err.message, err.body);
   }
 }
 ```
@@ -34,6 +37,7 @@ try {
 APIError
 ├── CommunicationError              (non-2xx response)
 │   ├── ChargerBusyError            (charger busy — HTTP 422, errorId 89)
+│   ├── VehicleNotReadyError        (vehicle not ready to charge, e.g. at charge limit — HTTP 422, errorId 25)
 │   ├── NoActiveSessionError        (stop for a missing session — HTTP 422, errorId 165)
 │   ├── LoginError                  (authentication failed)
 │   └── InvalidSession              (session expired — HTTP 401)
@@ -41,6 +45,8 @@ APIError
 ├── StartVerificationTimeoutError   (start ack'd but no session appeared in time)
 └── DatadomeCaptcha                 (Datadome bot protection — HTTP 403)
 ```
+
+Every `CommunicationError` thrown from `sendCommand` (the shared start/stop implementation behind `startChargingSession`, `stopChargingSession`, and `ChargingSession.stop`) carries the parsed ChargePoint error response on `.body`, whether or not it matches one of the typed subclasses above. `.message` is always a human-readable string — either the API's own `errorMessage`, or a generic fallback — and never has JSON embedded in it, so `.body` (typed as `ChargePointCommandErrorBody`) is the place to look for structured details.
 
 ## `ChargerBusyError`
 
@@ -55,6 +61,23 @@ try {
   if (err instanceof ChargerBusyError) {
     // err.statusCode === 422
     console.error('Charger busy, retrying…');
+  }
+}
+```
+
+## `VehicleNotReadyError`
+
+Thrown by `startChargingSession` and `stopChargingSession` (and `ChargingSession.start`/`.stop`) when the ChargePoint API responds with HTTP 422 and `errorId` 25 — indicating the vehicle isn't in a state that can (dis)charge right now, e.g. it's already at its charge limit. Unplug and reconnect the vehicle, or retry later.
+
+```typescript
+import { VehicleNotReadyError } from 'node-chargepoint';
+
+try {
+  await client.startChargingSession(deviceId);
+} catch (err) {
+  if (err instanceof VehicleNotReadyError) {
+    // err.statusCode === 422, err.body?.errorId === 25
+    console.error('Vehicle not ready:', err.message);
   }
 }
 ```

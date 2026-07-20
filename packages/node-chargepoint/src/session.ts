@@ -1,6 +1,6 @@
 import type { ChargePoint } from './client.js';
-import { ChargerBusyError, CommunicationError, NoActiveSessionError, StartVerificationTimeoutError, UnresolvedSessionError } from './exceptions.js';
-import type { ChargingSessionUpdate, ChargingStatus, PowerUtility, StartSessionOptions, VehicleInfo } from './types.js';
+import { ChargerBusyError, CommunicationError, NoActiveSessionError, StartVerificationTimeoutError, UnresolvedSessionError, VehicleNotReadyError } from './exceptions.js';
+import type { ChargePointCommandErrorBody, ChargingSessionUpdate, ChargingStatus, PowerUtility, StartSessionOptions, VehicleInfo } from './types.js';
 
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
@@ -35,21 +35,22 @@ async function sendCommand(
     } catch {
       cmdBody = await response.text();
     }
+    const cmdErrorMessage = typeof (cmdBody as RawObj)?.errorMessage === 'string'
+      ? (cmdBody as RawObj).errorMessage as string
+      : undefined;
     if (response.status === 422 && (cmdBody as RawObj)?.errorId === 89) {
-      const msg = typeof (cmdBody as RawObj)?.errorMessage === 'string'
-        ? (cmdBody as RawObj).errorMessage as string
-        : undefined;
-      throw new ChargerBusyError(msg, cmdBody);
+      throw new ChargerBusyError(cmdErrorMessage, cmdBody as ChargePointCommandErrorBody);
     }
     if (action === 'stop' && response.status === 422 && (cmdBody as RawObj)?.errorId === 165) {
-      const msg = typeof (cmdBody as RawObj)?.errorMessage === 'string'
-        ? (cmdBody as RawObj).errorMessage as string
-        : undefined;
-      throw new NoActiveSessionError(msg, cmdBody);
+      throw new NoActiveSessionError(cmdErrorMessage, cmdBody);
+    }
+    if (response.status === 422 && (cmdBody as RawObj)?.errorId === 25) {
+      throw new VehicleNotReadyError(cmdErrorMessage, cmdBody as ChargePointCommandErrorBody);
     }
     throw new CommunicationError(
       response.status,
-      `Failed to ${action} ChargePoint session: ${typeof cmdBody === 'string' ? cmdBody : JSON.stringify(cmdBody)}`,
+      cmdErrorMessage ?? `Failed to ${action} ChargePoint session.`,
+      cmdBody,
     );
   }
 
@@ -91,7 +92,7 @@ async function sendCommand(
         typeof (errorBody as RawObj)?.errorMessage === 'string'
           ? (errorBody as RawObj).errorMessage as string
           : undefined,
-        errorBody,
+        errorBody as ChargePointCommandErrorBody,
       );
     }
 
@@ -101,6 +102,15 @@ async function sendCommand(
           ? (errorBody as RawObj).errorMessage as string
           : undefined,
         errorBody,
+      );
+    }
+
+    if (ackResponse.status === 422 && (errorBody as RawObj)?.errorId === 25) {
+      throw new VehicleNotReadyError(
+        typeof (errorBody as RawObj)?.errorMessage === 'string'
+          ? (errorBody as RawObj).errorMessage as string
+          : undefined,
+        errorBody as ChargePointCommandErrorBody,
       );
     }
 
@@ -245,7 +255,7 @@ export class ChargingSession {
     const status = json.charging_status as RawObj | undefined;
 
     if (!status || 'error_message' in status || 'error' in status) {
-      throw new CommunicationError(response.status, 'Failed to get charging session data.');
+      throw new CommunicationError(response.status, 'Failed to get charging session data.', status);
     }
 
     this._apply(status);
