@@ -72,6 +72,13 @@ describe('getHomeChargerStatus()', () => {
     expect(typeof status.amperageLimit).toBe('number');
     expect(Array.isArray(status.possibleAmperageLimits)).toBe(true);
     expect(status.possibleAmperageLimits.length).toBeGreaterThan(0);
+
+    // Optional session-plane fields: only present while a session is active.
+    // When the device plane surfaces a session id it must be a usable positive id.
+    if (status.sessionId !== undefined) {
+      expect(typeof status.sessionId).toBe('number');
+      expect(status.sessionId).toBeGreaterThan(0);
+    }
   });
 });
 

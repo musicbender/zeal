@@ -61,6 +61,17 @@ export class NoActiveSessionError extends CommunicationError {
   }
 }
 
+export class UnresolvedSessionError extends APIError {
+  constructor(
+    public readonly deviceId: number,
+    message = `Could not resolve an active charging session for device ${deviceId}. The driver plane (getUserChargingStatus) returned no session and the device plane (getHomeChargerStatus) did not surface a session id. The device may not be charging, or the session may have been started in a way that is not visible to this account.`,
+  ) {
+    super(message);
+    this.name = 'UnresolvedSessionError';
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
 export class StartVerificationTimeoutError extends APIError {
   constructor(
     public readonly deviceId: number,

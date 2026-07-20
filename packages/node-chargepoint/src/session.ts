@@ -1,5 +1,5 @@
 import type { ChargePoint } from './client.js';
-import { ChargerBusyError, CommunicationError, NoActiveSessionError, StartVerificationTimeoutError } from './exceptions.js';
+import { ChargerBusyError, CommunicationError, NoActiveSessionError, StartVerificationTimeoutError, UnresolvedSessionError } from './exceptions.js';
 import type { ChargingSessionUpdate, ChargingStatus, PowerUtility, StartSessionOptions, VehicleInfo } from './types.js';
 
 const sleep = (ms: number): Promise<void> =>
@@ -262,8 +262,56 @@ export class ChargingSession {
     );
   }
 
+  /**
+   * Resolve the active session for a device across both planes, without requiring
+   * a session handle. Returns `null` when no session id can be found.
+   *
+   * Resolution order:
+   * 1. Driver plane (`getUserChargingStatus`) — works for public stations and
+   *    sessions started/owned by the authenticated driver.
+   * 2. Device plane (`getHomeChargerStatus`) — home chargers' auto-started sessions
+   *    are invisible to the driver plane but surface a session id here.
+   */
+  private static async resolveActiveByDevice(
+    deviceId: number,
+    client: ChargePoint,
+  ): Promise<ChargingSession | null> {
+    const userStatus = await client.getUserChargingStatus();
+    if (userStatus && userStatus.sessionId > 0) {
+      const session = await client.getChargingSession(userStatus.sessionId);
+      // getUserChargingStatus reports the driver's active session, which may live
+      // on a *different* device than the one we were asked to stop (e.g. a household
+      // with two chargers). Only accept it when it belongs to this device, otherwise
+      // we could stop the wrong charger. Fall through to the device plane on mismatch.
+      if (session.deviceId === deviceId) {
+        return session;
+      }
+    }
+
+    try {
+      const chargerStatus = await client.getHomeChargerStatus(deviceId);
+      if (chargerStatus.sessionId !== undefined && chargerStatus.sessionId > 0) {
+        return client.getChargingSession(chargerStatus.sessionId);
+      }
+    } catch {
+      // Device-plane lookup unavailable (e.g. deviceId is not a home charger
+      // owned by this account). Fall through to the unresolved-session error.
+    }
+
+    return null;
+  }
+
   static async stopByDevice(deviceId: number, client: ChargePoint): Promise<void> {
-    await sendCommand(client, 'stop', deviceId);
+    // A device-level stop must carry the real sessionId + outletNumber. ChargePoint
+    // rejects a stop for sessionId 0 with HTTP 422 errorId 165 (NoActiveSessionError),
+    // so the previous default of portNumber=1/sessionId=0 could never stop a real
+    // session. Resolve the active session first, then issue the stop with its real
+    // identifiers (mirrors python-chargepoint's ChargingSession.stop()).
+    const session = await ChargingSession.resolveActiveByDevice(deviceId, client);
+    if (!session) {
+      throw new UnresolvedSessionError(deviceId);
+    }
+    await session.stop();
   }
 
   static async start(

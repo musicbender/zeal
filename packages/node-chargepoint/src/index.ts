@@ -12,6 +12,7 @@ export {
   LoginError,
   NoActiveSessionError,
   StartVerificationTimeoutError,
+  UnresolvedSessionError,
 } from './exceptions.js';
 
 export type {

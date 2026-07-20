@@ -405,7 +405,26 @@ describe('_request() error handling', () => {
 });
 
 describe('ChargePoint.stopChargingSession()', () => {
-  it('throws NoActiveSessionError when ChargePoint reports errorId 165 (session already stopped)', async () => {
+  it('resolves the active session and stops with the real sessionId + outletNumber', async () => {
+    let stopBody: Record<string, unknown> | undefined;
+    server.use(
+      http.post('https://account.chargepoint.com/v1/driver/station/stopSession', async ({ request }) => {
+        stopBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ ackId: 'ack-12345' });
+      }),
+    );
+
+    const client = await authenticatedClient();
+    // Default user-status fixture resolves to session 1, which lives on device 1.
+    await client.stopChargingSession(1);
+
+    // Sends the real resolved ids — never the old bogus sessionId:0/portNumber:1 default.
+    expect(stopBody?.sessionId).toBe(1);
+    expect(stopBody?.deviceId).toBe(1);
+    expect(stopBody?.portNumber).toBe(1);
+  });
+
+  it('surfaces NoActiveSessionError when the resolved-session stop reports errorId 165', async () => {
     server.use(
       http.post('https://account.chargepoint.com/v1/driver/station/stopSession', () =>
         HttpResponse.json(
@@ -416,7 +435,8 @@ describe('ChargePoint.stopChargingSession()', () => {
     );
 
     const client = await authenticatedClient();
-    const error = await client.stopChargingSession(TEST_DEVICE_ID).catch((e) => e);
+    // Resolves session 1 on device 1, then the stop itself reports 165.
+    const error = await client.stopChargingSession(1).catch((e) => e);
 
     expect(error).toBeInstanceOf(NoActiveSessionError);
     expect(error.message).toBe('unable to find charging session');

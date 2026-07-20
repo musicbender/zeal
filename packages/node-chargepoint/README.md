@@ -256,7 +256,7 @@ Returns `null` when the charger is not actively charging or no session can be re
 
 Resolution order:
 1. **Device plane** — reads the session id from `getHomeChargerStatus` when the device API
-   surfaces it (app-started, auto-started, and RFID sessions).
+   surfaces it.
 2. **Driver plane fallback** — calls `getUserChargingStatus` for driver-authenticated sessions
    (started via this library's `startChargingSession`).
 
@@ -266,8 +266,15 @@ them: `sessionId`, `energyKwh`, `powerKw`, and `sessionStartTime`.
 > **Driver-plane vs device-plane identity:** `getUserChargingStatus()` is the *driver plane*
 > and is only populated for sessions bound to the current authenticated context (API-started
 > or driver-authenticated sessions). The *device plane* (`getHomeChargerStatus`) reflects the
-> physical charger state and surfaces sessions regardless of how they were started. Use
-> `getHomeChargerSession` as the primary path for home charger session management.
+> physical charger state and, on some models, surfaces sessions regardless of how they were
+> started. Use `getHomeChargerSession` as the primary path for home charger session management.
+
+> **Known limitation:** on chargers whose live telemetry runs over ChargePoint's WebSocket
+> channel rather than REST (observed on the `CPH50` family), neither plane surfaces a session
+> id for an EV-auto-started session — `getHomeChargerStatus().sessionId` stays `undefined` and
+> `getUserChargingStatus()` returns `null` even while actively charging. This library is
+> REST-only today, so such a session cannot currently be resolved or stopped through it; see
+> [Error Handling](docs/error-handling.md#known-limitation-some-home-chargers-never-surface-a-session-id-over-rest).
 
 #### Driver-plane status
 
@@ -299,7 +306,14 @@ const session = await client.getChargingSession(status.sessionId);
 await session.stop();
 ```
 
-`stopChargingSession(deviceId)` is the device-level stop symmetric with `startChargingSession`. It stops the active session on the device without requiring you to fetch a session first. If the charger is currently busy (e.g. mid-handshake), a `ChargerBusyError` is thrown — see [Error Handling](docs/error-handling.md).
+`stopChargingSession(deviceId)` is the device-level stop symmetric with `startChargingSession`. It stops the active session on the device without requiring you to fetch a session first.
+
+Under the hood it resolves the active session before issuing the stop, because ChargePoint rejects a stop that does not carry the real session id (HTTP 422 `errorId` 165). Resolution order:
+
+1. **Driver plane** — `getUserChargingStatus()` (public stations and driver-owned sessions). The resolved session is only used when it actually belongs to `deviceId`, so a session on a *different* charger (e.g. a second charger in the same account) is never stopped by mistake.
+2. **Device plane fallback** — the session id surfaced by `getHomeChargerStatus`, on chargers where the device API includes it (see the known limitation below).
+
+The resolved session's real `sessionId` and `outletNumber` are then sent to the stop endpoint. If no active session can be resolved on either plane, an `UnresolvedSessionError` (carrying the `deviceId`) is thrown — distinct from the `NoActiveSessionError` the API returns for a stop targeting a non-existent session. If the charger is currently busy (e.g. mid-handshake), a `ChargerBusyError` is thrown — see [Error Handling](docs/error-handling.md). On some charger models an EV-auto-started session may be unresolvable by either plane; see the [known limitation](docs/error-handling.md#known-limitation-some-home-chargers-never-surface-a-session-id-over-rest).
 
 ---
 
