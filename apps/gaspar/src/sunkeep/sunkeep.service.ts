@@ -4,6 +4,7 @@ import {
 	InvalidSession,
 	NoActiveSessionError,
 	StartVerificationTimeoutError,
+	UnresolvedSessionError,
 	isWithinChargeScheduleWindow,
 	type ChargingSession,
 	type HomeChargerStatus,
@@ -650,9 +651,13 @@ export class SunkeepService {
 		return Date.now() - freshest.startedAt.getTime() <= MAX_INCOMPLETE_EVENT_AGE_MS;
 	}
 
-	// Stop a charging session that began outside Sunkeep when our policy is not met,
-	// without adopting it or writing a ChargingEvent. Best-effort: a charger that is
-	// already idle (NoActiveSessionError) is treated as success.
+	// Stop a charging session that began outside Sunkeep when our policy is not met, without
+	// adopting it or writing a ChargingEvent. node-chargepoint's stopChargingSession resolves
+	// the live session id itself (driver plane, then device plane) and stops it by its real
+	// sessionId/outletNumber. Best-effort: a charger that is already idle
+	// (NoActiveSessionError), or whose session id can't be resolved over REST
+	// (UnresolvedSessionError — e.g. a CPH50 that only surfaces auto-started sessions over
+	// WebSocket), falls through to the MIN_AMPS clamp below.
 	private async stopExternalCharger(reason: string): Promise<void> {
 		try {
 			await this.chargePoint.stopChargingSession(this.config.chargePointDeviceId);
@@ -660,6 +665,11 @@ export class SunkeepService {
 		} catch (err) {
 			if (err instanceof NoActiveSessionError) {
 				log.info('Externally-started charging already stopped');
+			} else if (err instanceof UnresolvedSessionError) {
+				log.warn(
+					{ reason },
+					'Could not resolve an active ChargePoint session to stop (not visible over REST) — relying on minimum-amps clamp'
+				);
 			} else {
 				log.warn({ err }, 'Failed to stop externally-started charging');
 			}
@@ -1083,6 +1093,10 @@ export class SunkeepService {
 			}
 		}
 
+		// Device-level stop: node-chargepoint resolves the live session id itself (driver
+		// plane, then device plane) and stops it by its real sessionId/outletNumber. This is
+		// the path that matters for sessions adopted without a handle (EV auto-started on
+		// plug-in) or a stale handle whose id no longer matches the live session.
 		if (!chargerStopConfirmed) {
 			try {
 				await this.chargePoint.stopChargingSession(this.config.chargePointDeviceId);
@@ -1091,6 +1105,13 @@ export class SunkeepService {
 				if (err instanceof NoActiveSessionError) {
 					log.info(
 						'Device-level stop also returned no-active-session — charger may already be idle'
+					);
+				} else if (err instanceof UnresolvedSessionError) {
+					// The session id can't be resolved over REST (e.g. a CPH50 that only
+					// surfaces auto-started sessions over WebSocket). Nothing more we can do via
+					// the API — the MIN_AMPS clamp below is the remaining mitigation.
+					log.warn(
+						'Device-level stop could not resolve an active session over REST — relying on minimum-amps clamp'
 					);
 				} else {
 					log.warn({ err }, 'Device-level stop also failed');

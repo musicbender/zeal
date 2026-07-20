@@ -54,7 +54,7 @@ await client.setAmperageLimit(chargerId: number, amperage: number): Promise<void
 
 // Sessions
 await client.startChargingSession(deviceId: number, options?: StartSessionOptions): Promise<ChargingSession>
-await client.stopChargingSession(deviceId: number): Promise<void>  // stops active session by device ID, no session object needed (added 0.8.0)
+await client.stopChargingSession(deviceId: number): Promise<void>  // resolves the live session (driver plane, then device plane) and stops it by its real sessionId/outletNumber (0.10.0). Throws UnresolvedSessionError when no session id is visible over REST.
 await client.getChargingSession(sessionId: number): Promise<ChargingSession>
 await client.getUserChargingStatus(): Promise<UserChargingStatus | null>
 ```
@@ -68,4 +68,5 @@ await client.getUserChargingStatus(): Promise<UserChargingStatus | null>
 - Call `getUserChargingStatus()` before `startChargingSession()` — ChargePoint errors if a session is already active.
 - `setAmperageLimit()` takes integer amps. Always `Math.round()` before calling.
 - `InvalidSession` means the coulombToken expired — catch and re-authenticate.
+- `stopChargingSession()` throws `UnresolvedSessionError` when it can't resolve a session id over REST — notably for auto-started sessions on CPH50-family chargers, whose live telemetry runs over WebSocket. There's no REST way to get that session id, so a session Sunkeep didn't start can't be stopped via the API; the caller falls back to clamping amperage to the minimum.
 - Source types: `../node-chargepoint/src/types.ts` has all response shapes.
