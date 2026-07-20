@@ -1,6 +1,15 @@
-## [v0.9.0](https://github.com/musicbender/node-chargepoint/releases/tag/v0.9.0) — 2026-06-06
+## [v0.10.0](https://github.com/musicbender/node-chargepoint/releases/tag/v0.10.0) — 2026-07-20
 
-<!-- Release notes generated using configuration in .github/release.yml at v0.9.0 -->
+<!-- Release notes generated using configuration in .github/release.yml at v0.10.0 -->
+
+## What's Changed
+### New Features
+* Implement device-level session resolution for stopChargingSession by @musicbender in https://github.com/musicbender/node-chargepoint/pull/35
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.9.0...v0.10.0
+
+---
 
 ## What's Changed
 ### New Features
