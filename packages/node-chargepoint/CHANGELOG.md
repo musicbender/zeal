@@ -1,6 +1,17 @@
-## [v0.11.0](https://github.com/musicbender/node-chargepoint/releases/tag/v0.11.0) — 2026-07-20
+## [v0.11.1](https://github.com/musicbender/node-chargepoint/releases/tag/v0.11.1) — 2026-07-20
 
-<!-- Release notes generated using configuration in .github/release.yml at v0.11.0 -->
+<!-- Release notes generated using configuration in .github/release.yml at v0.11.1 -->
+
+## What's Changed
+### Bug Fixes & Patches
+* Bump the dev-dependencies group with 5 updates by @dependabot[bot] in https://github.com/musicbender/node-chargepoint/pull/34
+
+## New Contributors
+* @dependabot[bot] made their first contribution in https://github.com/musicbender/node-chargepoint/pull/34
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.11.0...v0.11.1
+
+---
 
 ## What's Changed
 ### New Features
