@@ -1,6 +1,6 @@
 {
   "name": "node-chargepoint",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "A Node.js/TypeScript wrapper for the ChargePoint EV charging network API. Based on python-chargepoint by Marc Billow.",
   "keywords": [
     "chargepoint",
