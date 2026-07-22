@@ -77,6 +77,12 @@ export class SunkeepService {
 	private activeEventId: string | null = null;
 	private currentAmps = 0;
 	private peakSolarKw = 0;
+	// Live energy delivered in the current session (kWh), as last reported by the charger's
+	// device-plane status (HomeChargerStatus.energyKwh). This is the only energy reading
+	// available for sessions adopted without a driver-plane session handle (the common case
+	// for chargers whose auto-started sessions never surface via getUserChargingStatus) —
+	// session?.energyKwh is null in that case, so this is the fallback persisted on stop.
+	private lastKnownEnergyKwh: number | null = null;
 	private lastPollAt: Date | null = null;
 	private lastPwData: PowerwallData | null = null;
 	private sessionStartedAt: Date | null = null;
@@ -232,8 +238,24 @@ export class SunkeepService {
 	}
 
 	async manualStopSession(): Promise<void> {
-		if (this.state !== SunkeepState.CHARGING) return;
-		await this.stopActiveSession(StopReason.MANUAL);
+		if (this.state === SunkeepState.CHARGING) {
+			await this.stopActiveSession(StopReason.MANUAL);
+			this.state = SunkeepState.IDLE;
+			this.waitReason = null;
+			return;
+		}
+		// Sunkeep's own state can already have drifted to WAITING while the charger is
+		// still physically delivering current — e.g. an earlier automated stop attempt
+		// hit UnresolvedSessionError (session id not visible over REST) and could only
+		// clamp amps, not actually stop it. Trust the last-known charger status (updated
+		// every tick) over our own FSM state so a force-stop always retries the stop
+		// instead of silently no-op'ing.
+		if (this.chargerChargingStatus !== 'CHARGING' && !this.activeEventId) return;
+		if (this.activeEventId) {
+			await this.stopActiveSession(StopReason.MANUAL);
+		} else {
+			await this.stopExternalCharger('Manual stop');
+		}
 		this.state = SunkeepState.IDLE;
 	}
 
@@ -247,6 +269,8 @@ export class SunkeepService {
 		this.chargerAmps = chargerStatus.amperageLimit;
 		this.chargerChargingStatus = chargerStatus.chargingStatus;
 		this.lastPwData = pwData;
+		if (typeof chargerStatus.energyKwh === 'number')
+			this.lastKnownEnergyKwh = chargerStatus.energyKwh;
 		if (chargerStatus.chargingStatus === 'DONE') {
 			// ChargePoint DONE state means the car hit its charge limit; the physical
 			// connector must be unplugged and replugged before a new session will start.
@@ -392,6 +416,8 @@ export class SunkeepService {
 		this.isDuringScheduledTime = chargerStatus.isDuringScheduledTime;
 		this.chargerChargingStatus = chargerStatus.chargingStatus;
 		this.lastPwData = pwData;
+		if (typeof chargerStatus.energyKwh === 'number')
+			this.lastKnownEnergyKwh = chargerStatus.energyKwh;
 		if (chargerStatus.chargingStatus === 'CHARGING' && (this.activeSession || this.activeEventId)) {
 			this.chargerConfirmedCurrentSession = true;
 		}
@@ -961,7 +987,7 @@ export class SunkeepService {
 				// Ghost is gone — fall through to start below
 			}
 		} catch (err) {
-			log.warn({ err }, 'getUserChargingStatus check before start failed — proceeding anyway');
+			log.warn({ err }, 'Pre-start session check failed — proceeding anyway');
 		}
 
 		await this.chargePoint.setAmperageLimit(this.config.chargePointDeviceId, targetAmps);
@@ -1039,6 +1065,30 @@ export class SunkeepService {
 			// `forced` intact — a forced session retries on the next tick, and an automated
 			// one re-evaluates the solar policy and retries when conditions still hold.
 			if (err instanceof ChargerBusyError) {
+				// ChargePoint's backend genuinely has an active session — very likely because
+				// the charger is actually delivering current right now (e.g. auto-started on
+				// plug-in, which never shows up in the getUserChargingStatus ghost-session
+				// check above). Re-poll the device plane: if it confirms CHARGING, adopt it
+				// using the row we just optimistically created instead of treating this as a
+				// failed start. Without this, force-start against an already-charging car
+				// (invisible to the driver plane) always fails with "Charger busy" and never
+				// recovers into a managed session.
+				let recheckStatus: HomeChargerStatus | null = null;
+				try {
+					recheckStatus = await this.chargePoint.getHomeChargerStatus(
+						this.config.chargePointDeviceId
+					);
+				} catch (recheckErr) {
+					log.warn({ err: recheckErr }, 'Charger-status recheck after ChargerBusyError failed');
+				}
+				if (recheckStatus?.chargingStatus === 'CHARGING') {
+					log.warn(
+						{ eventId: event.id },
+						'ChargerBusyError but charger is actually CHARGING — adopting live session instead of failing the start'
+					);
+					await this.finalizeAdoption(recheckStatus, null);
+					return;
+				}
 				log.warn(
 					{ err, eventId: event.id, targetAmps },
 					'startChargingSession rejected: charger busy — dropping event row, will retry next tick'
@@ -1165,7 +1215,10 @@ export class SunkeepService {
 					stoppedAt: new Date(),
 					stopReason: reason,
 					endAmps,
-					energyKwh: session?.energyKwh ?? null,
+					// session?.energyKwh (driver-plane) is only populated when we hold a real
+					// session handle and refreshed it — never true for sessions adopted without
+					// one. Fall back to the device-plane reading polled on every tick.
+					energyKwh: session?.energyKwh ?? this.lastKnownEnergyKwh ?? null,
 				},
 			});
 		} catch (err) {
@@ -1177,6 +1230,7 @@ export class SunkeepService {
 		this.activeEventId = null;
 		this.currentAmps = 0;
 		this.peakSolarKw = 0;
+		this.lastKnownEnergyKwh = null;
 		this.sessionStartedAt = null;
 		this.lockedAmps = null;
 		this.chargerConfirmedCurrentSession = false;

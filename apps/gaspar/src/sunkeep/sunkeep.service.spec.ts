@@ -521,6 +521,32 @@ describe('SunkeepService', () => {
 		expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
 	});
 
+	it('adopts the live session on ChargerBusyError when the charger is actually already CHARGING', async () => {
+		// Reproduces the real-world "force start doesn't work" bug: the charger is already
+		// delivering current (auto-started on plug-in, invisible to getUserChargingStatus),
+		// so startChargingSession races it and loses with ChargerBusyError. Rather than
+		// giving up in WAITING, Sunkeep must re-check the device plane and, seeing CHARGING,
+		// adopt the row it optimistically created instead of failing the start.
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus
+			.mockResolvedValueOnce(pluggedInStatus()) // initial tick poll: NOT_CHARGING
+			.mockResolvedValueOnce(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 12,
+				})
+			); // recheck after ChargerBusyError: charger is actually charging
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+		mockCp.startChargingSession.mockRejectedValueOnce(new ChargerBusyError());
+
+		await service.runTick();
+
+		expect(mockPrisma.chargingEvent.delete).not.toHaveBeenCalled();
+		expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+		expect(service.getStatus().waitReason).toBeNull();
+	});
+
 	it('enters WAITING with the ChargePoint errorMessage for other CommunicationErrors', async () => {
 		// node-chargepoint >=0.11 surfaces a clean human-readable message directly on
 		// CommunicationError (no JSON to parse out of err.message).
@@ -704,6 +730,42 @@ describe('SunkeepService', () => {
 		expect(service.getStatus().state).toBe(SunkeepState.IDLE);
 	});
 
+	it('persists energyKwh from the device-plane status when the session was adopted without a handle', async () => {
+		// Sessions adopted without a driver-plane session handle (the common case for
+		// chargers whose auto-started sessions never surface via getUserChargingStatus) have
+		// no session.energyKwh to read at stop time — session is null. Sunkeep must fall back
+		// to the device-plane energyKwh polled on each tick instead of persisting null.
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getUserChargingStatus.mockResolvedValueOnce(null); // no driver-plane handle
+		mockCp.getHomeChargerStatus.mockResolvedValueOnce(
+			pluggedInStatus({
+				chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+				energyKwh: 1.2,
+			})
+		);
+		mockPw.getData.mockResolvedValue(goodPwData());
+		await service.runTick(); // adopt without a handle
+		expect(service.getStatus().activeSession).toBeNull();
+
+		mockCp.getHomeChargerStatus.mockResolvedValue(
+			pluggedInStatus({
+				chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+				energyKwh: 3.4,
+			})
+		);
+		await service.runTick(); // energy climbs
+
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus({ isPluggedIn: false }));
+		await service.runTick(); // charger reports stopped -> closes the event
+
+		expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({ energyKwh: 3.4 }),
+			})
+		);
+	});
+
 	// --- Manual stop ---
 
 	it('manualStopSession() stops active session with manual reason', async () => {
@@ -774,6 +836,33 @@ describe('SunkeepService', () => {
 				data: expect.objectContaining({ stopReason: StopReason.MANUAL }),
 			})
 		);
+		expect(service.getStatus().state).toBe(SunkeepState.IDLE);
+	});
+
+	it('manualStopSession() still stops the charger when state drifted to WAITING but the charger reports CHARGING', async () => {
+		// Reproduces the real-world bug: the charger is CHARGING with no session/event
+		// Sunkeep owns (solar policy rejected adopting it), leaving Sunkeep in WAITING while
+		// the car keeps drawing current at the clamped minimum. A force-stop must still
+		// retry the stop instead of no-op'ing just because state !== CHARGING.
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus.mockResolvedValue(
+			pluggedInStatus({ chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'] })
+		);
+		// Charger reports amperageLimit 16 (3.84 kW draw); even adding that back, excess is
+		// still well below the 1.5 kW threshold, so evaluateSolarPolicy rejects adopting it.
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 0.5, loadKw: 5.0 }));
+		await service.runTick(); // policy rejects adopting -> WAITING, no owned session/event
+		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+		expect(service.getStatus().activeSession).toBeNull();
+
+		mockCp.stopChargingSession.mockClear();
+		mockCp.setAmperageLimit.mockClear();
+
+		await service.manualStopSession();
+
+		expect(mockCp.stopChargingSession).toHaveBeenCalledWith(42);
+		expect(mockCp.setAmperageLimit).toHaveBeenCalledWith(42, 8);
 		expect(service.getStatus().state).toBe(SunkeepState.IDLE);
 	});
 
