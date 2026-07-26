@@ -86,6 +86,28 @@ try {
 
 Thrown by `stopChargingSession(deviceId)` (and `ChargingSession.stopByDevice`) when no active charging session can be resolved for the device. A device-level stop must carry the real session id — sending `sessionId: 0` is rejected by ChargePoint — so the library first resolves the active session via the driver plane (`getUserChargingStatus`) and then the device plane (`getHomeChargerStatus`). If neither yields a session id, this error is thrown instead of a misleading `NoActiveSessionError`. The offending device id is available as `err.deviceId`.
 
+### Home-charger sessions with no `device_id` in the driver-bff response
+
+On some home-charger sessions, the driver-bff `/sessions/{id}` response omits `device_id`
+and `outlet_number` entirely, rather than nesting them under a different key. Left
+unhandled, this meant `ChargingSession.deviceId`/`.outletNumber` stayed at the class default
+of `0`, which broke device-level stops in two ways:
+
+- `session.stop()` sent `deviceId: 0` in the stop command body, which ChargePoint silently
+  ignored instead of stopping the real charger.
+- `resolveActiveByDevice`'s device-match check (`session.deviceId === deviceId`), added to
+  stop `stopChargingSession()` from ever targeting the wrong charger in a multi-charger
+  household, rejected the session — even though it was the correct one — and fell through
+  to `UnresolvedSessionError`.
+
+The fix does not depend on any particular response shape: when a resolved session's
+`deviceId` comes back as `0`, the library corroborates against the device plane
+(`getHomeChargerStatus(deviceId)`) — only once that device itself reports `CHARGING` does
+it accept the session as belonging to `deviceId` and backfill `deviceId`/`outletNumber`
+(the latter defaulting to `1`, i.e. the charger's only outlet) from the context it already
+resolved for, rather than an echo the API may never provide. `getHomeChargerSession()`
+applies the same backfill unconditionally, since it already queried that specific charger.
+
 ```typescript
 import { UnresolvedSessionError } from 'node-chargepoint';
 

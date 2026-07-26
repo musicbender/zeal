@@ -263,6 +263,11 @@ Resolution order:
 `getHomeChargerStatus` also surfaces optional live telemetry fields when the device API includes
 them: `sessionId`, `energyKwh`, `powerKw`, and `sessionStartTime`.
 
+The returned session's `deviceId`/`outletNumber` are backfilled with `chargerId`/`1` when the
+driver-bff `/sessions/{id}` response doesn't include `device_id`/`outlet_number` itself (observed
+on some home-charger sessions) — otherwise `session.stop()` would send a stop command for device
+`0` instead of the real charger.
+
 > **Driver-plane vs device-plane identity:** `getUserChargingStatus()` is the *driver plane*
 > and is only populated for sessions bound to the current authenticated context (API-started
 > or driver-authenticated sessions). The *device plane* (`getHomeChargerStatus`) reflects the
@@ -312,6 +317,8 @@ Under the hood it resolves the active session before issuing the stop, because C
 
 1. **Driver plane** — `getUserChargingStatus()` (public stations and driver-owned sessions). The resolved session is only used when it actually belongs to `deviceId`, so a session on a *different* charger (e.g. a second charger in the same account) is never stopped by mistake.
 2. **Device plane fallback** — the session id surfaced by `getHomeChargerStatus`, on chargers where the device API includes it (see the known limitation below).
+
+On some home-charger sessions, the driver-bff `/sessions/{id}` response omits `device_id`/`outlet_number` entirely, which would otherwise leave both at their class default of `0` and send a stop command for the wrong device. When that happens, the resolved session's `deviceId` is only accepted once the device plane corroborates that `deviceId` itself is `CHARGING`, and `deviceId`/`outletNumber` are then backfilled from the device we already resolved for rather than trusted blindly from the API response.
 
 The resolved session's real `sessionId` and `outletNumber` are then sent to the stop endpoint. If no active session can be resolved on either plane, an `UnresolvedSessionError` (carrying the `deviceId`) is thrown — distinct from the `NoActiveSessionError` the API returns for a stop targeting a non-existent session. If the charger is currently busy (e.g. mid-handshake), a `ChargerBusyError` is thrown. If the vehicle isn't in a state that can charge (e.g. it's already at its charge limit), a `VehicleNotReadyError` is thrown — see [Error Handling](docs/error-handling.md). On some charger models an EV-auto-started session may be unresolvable by either plane; see the [known limitation](docs/error-handling.md#known-limitation-some-home-chargers-never-surface-a-session-id-over-rest).
 

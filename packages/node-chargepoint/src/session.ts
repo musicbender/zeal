@@ -1,6 +1,6 @@
 import type { ChargePoint } from './client.js';
 import { ChargerBusyError, CommunicationError, NoActiveSessionError, StartVerificationTimeoutError, UnresolvedSessionError, VehicleNotReadyError } from './exceptions.js';
-import type { ChargePointCommandErrorBody, ChargingSessionUpdate, ChargingStatus, PowerUtility, StartSessionOptions, VehicleInfo } from './types.js';
+import type { ChargePointCommandErrorBody, ChargingSessionUpdate, ChargingStatus, HomeChargerStatus, PowerUtility, StartSessionOptions, VehicleInfo } from './types.js';
 
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
@@ -192,6 +192,23 @@ export class ChargingSession {
     this._client = client;
   }
 
+  /**
+   * @internal Backfill deviceId from context (the device we already queried for)
+   * when the driver-bff /sessions/{id} response didn't include device_id — observed
+   * on some home-charger sessions. Never overwrites a value the API did supply.
+   */
+  _ensureDeviceId(deviceId: number): void {
+    if (this.deviceId === 0) this.deviceId = deviceId;
+  }
+
+  /**
+   * @internal Backfill outletNumber from context when the driver-bff response didn't
+   * include outlet_number. Never overwrites a value the API did supply.
+   */
+  _ensureOutletNumber(outletNumber: number): void {
+    if (this.outletNumber === 0) this.outletNumber = outletNumber;
+  }
+
   /** @internal Apply raw session data from the driver-bff API (snake_case keys). */
   _apply(data: RawObj): void {
     if (data.device_id !== undefined) this.deviceId = data.device_id as number;
@@ -287,6 +304,8 @@ export class ChargingSession {
     client: ChargePoint,
   ): Promise<ChargingSession | null> {
     const userStatus = await client.getUserChargingStatus();
+    let chargerStatus: HomeChargerStatus | null = null;
+
     if (userStatus && userStatus.sessionId > 0) {
       const session = await client.getChargingSession(userStatus.sessionId);
       // getUserChargingStatus reports the driver's active session, which may live
@@ -296,19 +315,46 @@ export class ChargingSession {
       if (session.deviceId === deviceId) {
         return session;
       }
+      if (session.deviceId === 0) {
+        // The driver-bff /sessions/{id} response omitted device_id entirely — observed
+        // on some home-charger sessions. We can't compare it to `deviceId` directly, so
+        // corroborate against the device plane: only accept this session as belonging
+        // to `deviceId` when that device itself reports CHARGING, then backfill the
+        // fields the stop command needs (deviceId, and outletNumber for a single-outlet
+        // home charger).
+        chargerStatus = await ChargingSession._tryGetHomeChargerStatus(deviceId, client);
+        if (chargerStatus?.chargingStatus === 'CHARGING') {
+          session._ensureDeviceId(deviceId);
+          session._ensureOutletNumber(1);
+          return session;
+        }
+      }
     }
 
-    try {
-      const chargerStatus = await client.getHomeChargerStatus(deviceId);
-      if (chargerStatus.sessionId !== undefined && chargerStatus.sessionId > 0) {
-        return client.getChargingSession(chargerStatus.sessionId);
-      }
-    } catch {
-      // Device-plane lookup unavailable (e.g. deviceId is not a home charger
-      // owned by this account). Fall through to the unresolved-session error.
+    if (chargerStatus === null) {
+      chargerStatus = await ChargingSession._tryGetHomeChargerStatus(deviceId, client);
+    }
+    if (chargerStatus?.sessionId !== undefined && chargerStatus.sessionId > 0) {
+      const session = await client.getChargingSession(chargerStatus.sessionId);
+      session._ensureDeviceId(deviceId);
+      session._ensureOutletNumber(1);
+      return session;
     }
 
     return null;
+  }
+
+  private static async _tryGetHomeChargerStatus(
+    deviceId: number,
+    client: ChargePoint,
+  ): Promise<HomeChargerStatus | null> {
+    try {
+      return await client.getHomeChargerStatus(deviceId);
+    } catch {
+      // Device-plane lookup unavailable (e.g. deviceId is not a home charger
+      // owned by this account).
+      return null;
+    }
   }
 
   static async stopByDevice(deviceId: number, client: ChargePoint): Promise<void> {

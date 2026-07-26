@@ -557,13 +557,22 @@ export class ChargePoint {
     }
 
     if (status.sessionId !== undefined) {
-      return this.getChargingSession(status.sessionId);
+      const session = await this.getChargingSession(status.sessionId);
+      // The driver-bff /sessions/{id} response can omit device_id/outlet_number
+      // entirely for home-charger sessions; we already know this session belongs
+      // to `chargerId` because the device plane just reported it, so backfill.
+      session._ensureDeviceId(chargerId);
+      session._ensureOutletNumber(1);
+      return session;
     }
 
     // Device plane had no session id — try driver plane
     const userStatus = await this.getUserChargingStatus();
     if (userStatus) {
-      return this.getChargingSession(userStatus.sessionId);
+      const session = await this.getChargingSession(userStatus.sessionId);
+      session._ensureDeviceId(chargerId);
+      session._ensureOutletNumber(1);
+      return session;
     }
 
     return null;

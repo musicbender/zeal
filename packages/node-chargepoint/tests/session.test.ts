@@ -4,7 +4,7 @@ import { server } from './setup.js';
 import { ChargePoint } from '../src/client.js';
 import { ChargingSession } from '../src/session.js';
 import { ChargerBusyError, CommunicationError, NoActiveSessionError, StartVerificationTimeoutError, UnresolvedSessionError, VehicleNotReadyError } from '../src/exceptions.js';
-import { TEST_TOKEN, TEST_SESSION_ID, TEST_SESSION_ID_99, TEST_DEVICE_ID, TEST_USER_ID } from './handlers.js';
+import { TEST_TOKEN, TEST_SESSION_ID, TEST_SESSION_ID_99, TEST_SESSION_ID_100, TEST_DEVICE_ID, TEST_USER_ID } from './handlers.js';
 
 async function authenticatedClient(): Promise<ChargePoint> {
   return ChargePoint.create('testuser', { coulombToken: TEST_TOKEN });
@@ -31,6 +31,18 @@ describe('ChargingSession.refresh()', () => {
     expect(session.updateData?.[0]?.timestamp).toBeInstanceOf(Date);
     expect(session.latitude).toBe(37.7749);
     expect(session.address).toBe('123 Main St');
+    expect(session.isHomeCharger).toBe(true);
+  });
+
+  it('leaves deviceId/outletNumber at 0 when the driver-bff response omits them (observed live for some home-charger sessions)', async () => {
+    const client = await authenticatedClient();
+    const session = new ChargingSession(TEST_SESSION_ID_100);
+    session._setClient(client);
+
+    await session.refresh();
+
+    expect(session.deviceId).toBe(0);
+    expect(session.outletNumber).toBe(0);
     expect(session.isHomeCharger).toBe(true);
   });
 
@@ -301,6 +313,91 @@ describe('ChargingSession.stopByDevice()', () => {
     expect(stopBody?.sessionId).toBe(TEST_SESSION_ID_99);
     expect(stopBody?.deviceId).toBe(12345);
     expect(stopBody?.portNumber).toBe(1);
+  });
+
+  it('accepts a driver-plane session missing device_id when the device plane confirms this device is CHARGING', async () => {
+    let stopBody: Record<string, unknown> | undefined;
+    server.use(
+      // Driver plane resolves to session 100, whose driver-bff response omits device_id
+      // entirely (the live bug: some home-charger sessions never echo it back).
+      http.post('https://mc.chargepoint.com/map-prod/v2', async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>;
+        if ('user_status' in body) {
+          return HttpResponse.json({
+            user_status: {
+              charging_status: {
+                session_id: TEST_SESSION_ID_100, start_time: 1609459200000,
+                current_charging: 'CHARGING', stations: [],
+              },
+            },
+          });
+        }
+        return new HttpResponse(null, { status: 400 });
+      }),
+      // Device plane for the requested device corroborates that it is charging, even
+      // though it doesn't surface its own session id.
+      http.get(
+        `https://hcpoprodhcm.chargepoint.com/api/v1/configuration/users/${TEST_USER_ID}/chargers/${TEST_DEVICE_ID}/status`,
+        () => HttpResponse.json({
+          brand: 'ChargePoint', model: 'CPH25', macAddress: 'AA:BB:CC:DD:EE:FF',
+          chargingStatus: 'CHARGING',
+          isPluggedIn: true, isConnected: true, isReminderEnabled: false,
+          plugInReminderTime: '22:00', hasUtilityInfo: false, isDuringScheduledTime: false,
+          chargeAmperageSettings: { chargeLimit: 32, inProgress: false, possibleChargeLimit: [16, 24, 32] },
+        }),
+      ),
+      http.post('https://account.chargepoint.com/v1/driver/station/stopSession', async ({ request }) => {
+        stopBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ ackId: 'ack-12345' });
+      }),
+    );
+
+    const client = await authenticatedClient();
+    await ChargingSession.stopByDevice(TEST_DEVICE_ID, client);
+
+    // The session had no device_id of its own — the real deviceId/outletNumber must be
+    // backfilled from context (the device we resolved for) instead of staying at 0.
+    expect(stopBody?.sessionId).toBe(TEST_SESSION_ID_100);
+    expect(stopBody?.deviceId).toBe(TEST_DEVICE_ID);
+    expect(stopBody?.deviceId).not.toBe(0);
+    expect(stopBody?.portNumber).toBe(1);
+  });
+
+  it('rejects a driver-plane session missing device_id when the device plane does not confirm this device is charging', async () => {
+    server.use(
+      http.post('https://mc.chargepoint.com/map-prod/v2', async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>;
+        if ('user_status' in body) {
+          return HttpResponse.json({
+            user_status: {
+              charging_status: {
+                session_id: TEST_SESSION_ID_100, start_time: 1609459200000,
+                current_charging: 'CHARGING', stations: [],
+              },
+            },
+          });
+        }
+        return new HttpResponse(null, { status: 400 });
+      }),
+      // The device we were asked to stop is not charging, so the ambiguous session
+      // (no device_id) must not be assumed to belong to it.
+      http.get(
+        `https://hcpoprodhcm.chargepoint.com/api/v1/configuration/users/${TEST_USER_ID}/chargers/${TEST_DEVICE_ID}/status`,
+        () => HttpResponse.json({
+          brand: 'ChargePoint', model: 'CPH25', macAddress: 'AA:BB:CC:DD:EE:FF',
+          chargingStatus: 'NOT_CHARGING',
+          isPluggedIn: false, isConnected: true, isReminderEnabled: false,
+          plugInReminderTime: '22:00', hasUtilityInfo: false, isDuringScheduledTime: false,
+          chargeAmperageSettings: { chargeLimit: 32, inProgress: false, possibleChargeLimit: [16, 24, 32] },
+        }),
+      ),
+    );
+
+    const client = await authenticatedClient();
+    const error = await ChargingSession.stopByDevice(TEST_DEVICE_ID, client).catch((e) => e);
+
+    expect(error).toBeInstanceOf(UnresolvedSessionError);
+    expect(error.deviceId).toBe(TEST_DEVICE_ID);
   });
 
   it('throws UnresolvedSessionError (not NoActiveSessionError) when neither plane yields a session', async () => {

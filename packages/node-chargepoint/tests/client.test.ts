@@ -14,6 +14,7 @@ import {
   TEST_CHARGER_ID,
   TEST_SESSION_ID,
   TEST_SESSION_ID_99,
+  TEST_SESSION_ID_100,
   TEST_DEVICE_ID,
 } from './handlers.js';
 
@@ -293,6 +294,32 @@ describe('getHomeChargerSession()', () => {
 
     expect(session).not.toBeNull();
     expect(session?.sessionId).toBe(TEST_SESSION_ID);
+  });
+
+  it('backfills deviceId/outletNumber when the driver-bff session response omits them', async () => {
+    server.use(
+      http.get(
+        `https://hcpoprodhcm.chargepoint.com/api/v1/configuration/users/1234567890/chargers/${TEST_CHARGER_ID}/status`,
+        () => HttpResponse.json({
+          brand: 'ChargePoint', model: 'CPH25', macAddress: 'AA:BB:CC:DD:EE:FF',
+          chargingStatus: 'CHARGING', sessionId: TEST_SESSION_ID_100,
+          isPluggedIn: true, isConnected: true, isReminderEnabled: false,
+          plugInReminderTime: '22:00', hasUtilityInfo: false, isDuringScheduledTime: false,
+          chargeAmperageSettings: { chargeLimit: 32, inProgress: false, possibleChargeLimit: [16, 24, 32] },
+        }),
+      ),
+    );
+
+    const client = await authenticatedClient();
+    const session = await client.getHomeChargerSession(TEST_CHARGER_ID);
+
+    // session-100 fixture has no device_id/outlet_number of its own — since we already
+    // know it belongs to TEST_CHARGER_ID (the device plane just told us so), the session
+    // must reflect that instead of staying at the ChargingSession class default of 0.
+    expect(session).not.toBeNull();
+    expect(session?.sessionId).toBe(TEST_SESSION_ID_100);
+    expect(session?.deviceId).toBe(TEST_CHARGER_ID);
+    expect(session?.outletNumber).toBe(1);
   });
 
   it('returns null when charger is CHARGING but neither plane yields a session', async () => {
