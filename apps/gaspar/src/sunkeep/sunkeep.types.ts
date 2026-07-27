@@ -96,8 +96,12 @@ export interface SunkeepStatus {
 	activeSession: ActiveSessionSummary | null;
 	solarKw: number | null;
 	excessKw: number | null;
+	// Total site load measured by the Powerwall, the car included.
 	loadKw: number | null;
+	// Estimated share of loadKw drawn by the car. Never exceeds loadKw.
 	carKw: number | null;
+	// loadKw minus carKw — the house on its own. Never negative.
+	houseKw: number | null;
 	batteryPct: number | null;
 	batteryKw: number | null;
 	lockedAmps: number | null;

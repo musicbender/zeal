@@ -100,7 +100,9 @@ export function SunkeepEnergyPanel({ status, batteryCapacityKwh }: SunkeepEnergy
 	const gridKw = status?.gridKw ?? null;
 	const loadKw = status?.loadKw ?? null;
 	const carKw = status?.carKw ?? 0;
-	const houseKw = loadKw != null ? loadKw - carKw : null;
+	// Gaspar splits the metered load for us. Fall back to subtracting locally (clamped —
+	// house load is never negative) for a gaspar that predates the houseKw field.
+	const houseKw = status?.houseKw ?? (loadKw != null ? Math.max(0, loadKw - carKw) : null);
 
 	const batteryNote = (() => {
 		if (batteryPct == null || batteryKw == null || !batteryCapacityKwh) return undefined;
