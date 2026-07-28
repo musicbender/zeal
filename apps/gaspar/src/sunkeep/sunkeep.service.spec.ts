@@ -2,6 +2,7 @@ import {
 	ChargerBusyError,
 	CommunicationError,
 	StartVerificationTimeoutError,
+	UnresolvedSessionError,
 	VehicleNotReadyError,
 	type HomeChargerStatus,
 } from 'node-chargepoint';
@@ -111,6 +112,13 @@ function pluggedInStatus(overrides: Partial<HomeChargerStatus> = {}): HomeCharge
 	};
 }
 
+// The data payload of the chargingEvent.update call that closed a session, if any.
+function closingUpdate(): Record<string, unknown> | undefined {
+	return mockPrisma.chargingEvent.update.mock.calls
+		.map((c) => (c[0] as { data: Record<string, unknown> }).data)
+		.find((d) => d.stoppedAt !== undefined);
+}
+
 function goodPwData(overrides = {}) {
 	return { batteryPct: 99, solarKw: 4.0, loadKw: 1.0, ...overrides };
 }
@@ -124,6 +132,9 @@ describe('SunkeepService', () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
+		// clearAllMocks resets recorded calls but keeps implementations, so a test that
+		// overrides a shared mock would leak into every test after it.
+		mockCp.stopChargingSession.mockResolvedValue(undefined);
 		vi.useFakeTimers();
 		service = new SunkeepService(mockCp as any, mockPw as any, mockPrisma as any, testConfig);
 	});
@@ -180,6 +191,419 @@ describe('SunkeepService', () => {
 			await service.runTick();
 			// excess = 6.0 - 4.6 + min(0, 0) + (15 * 240 / 1000) = 1.4 + 3.6 = 5.0
 			expect(service.getStatus().excessKw).toBeCloseTo(5.0);
+		});
+	});
+
+	// --- Load accounting: splitting the metered load between car and house ---
+
+	describe('load accounting', () => {
+		// The reported fiendlord-keep payload. ChargePoint's amperage limit implied 6.24 kW
+		// of car draw against a metered site total of 4.45 kW, so the dashboard subtracted
+		// its way to a negative house load and Sunkeep believed it had more excess (6.48 kW)
+		// than the array was producing (5.89 kW).
+		const reportedPw = {
+			batteryPct: 97.22504856165017,
+			solarKw: 5.892,
+			loadKw: 4.452199951171875,
+			batteryKw: 0,
+			gridKw: -1.439800048828125,
+		};
+
+		it('never reports the car drawing more than the whole site, nor a negative house load', async () => {
+			mockCp.getUserChargingStatus.mockResolvedValue(null);
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 26,
+				})
+			);
+			mockPw.getData.mockResolvedValue(reportedPw);
+
+			await service.runTick();
+
+			const status = service.getStatus();
+			expect(status.carKw!).toBeLessThanOrEqual(status.loadKw!);
+			expect(status.houseKw!).toBeGreaterThanOrEqual(0);
+			// Excess is solar that is not being consumed — it cannot exceed production.
+			expect(status.excessKw!).toBeLessThanOrEqual(status.solarKw!);
+		});
+
+		it('keeps carKw and excessKw consistent for a session adopted without a handle', async () => {
+			// activeSession is null for app/auto-started sessions while state is CHARGING.
+			// carKw used to read currentAmps and excessKw chargerAmps, so one payload
+			// described the car at two different amperages (6.24 kW and 5.04 kW).
+			mockCp.getUserChargingStatus.mockResolvedValue(null);
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 21,
+				})
+			);
+			mockPw.getData.mockResolvedValue(reportedPw);
+
+			await service.runTick();
+
+			const status = service.getStatus();
+			expect(status.activeSession).toBeNull();
+			expect(status.state).toBe(SunkeepState.CHARGING);
+			expect(status.excessKw!).toBeCloseTo(
+				status.solarKw! - status.loadKw! + status.carKw! + Math.min(0, status.batteryKw!)
+			);
+			expect(status.houseKw!).toBeCloseTo(status.loadKw! - status.carKw!);
+		});
+
+		it('measures the car against a house baseline captured while the charger was idle', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			// Idle poll — the whole 0.61 kW of metered load is the house.
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 5.892, loadKw: 0.61 }));
+			await service.runTick();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+
+			// Car is now charging and the metered load has risen to include it.
+			mockPw.getData.mockResolvedValue(reportedPw);
+			await service.runTick();
+
+			const status = service.getStatus();
+			// 4.4522 measured total − 0.61 house baseline = what the car is really pulling,
+			// well under the 5.28 kW the 22A limit would imply.
+			expect(status.carKw!).toBeCloseTo(3.842, 2);
+			expect(status.houseKw!).toBeCloseTo(0.61, 2);
+			// Excess is production minus the house's own draw, independent of the amperage
+			// we happen to have commanded.
+			expect(status.excessKw!).toBeCloseTo(5.282, 2);
+		});
+
+		it('ignores an idle load reading taken before the car stopped drawing', async () => {
+			// Tesla's telemetry lags the charger. A load reading timestamped while the car
+			// was still pulling must not be adopted as the house baseline — doing so would
+			// zero out every later carKw and collapse the excess.
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({ chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'] })
+			);
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 6.0, loadKw: 4.6 }));
+			await service.runTick();
+
+			// Charger goes idle, but this poll's Tesla reading is stamped in the past.
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus({ isPluggedIn: false }));
+			mockPw.getData.mockResolvedValue(
+				goodPwData({ solarKw: 6.0, loadKw: 4.6, lastTeslaAt: new Date().toISOString() })
+			);
+			await service.runTick();
+
+			// A stale baseline of 4.6 kW would have made the car read as 0 kW here.
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 15,
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 6.0, loadKw: 4.6 }));
+			await service.runTick();
+
+			// A stale 4.6 kW baseline would have put the car at 0 kW, which collapses the
+			// excess to 1.4 kW and stops the session Sunkeep just adopted.
+			expect(service.getStatus().carKw!).toBeGreaterThan(0);
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+		});
+	});
+
+	// --- Amperage ratchet ---
+
+	it('does not raise amps twice off a single Powerwall reading', async () => {
+		// The reported 16A → 21A → 26A climb inside twelve seconds: each poll added the
+		// amperage it had just commanded back into the excess, then commanded more, while
+		// the Tesla client served the same cached live_status snapshot throughout.
+		const teslaAt = '2026-07-27T15:12:37-07:00';
+		mockCp.getUserChargingStatus.mockResolvedValue(null);
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus.mockResolvedValue(
+			pluggedInStatus({
+				chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+				amperageLimit: 16,
+			})
+		);
+		mockPw.getData.mockResolvedValue({
+			batteryPct: 97.2,
+			solarKw: 5.892,
+			loadKw: 4.4522,
+			batteryKw: 0,
+			lastTeslaAt: teslaAt,
+		});
+
+		await service.runTick();
+		const firstTarget = mockCp.setAmperageLimit.mock.calls.at(-1)?.[1];
+		expect(firstTarget).toBeGreaterThan(16);
+
+		// Two more polls against the same live_status snapshot must change nothing.
+		mockCp.setAmperageLimit.mockClear();
+		await service.runTick();
+		await service.runTick();
+		expect(mockCp.setAmperageLimit).not.toHaveBeenCalled();
+
+		// A fresh reading — the car is now drawing what we asked for on top of a 0.61 kW
+		// house — resumes management and settles instead of climbing to the 32A ceiling.
+		mockPw.getData.mockResolvedValue({
+			batteryPct: 97.2,
+			solarKw: 5.892,
+			loadKw: 0.61 + (firstTarget! * 240) / 1000,
+			batteryKw: 0,
+			lastTeslaAt: '2026-07-27T15:22:37-07:00',
+		});
+		await service.runTick();
+		const settled = mockCp.setAmperageLimit.mock.calls.at(-1)?.[1] ?? firstTarget;
+		expect(settled).toBeLessThan(32);
+	});
+
+	// --- Sessions that cannot be stopped over REST ---
+
+	describe('a charger whose sessions cannot be stopped over REST', () => {
+		// Reproduces the production log: every stop answers UnresolvedSessionError, the
+		// charger keeps delivering current at the MIN_AMPS clamp, and the next poll used
+		// to adopt that same continuous charge into a brand new row — eight "sessions" in
+		// three hours for one physical charge.
+		function charging(amps: number): HomeChargerStatus {
+			return pluggedInStatus({
+				chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+				amperageLimit: amps,
+			});
+		}
+
+		beforeEach(() => {
+			mockCp.getUserChargingStatus.mockResolvedValue(null);
+			mockCp.stopChargingSession.mockRejectedValue(new UnresolvedSessionError(42));
+		});
+
+		it('does not open a new event row each time policy flickers', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(charging(8));
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 5.1, loadKw: 2.52 }));
+			await service.runTick();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+			expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
+
+			// Solar collapses — Sunkeep wants to stop but the charger will not let it.
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 0.5, loadKw: 4.5 }));
+			await service.runTick();
+			expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+			// The charge did not end, so nothing may be recorded as ended.
+			expect(mockPrisma.chargingEvent.update).not.toHaveBeenCalledWith(
+				expect.objectContaining({ data: expect.objectContaining({ stoppedAt: expect.anything() }) })
+			);
+
+			// Two more polls with the charger still delivering: still one row.
+			await service.runTick();
+			await service.runTick();
+			expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
+
+			// Solar returns; the same row carries on rather than a fresh one being opened.
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 5.1, loadKw: 2.52 }));
+			await service.runTick();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+			expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
+		});
+
+		it('closes the row with the reason it wanted, once the charger really stops', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(charging(8));
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 5.1, loadKw: 2.52 }));
+			await service.runTick();
+
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 0.5, loadKw: 4.5 }));
+			await service.runTick(); // wants to stop, cannot
+
+			// The car finishes and the charger finally reports idle.
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+			await service.runTick();
+			await service.runTick(); // second observation clears the external-stop debounce
+
+			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
+				expect.objectContaining({
+					data: expect.objectContaining({ stopReason: StopReason.SOLAR_DROPPED }),
+				})
+			);
+		});
+	});
+
+	// --- Session energy ---
+
+	describe('session energyKwh', () => {
+		// The real-world shape: no driver-plane session handle, so session?.energyKwh is
+		// never available and everything rests on what the device plane reports.
+		beforeEach(() => {
+			mockCp.getUserChargingStatus.mockResolvedValue(null);
+		});
+
+		it('integrates the car draw when ChargePoint reports no energy at all', async () => {
+			// node-chargepoint only fills HomeChargerStatus.energyKwh when the charger's
+			// status payload carries it, and this charger's does not — so both readings are
+			// absent and every row landed null.
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 16,
+				})
+			);
+			// House 1.0 kW plus the car at 16A (3.84 kW).
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 6.0, loadKw: 4.84 }));
+			await service.runTick();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+
+			// Half an hour later, still charging.
+			vi.setSystemTime(new Date(NOON.getTime() + 30 * 60 * 1000));
+			await service.runTick();
+
+			// Car unplugged — the session closes.
+			vi.setSystemTime(new Date(NOON.getTime() + 35 * 60 * 1000));
+			mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus({ isPluggedIn: false }));
+			await service.runTick();
+
+			const closing = closingUpdate();
+			expect(closing).toBeDefined();
+			// ~0.5h at roughly 3.8 kW.
+			expect(closing!.energyKwh).toBeGreaterThan(1);
+			expect(closing!.energyEstimated).toBe(true);
+		});
+
+		it('prefers the charger reading and does not flag it as estimated', async () => {
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 16,
+					energyKwh: 7.5,
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 6.0, loadKw: 4.84 }));
+			await service.runTick();
+
+			vi.setSystemTime(new Date(NOON.getTime() + 30 * 60 * 1000));
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({ isPluggedIn: false, energyKwh: 7.5 })
+			);
+			await service.runTick();
+
+			const closing = closingUpdate();
+			expect(closing!.energyKwh).toBe(7.5);
+			expect(closing!.energyEstimated).toBe(false);
+		});
+	});
+
+	describe('closed-loop amperage control', () => {
+		// A house that draws 0.6 kW and a car that takes exactly the limit it is given.
+		function lastCommandedAmps(): number {
+			return mockCp.setAmperageLimit.mock.calls.at(-1)![1] as number;
+		}
+
+		function siteAt(solarKw: number, amps: number, lastTeslaAt: string) {
+			return {
+				batteryPct: 97,
+				solarKw,
+				loadKw: 0.6 + (amps * 240) / 1000,
+				batteryKw: 0,
+				lastTeslaAt,
+			};
+		}
+
+		it('settles at the amperage the surplus supports instead of climbing', async () => {
+			// From the log: adopt at the 8A the previous stop clamped to, then ramp. The
+			// ramp must land where solar actually covers it and stay there — the open-loop
+			// form re-added the amperage it had just commanded, so each tick found "more"
+			// excess than the one before.
+			mockCp.getUserChargingStatus.mockResolvedValue(null);
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 8,
+				})
+			);
+			mockPw.getData.mockResolvedValue(siteAt(5.1, 8, 'T1'));
+			await service.runTick();
+
+			// surplus = 5.1 - 2.52 = 2.58 kW = 10.75A -> 8 + 10 = 18A
+			let amps = lastCommandedAmps();
+			expect(amps).toBe(18);
+
+			// The car takes it; the surplus it consumed is gone, so nothing more to give.
+			mockPw.getData.mockResolvedValue(siteAt(5.1, amps, 'T2'));
+			mockCp.setAmperageLimit.mockClear();
+			await service.runTick();
+			expect(mockCp.setAmperageLimit).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+
+			// Solar falls by 2 kW — wind back down to match, do not stop. The site is
+			// importing 1.82 kW at 18A, which is 7 amps' worth after the deadband.
+			mockPw.getData.mockResolvedValue(siteAt(3.1, 18, 'T3'));
+			await service.runTick();
+			amps = lastCommandedAmps();
+			expect(amps).toBe(11);
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+		});
+
+		it('stops once the surplus cannot cover the draw the car already has', async () => {
+			mockCp.getUserChargingStatus.mockResolvedValue(null);
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 8,
+				})
+			);
+			mockPw.getData.mockResolvedValue(siteAt(5.1, 8, 'T1'));
+			await service.runTick();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+
+			// Solar collapses: at 18A the site is importing 3.8 kW, more than winding all
+			// the way down to 8A could recover.
+			mockPw.getData.mockResolvedValue(siteAt(1.0, 18, 'T2'));
+			await service.runTick();
+
+			expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+			expect(service.getStatus().waitReason).toBe('Insufficient solar excess');
+		});
+
+		it('stops raising the limit for a car that is not taking the headroom', async () => {
+			// A car tapering at its charge limit keeps the surplus high no matter what
+			// limit it is offered. Walking the limit to 32A against it achieves nothing and
+			// leaves a 7.7 kW ceiling for the car to wake up into.
+			mockCp.getUserChargingStatus.mockResolvedValue(null);
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 8,
+				})
+			);
+			// Load never moves off 8A worth of draw however high the limit goes.
+			mockPw.getData.mockResolvedValue(siteAt(5.1, 8, 'T1'));
+			await service.runTick();
+			expect(lastCommandedAmps()).toBe(18);
+
+			mockCp.setAmperageLimit.mockClear();
+			mockPw.getData.mockResolvedValue(siteAt(5.1, 8, 'T2'));
+			await service.runTick();
+			mockPw.getData.mockResolvedValue(siteAt(5.1, 8, 'T3'));
+			await service.runTick();
+
+			expect(mockCp.setAmperageLimit).not.toHaveBeenCalled();
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
 		});
 	});
 
@@ -407,11 +831,11 @@ describe('SunkeepService', () => {
 		expect(service.getStatus().state).not.toBe(SunkeepState.CHARGING);
 	});
 
-	it('enters WAITING with "Car fully charged" when startChargingSession throws VehicleNotReadyError', async () => {
-		// VehicleNotReadyError (ChargePoint error 25) means the Tesla's onboard charger
-		// rejected the start because the car is at its charge limit. Sunkeep must surface
-		// "Car fully charged" (same as the DONE path) rather than the raw ChargePoint error
-		// message, and must not enter ERROR state.
+	it('reports a ChargePoint refusal, not a full car, when error 25 arrives with a non-DONE charger', async () => {
+		// VehicleNotReadyError (ChargePoint error 25) is also how ChargePoint refuses a
+		// start it cannot service — a stale session on their backend that the REST API
+		// will not let us clear. Calling that "Car fully charged" sends the user hunting
+		// for a charge limit that is not the problem; the charger is not reporting DONE.
 		service.enable();
 		vi.setSystemTime(NOON);
 		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
@@ -428,6 +852,28 @@ describe('SunkeepService', () => {
 		// The optimistically-created row must be deleted, not left open — otherwise the
 		// next tick's reconcile closes it as a bogus UNKNOWN "session".
 		expect(mockPrisma.chargingEvent.delete).toHaveBeenCalledWith({ where: { id: 'event-1' } });
+		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
+		expect(service.getStatus().waitReason).toBe('ChargePoint rejected start');
+	});
+
+	it('reports "Car fully charged" when error 25 arrives and the charger corroborates with DONE', async () => {
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus.mockResolvedValue(
+			pluggedInStatus({ chargingStatus: 'DONE' as HomeChargerStatus['chargingStatus'] })
+		);
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+		mockCp.startChargingSession.mockRejectedValueOnce(
+			new VehicleNotReadyError('Unable to start charging.', {
+				errorId: 25,
+				errorCategory: 'CHARGE',
+				errorMessage: 'Unable to start charging.',
+			})
+		);
+
+		// The automated tick short-circuits on DONE, so drive the start explicitly.
+		await service.manualStartSession();
+
 		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
 		expect(service.getStatus().waitReason).toBe('Car fully charged');
 	});
@@ -458,7 +904,7 @@ describe('SunkeepService', () => {
 		expect(mockCp.startChargingSession).toHaveBeenCalledOnce();
 		expect(mockPrisma.chargingEvent.create).toHaveBeenCalledOnce();
 		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
-		expect(service.getStatus().waitReason).toBe('Car fully charged');
+		expect(service.getStatus().waitReason).toBe('ChargePoint rejected start');
 
 		// Unplugging clears the guard so a later plug-in gets a fresh attempt.
 		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus({ isPluggedIn: false }));
@@ -602,13 +1048,26 @@ describe('SunkeepService', () => {
 		expect(service.getStatus().waitReason).toBe('ChargePoint start error');
 	});
 
-	it('calculates correct amps: clamps to 8 at 1.5 kW excess', async () => {
+	it('does not start at 1.5 kW surplus — the charger cannot draw less than 1.92 kW', async () => {
+		// 8A at 240V is 1.92 kW, so a 1.5 kW surplus cannot run even the minimum charge:
+		// starting would pull the remaining 0.42 kW from the grid or the Powerwall.
 		service.enable();
 		vi.setSystemTime(NOON);
 		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
-		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 2.5, loadKw: 1.0 })); // 1.5 kW exact → floor(6.25) = 6, clamped to 8
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 2.5, loadKw: 1.0 }));
+		await service.runTick();
+		expect(mockCp.startChargingSession).not.toHaveBeenCalled();
+		expect(service.getStatus().waitReason).toBe('Insufficient solar excess');
+	});
+
+	it('starts at 8A once the surplus covers the minimum draw', async () => {
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 2.92, loadKw: 1.0 })); // 1.92 kW → exactly 8A
 		await service.runTick();
 		expect(mockCp.setAmperageLimit).toHaveBeenCalledWith(42, 8);
+		expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
 	});
 
 	it('calculates correct amps: clamps to 32 at excess > 7.68 kW', async () => {
@@ -888,7 +1347,11 @@ describe('SunkeepService', () => {
 		expect(mockCp.setAmperageLimit).toHaveBeenCalledWith(42, 8);
 	});
 
-	it('manualStartSession() sets WAITING/"Car fully charged" when charger is DONE', async () => {
+	it('manualStartSession() attempts the start even when the charger reports DONE', async () => {
+		// DONE means the car was at its charge limit when ChargePoint last looked, which
+		// goes stale as soon as the limit is raised. Refusing to try left the user with a
+		// charger that starts fine from the ChargePoint app while Sunkeep insisted the car
+		// was full — an explicit force start must let ChargePoint make the call.
 		service.enable();
 		mockCp.getHomeChargerStatus.mockResolvedValue(
 			pluggedInStatus({ chargingStatus: 'DONE' as HomeChargerStatus['chargingStatus'] })
@@ -896,9 +1359,56 @@ describe('SunkeepService', () => {
 		mockPw.getData.mockResolvedValue(goodPwData());
 		await service.manualStartSession();
 
-		expect(mockCp.startChargingSession).not.toHaveBeenCalled();
+		expect(mockCp.startChargingSession).toHaveBeenCalledWith(42);
+		expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+		expect(service.getStatus().forced).toBe(true);
+	});
+
+	it('manualStartSession() reports "Car fully charged" when a DONE car really rejects the start', async () => {
+		// The genuine car-full case still surfaces correctly: ChargePoint answers the
+		// attempt with error 25 and Sunkeep re-latches the guard instead of churning rows.
+		service.enable();
+		mockCp.getHomeChargerStatus.mockResolvedValue(
+			pluggedInStatus({ chargingStatus: 'DONE' as HomeChargerStatus['chargingStatus'] })
+		);
+		mockPw.getData.mockResolvedValue(goodPwData());
+		mockCp.startChargingSession.mockRejectedValueOnce(
+			new VehicleNotReadyError('Unable to start charging.', {
+				errorId: 25,
+				errorCategory: 'CHARGE',
+				errorMessage: 'Unable to start charging.',
+			})
+		);
+
+		await service.manualStartSession();
+
 		expect(service.getStatus().state).toBe(SunkeepState.WAITING);
 		expect(service.getStatus().waitReason).toBe('Car fully charged');
+		expect(mockPrisma.chargingEvent.delete).toHaveBeenCalledWith({ where: { id: 'event-1' } });
+	});
+
+	it('manualStartSession() clears a latched car-full guard so a force start is not blocked', async () => {
+		// A prior error-25 rejection latches carReportedFull, after which every tick
+		// short-circuits to "Car fully charged". A force start must clear it and try again
+		// rather than inherit a stale verdict.
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+		mockCp.startChargingSession.mockRejectedValueOnce(
+			new VehicleNotReadyError('Unable to start charging.', {
+				errorId: 25,
+				errorCategory: 'CHARGE',
+				errorMessage: 'Unable to start charging.',
+			})
+		);
+		await service.runTick();
+		expect(service.getStatus().waitReason).toBe('ChargePoint rejected start');
+
+		await service.manualStartSession();
+
+		expect(mockCp.startChargingSession).toHaveBeenCalledTimes(2);
+		expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
 	});
 
 	it('manualStartSession() is a no-op when already CHARGING', async () => {
@@ -1627,7 +2137,8 @@ describe('SunkeepService', () => {
 					amperageLimit: 15,
 				})
 			);
-			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 6.0, loadKw: 1.0 }));
+			// Tesla load includes the car at 15A (3.6 kW) on top of a 1.0 kW house
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 6.0, loadKw: 4.6 }));
 
 			await service.runTick();
 
@@ -1637,8 +2148,8 @@ describe('SunkeepService', () => {
 			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
 			// Adopted without an API-visible ChargePoint session handle
 			expect(service.getStatus().activeSession).toBeNull();
-			// Amperage is still managed via the charger device (excess 6-1+15*0.24 = 8.6 kW → 32 A)
-			expect(mockCp.setAmperageLimit).toHaveBeenCalledWith(42, 32);
+			// Amperage is still managed via the charger device (excess 6-4.6+3.6 = 5.0 kW → 20 A)
+			expect(mockCp.setAmperageLimit).toHaveBeenCalledWith(42, 20);
 		});
 
 		it('keeps an externally-started session adopted across ticks without duplicating events or stopping it', async () => {

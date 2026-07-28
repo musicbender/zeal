@@ -261,7 +261,7 @@
 							"host": ["{{baseUrl}}"],
 							"path": ["sunkeep", "status"]
 						},
-						"description": "Returns the current Sunkeep state including charging status, solar/battery metrics, and session info.\n\n**state** — one of: `DISABLED`, `IDLE`, `WAITING`, `CHARGING`, `ERROR`"
+						"description": "Returns the current Sunkeep state including charging status, solar/battery metrics, and session info.\n\n**state** — one of: `DISABLED`, `IDLE`, `WAITING`, `CHARGING`, `ERROR`\n\n**loadKw** is the total site load measured by the Powerwall, the car included. **carKw** is the estimated share of it drawn by the car and **houseKw** the remainder (`loadKw - carKw`, never negative). **excessKw** is solar production minus the house's own draw — the power available to the car — and never exceeds `solarKw`."
 					},
 					"response": [
 						{
@@ -269,7 +269,7 @@
 							"status": "OK",
 							"code": 200,
 							"header": [{ "key": "Content-Type", "value": "application/json" }],
-							"body": "{\n  \"state\": \"IDLE\",\n  \"enabled\": true,\n  \"lastPollAt\": \"2026-05-14T12:00:00.000Z\",\n  \"activeSession\": null,\n  \"solarKw\": 4.2,\n  \"excessKw\": 1.8,\n  \"batteryPct\": 85\n}"
+							"body": "{\n  \"state\": \"CHARGING\",\n  \"enabled\": true,\n  \"lastPollAt\": \"2026-05-14T19:10:02.000Z\",\n  \"activeSession\": {\n    \"sessionId\": 101,\n    \"currentAmps\": 20,\n    \"startedAt\": \"2026-05-14T18:40:00.000Z\"\n  },\n  \"solarKw\": 5.89,\n  \"excessKw\": 5.28,\n  \"loadKw\": 4.45,\n  \"carKw\": 3.84,\n  \"houseKw\": 0.61,\n  \"batteryPct\": 97.2,\n  \"batteryKw\": 0,\n  \"lockedAmps\": null,\n  \"chargerAmps\": 20,\n  \"isPluggedIn\": true,\n  \"gridKw\": -1.44,\n  \"gridStatus\": \"Active\",\n  \"lastTeslaAt\": \"2026-05-14T12:09:37-07:00\",\n  \"waitReason\": null,\n  \"forced\": false\n}"
 						}
 					]
 				},
@@ -415,7 +415,7 @@
 								}
 							]
 						},
-						"description": "Returns paginated charging events ordered by `startedAt` descending."
+						"description": "Returns paginated charging events ordered by `startedAt` descending.\n\n**energyKwh** is null when neither ChargePoint plane reported energy for the session and Sunkeep had nothing to integrate. **energyEstimated** is true when energyKwh came from Sunkeep integrating the car's draw rather than from a ChargePoint reading."
 					},
 					"response": [
 						{
@@ -423,7 +423,7 @@
 							"status": "OK",
 							"code": 200,
 							"header": [{ "key": "Content-Type", "value": "application/json" }],
-							"body": "{\n  \"events\": [\n    {\n      \"id\": \"clx123abc\",\n      \"startedAt\": \"2026-05-14T08:00:00.000Z\",\n      \"stoppedAt\": \"2026-05-14T11:00:00.000Z\",\n      \"stopReason\": \"solar_dropped\"\n    }\n  ],\n  \"total\": 1,\n  \"page\": 1,\n  \"limit\": 20\n}"
+							"body": "{\n  \"events\": [\n    {\n      \"id\": \"clx123abc\",\n      \"startedAt\": \"2026-05-14T08:00:00.000Z\",\n      \"stoppedAt\": \"2026-05-14T11:00:00.000Z\",\n      \"stopReason\": \"solar_dropped\",\n      \"startAmps\": 8,\n      \"endAmps\": 20,\n      \"peakSolarKw\": 5.89,\n      \"energyKwh\": 9.42,\n      \"energyEstimated\": true,\n      \"forced\": false,\n      \"createdAt\": \"2026-05-14T08:00:00.000Z\",\n      \"updatedAt\": \"2026-05-14T11:00:00.000Z\"\n    }\n  ],\n  \"total\": 1,\n  \"page\": 1,\n  \"limit\": 20\n}"
 						}
 					]
 				},
@@ -444,7 +444,7 @@
 							"status": "OK",
 							"code": 200,
 							"header": [{ "key": "Content-Type", "value": "application/json" }],
-							"body": "{\n  \"id\": \"clx123abc\",\n  \"startedAt\": \"2026-05-14T08:00:00.000Z\",\n  \"stoppedAt\": \"2026-05-14T11:00:00.000Z\",\n  \"stopReason\": \"solar_dropped\"\n}"
+							"body": "{\n  \"id\": \"clx123abc\",\n  \"startedAt\": \"2026-05-14T08:00:00.000Z\",\n  \"stoppedAt\": \"2026-05-14T11:00:00.000Z\",\n  \"stopReason\": \"solar_dropped\",\n  \"startAmps\": 8,\n  \"endAmps\": 20,\n  \"peakSolarKw\": 5.89,\n  \"energyKwh\": 9.42,\n  \"energyEstimated\": true,\n  \"forced\": false,\n  \"createdAt\": \"2026-05-14T08:00:00.000Z\",\n  \"updatedAt\": \"2026-05-14T11:00:00.000Z\"\n}"
 						},
 						{
 							"name": "404 Not Found",

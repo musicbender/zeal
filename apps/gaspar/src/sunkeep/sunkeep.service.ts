@@ -30,7 +30,11 @@ const log = initLogger('sunkeep.service');
 const MIN_AMPS = 8;
 const MAX_AMPS = 32;
 const VOLTAGE = 240;
-const MIN_EXCESS_KW = 1.5;
+// The effective "enough solar to charge" threshold is MIN_AMPS * VOLTAGE = 1.92 kW —
+// the smallest draw the charger can deliver. There is no separate excess threshold:
+// charging starts when the measured surplus can cover MIN_AMPS and stops when it can
+// no longer cover the draw the car already has (see resolveTargetAmps).
+//
 // Number of consecutive ticks the charger must report a non-charging status before we
 // treat an owned session as externally stopped. ChargePoint occasionally returns a single
 // not-charging poll for a session that is still live (e.g. right after an amperage
@@ -43,10 +47,23 @@ const DEFAULT_SOE_HYSTERESIS = 15;
 // session that ended outside our awareness — when adopting, we close them
 // and start a fresh row rather than show a misleading multi-day duration.
 const MAX_INCOMPLETE_EVENT_AGE_MS = 12 * 60 * 60 * 1000;
+// Tesla's live_status lags the hardware by up to a couple of minutes. A load reading
+// taken less than this long after the charger was last seen delivering current may
+// still include the car, so it is not trusted as a car-free house baseline.
+const BASELINE_SETTLE_MS = 2 * 60 * 1000;
+// A captured house baseline older than this is discarded — household draw drifts over
+// the day (AC, oven, dryer) and a stale baseline would misattribute it to the car.
+const MAX_BASELINE_AGE_MS = 6 * 60 * 60 * 1000;
+// How much the metered load must rise after an amperage raise for the car to count as
+// having responded to it. Below this it is meter noise, not the car.
+const RAISE_RESPONSE_EPSILON_KW = 0.2;
+// Longest gap between polls we will integrate energy across. The scheduler ticks every
+// 10 minutes; anything much longer than that means the process was asleep, and one
+// reading says nothing about what the car did in between.
+const MAX_ENERGY_ACCRUAL_HOURS = 1;
 
-function calcTargetAmps(excessKw: number): number {
-	const raw = Math.floor((excessKw * 1000) / VOLTAGE);
-	return Math.max(MIN_AMPS, Math.min(MAX_AMPS, raw));
+function clampAmps(amps: number): number {
+	return Math.max(MIN_AMPS, Math.min(MAX_AMPS, amps));
 }
 
 interface IncompleteChargingEvent {
@@ -83,6 +100,15 @@ export class SunkeepService {
 	// for chargers whose auto-started sessions never surface via getUserChargingStatus) —
 	// session?.energyKwh is null in that case, so this is the fallback persisted on stop.
 	private lastKnownEnergyKwh: number | null = null;
+	// Energy integrated from our own power estimate over the current session, in kWh, and
+	// the poll it was last accrued at. node-chargepoint only fills HomeChargerStatus.
+	// energyKwh when the charger's status payload carries it, and a charger whose device
+	// plane omits the session id (the same one whose sessions cannot be stopped over REST)
+	// omits this too — leaving both of the readings above null for every session and
+	// energyKwh null on every row. Integrating carLoadKw over the session is the only
+	// figure available; rows filled this way are flagged energyEstimated.
+	private estimatedEnergyKwh = 0;
+	private lastEnergyAccrualAt: number | null = null;
 	private lastPollAt: Date | null = null;
 	private lastPwData: PowerwallData | null = null;
 	private sessionStartedAt: Date | null = null;
@@ -115,6 +141,32 @@ export class SunkeepService {
 	// the session is closed. Used to debounce transient not-charging polls before closing
 	// an owned session as an external stop (see EXTERNAL_STOP_CONFIRM_TICKS).
 	private notChargingStreak = 0;
+	// Last Powerwall load reading (kW) taken while the charger was demonstrably not
+	// delivering current — i.e. the house's own draw with the car excluded. Subtracting
+	// it from a later load reading measures what the car is actually pulling. Null until
+	// a trustworthy idle reading has been observed.
+	private houseBaselineKw: number | null = null;
+	private houseBaselineAt: number | null = null;
+	// Local-clock ms of the last poll that saw the charger delivering current. Used to
+	// reject load readings that are too fresh to be car-free (see BASELINE_SETTLE_MS).
+	private lastChargerChargingAt: number | null = null;
+	// Why Sunkeep wanted the current session closed, when the stop command did not take
+	// and the charger kept delivering current. The event row stays open until the charger
+	// actually stops, and closes with this reason rather than the generic one the later
+	// poll would supply. Null when no stop is outstanding.
+	private stopPendingReason: StopReason | null = null;
+	// Metered load at the moment we last raised the limit. If the following poll shows the
+	// car took none of that headroom, raising again would walk the limit up against a car
+	// that is not listening (one tapering at its charge limit, or one whose onboard
+	// charger caps lower) and hand it a large limit to wake up into. Cleared whenever the
+	// limit is lowered or the session ends.
+	private loadAtLastRaiseKw: number | null = null;
+	// Tesla live_status timestamp of the reading that drove the last amperage adjustment.
+	// A tick whose reading carries the same timestamp is looking at pre-adjustment data,
+	// so it must not adjust again — back-to-back polls (manual POST /sunkeep/poll, or the
+	// client's 30s live_status cache) would otherwise ratchet the amps upward on a single
+	// stale measurement. Cleared whenever a session starts or stops.
+	private lastAdjustTeslaAt: string | null = null;
 
 	constructor(
 		private readonly chargePoint: IChargePointClient,
@@ -154,47 +206,171 @@ export class SunkeepService {
 				}
 			: null;
 
-		// When we own the session (CHARGING state), use currentAmps — what we last commanded.
-		// Falls back to the charger's reported amps when the charger is active but sunkeep
-		// isn't in CHARGING state (transient), or 0 when not charging.
-		const carKw =
-			this.lastPwData != null
-				? this.state === SunkeepState.CHARGING
-					? (this.currentAmps * VOLTAGE) / 1000
-					: this.chargerChargingStatus === 'CHARGING' && this.chargerAmps
-						? (this.chargerAmps * VOLTAGE) / 1000
-						: 0
-				: null;
+		const pw = this.lastPwData;
+		// One amperage source for every derived figure below. Previously carKw keyed off
+		// `state` while excessKw keyed off `activeSession`, so a session adopted without a
+		// session handle (the common case — activeSession null, state CHARGING) described
+		// the car at two different amperages within the same payload.
+		const carKw = pw != null ? this.carLoadKw(pw, this.activeCarAmps()) : null;
 
 		return {
 			state: this.state,
 			enabled: this.state !== SunkeepState.DISABLED,
 			lastPollAt: this.lastPollAt?.toISOString() ?? null,
 			activeSession: session,
-			solarKw: this.lastPwData?.solarKw ?? null,
-			excessKw: this.lastPwData
-				? this.lastPwData.solarKw -
-					this.lastPwData.loadKw +
-					Math.min(0, this.lastPwData.batteryKw ?? 0) +
-					(this.activeSession
-						? (this.currentAmps * VOLTAGE) / 1000
-						: this.chargerChargingStatus === 'CHARGING' && this.chargerAmps
-							? (this.chargerAmps * VOLTAGE) / 1000
-							: 0)
-				: null,
-			loadKw: this.lastPwData?.loadKw ?? null,
+			solarKw: pw?.solarKw ?? null,
+			excessKw: pw != null ? this.computeExcessKw(pw, carKw ?? 0) : null,
+			loadKw: pw?.loadKw ?? null,
 			carKw,
-			batteryPct: this.lastPwData?.batteryPct ?? null,
-			batteryKw: this.lastPwData?.batteryKw ?? null,
+			houseKw: pw != null ? Math.max(0, pw.loadKw - (carKw ?? 0)) : null,
+			batteryPct: pw?.batteryPct ?? null,
+			batteryKw: pw?.batteryKw ?? null,
 			lockedAmps: this.lockedAmps,
 			chargerAmps: this.chargerAmps,
 			isPluggedIn: this.isPluggedIn,
-			gridKw: this.lastPwData?.gridKw ?? null,
-			gridStatus: this.lastPwData?.gridStatus ?? null,
-			lastTeslaAt: this.lastPwData?.lastTeslaAt ?? null,
+			gridKw: pw?.gridKw ?? null,
+			gridStatus: pw?.gridStatus ?? null,
+			lastTeslaAt: pw?.lastTeslaAt ?? null,
 			waitReason: this.state === SunkeepState.WAITING ? this.waitReason : null,
 			forced: this.forced,
 		};
+	}
+
+	// Amperage ceiling currently applied to the car. While we own the session that is what
+	// we last commanded; otherwise it is whatever limit the charger reports while it is
+	// delivering current. Both getStatus() and the tick's excess maths read this so the
+	// two can never disagree about how hard the car is being driven.
+	private activeCarAmps(): number {
+		if (this.state === SunkeepState.CHARGING) return this.currentAmps;
+		if (this.chargerChargingStatus === 'CHARGING' && this.chargerAmps) return this.chargerAmps;
+		return 0;
+	}
+
+	// Best available estimate of what the car is really drawing, in kW.
+	//
+	// ChargePoint only exposes an amperage *limit*, never a power measurement. The car
+	// draws less than the limit whenever its onboard charger caps lower, whenever it
+	// tapers near its charge limit, and for the minutes before the charger applies a new
+	// limit. Treating the limit as a measurement is what reported a car load larger than
+	// the site's entire load (and, downstream in fiendlord-keep, a negative house load).
+	//
+	// The Powerwall's load_power *is* a measurement, and it covers everything behind the
+	// meter including the car — so subtracting a house baseline captured while the charger
+	// was idle measures the car directly. The amperage limit stays on as a ceiling, and
+	// the result is clamped into [0, loadKw] so the car can never be reported as drawing
+	// more than the whole site.
+	private carLoadKw(pw: PowerwallData, amps: number): number {
+		if (amps <= 0) return 0;
+		const ceilingKw = Math.min((amps * VOLTAGE) / 1000, pw.loadKw);
+		const baselineKw = this.freshHouseBaselineKw();
+		if (baselineKw === null) return Math.max(0, ceilingKw);
+		return Math.max(0, Math.min(ceilingKw, pw.loadKw - baselineKw));
+	}
+
+	private freshHouseBaselineKw(): number | null {
+		if (this.houseBaselineKw === null || this.houseBaselineAt === null) return null;
+		if (Date.now() - this.houseBaselineAt > MAX_BASELINE_AGE_MS) return null;
+		return this.houseBaselineKw;
+	}
+
+	// Production that nothing is currently consuming, in kW. By the Powerwall's energy
+	// identity (solar + battery + grid = load) this equals −gridKw − batteryKw: power
+	// flowing out to the grid plus power going into the battery. Negative means the car
+	// is already being fed by the grid or the battery.
+	private surplusKw(pw: PowerwallData): number {
+		return pw.solarKw - pw.loadKw;
+	}
+
+	// Amperage the car should be running at, given what the meters say right now.
+	//
+	// This is closed-loop while a session is live: the car's present draw is already
+	// inside loadKw, so the measured surplus is exactly the headroom left to hand it,
+	// and correcting the *current* amperage by that surplus needs no estimate of what
+	// the car is drawing — the one quantity the hardware will not tell us.
+	//
+	// The old open-loop form (solar − load + commandedAmps × 240 V, fed to a fresh
+	// target) had to guess that draw, and any error compounded: guess high, command
+	// higher, guess higher still. Closed-loop cannot compound, because whatever the car
+	// actually does with a new limit shows up in the next poll's surplus.
+	//
+	// Truncating toward zero gives a one-amp (240 W) deadband so meter noise around the
+	// settle point does not twitch the charger, and makes the start and stop thresholds
+	// exactly complementary: we start when the surplus covers MIN_AMPS, and stop when it
+	// can no longer cover the draw the car already has — so stopping frees MIN_AMPS of
+	// surplus, which is not enough to immediately restart.
+	private resolveTargetAmps(pw: PowerwallData, runningAmps: number): number {
+		const surplusAmps = (this.surplusKw(pw) * 1000) / VOLTAGE;
+		return runningAmps > 0 ? runningAmps + Math.trunc(surplusAmps) : Math.floor(surplusAmps);
+	}
+
+	// Solar power available to the car, in kW: production minus the house's own draw.
+	// loadKw already includes the car, so the car's measured draw is added back; battery
+	// charging is subtracted because that solar is already spoken for. Because carLoadKw
+	// is clamped to the measured load, excess can never exceed solar production — the
+	// physical invariant the old commanded-amps arithmetic violated (it reported 6.48 kW
+	// of excess against 5.89 kW of production).
+	private computeExcessKw(pw: PowerwallData, carKw: number): number {
+		return pw.solarKw - pw.loadKw + carKw + Math.min(0, pw.batteryKw ?? 0);
+	}
+
+	// Integrate the car's draw across the gap since the previous poll. Called once per
+	// poll while we own a session; the clock starts when the session does, so the first
+	// interval counts rather than being lost.
+	private accrueEnergy(pw: PowerwallData): void {
+		const now = Date.now();
+		const since = this.lastEnergyAccrualAt;
+		this.lastEnergyAccrualAt = now;
+		if (since === null) return;
+		const hours = (now - since) / 3_600_000;
+		// A gap far longer than the poll interval means the process was asleep or the
+		// scheduler stalled; we have no idea what the car did in between, so skip it
+		// rather than extrapolate one reading across hours.
+		if (hours <= 0 || hours > MAX_ENERGY_ACCRUAL_HOURS) return;
+		this.estimatedEnergyKwh += this.carLoadKw(pw, this.activeCarAmps()) * hours;
+	}
+
+	// Energy to persist when closing a session. ChargePoint's own readings win when it
+	// gives us any; otherwise fall back to what we integrated ourselves.
+	private resolveSessionEnergy(session: ChargingSession | null): {
+		energyKwh: number | null;
+		energyEstimated: boolean;
+	} {
+		const reported = session?.energyKwh ?? this.lastKnownEnergyKwh ?? null;
+		if (reported != null) return { energyKwh: reported, energyEstimated: false };
+		if (this.estimatedEnergyKwh <= 0) return { energyKwh: null, energyEstimated: false };
+		return { energyKwh: +this.estimatedEnergyKwh.toFixed(3), energyEstimated: true };
+	}
+
+	// Record what this poll tells us about the house's car-free draw. Only readings taken
+	// with nothing plausibly charging qualify — if the baseline absorbs the car's own draw
+	// then every later carLoadKw() reads as zero, the excess collapses, and Sunkeep stops
+	// the session it just started.
+	//
+	// "Nothing plausibly charging" is deliberately broad: ChargePoint's reported status
+	// lags a start by a poll or two, so an owned session counts even while the charger
+	// still says NOT_CHARGING. Call this after the charger fields have been refreshed for
+	// the current poll but before reconcile mutates ownership, so the ownership flags
+	// describe the period the load reading was actually taken over.
+	private observePower(pw: PowerwallData): void {
+		const carMayBeDrawing =
+			this.chargerChargingStatus === 'CHARGING' ||
+			this.state === SunkeepState.CHARGING ||
+			this.activeSession !== null ||
+			this.activeEventId !== null;
+		if (carMayBeDrawing) {
+			this.lastChargerChargingAt = Date.now();
+			return;
+		}
+		const readingAt = pw.lastTeslaAt ? Date.parse(pw.lastTeslaAt) : Date.now();
+		const readingMs = Number.isNaN(readingAt) ? Date.now() : readingAt;
+		if (
+			this.lastChargerChargingAt !== null &&
+			readingMs - this.lastChargerChargingAt < BASELINE_SETTLE_MS
+		) {
+			return;
+		}
+		this.houseBaselineKw = pw.loadKw;
+		this.houseBaselineAt = Date.now();
 	}
 
 	async runTick(): Promise<void> {
@@ -269,16 +445,19 @@ export class SunkeepService {
 		this.chargerAmps = chargerStatus.amperageLimit;
 		this.chargerChargingStatus = chargerStatus.chargingStatus;
 		this.lastPwData = pwData;
+		this.observePower(pwData);
 		if (typeof chargerStatus.energyKwh === 'number')
 			this.lastKnownEnergyKwh = chargerStatus.energyKwh;
-		if (chargerStatus.chargingStatus === 'DONE') {
-			// ChargePoint DONE state means the car hit its charge limit; the physical
-			// connector must be unplugged and replugged before a new session will start.
-			// Attempting startChargingSession here returns error 25 — skip it.
-			this.state = SunkeepState.WAITING;
-			this.waitReason = 'Car fully charged';
-			return;
-		}
+		// An explicit force start overrides a latched "car full". Both signals for it —
+		// ChargePoint's DONE status and the carReportedFull guard set by a previous error-25
+		// rejection — describe a car that was at its charge limit at some point in the past,
+		// and both go stale the moment the limit is raised or the car is woken. Refusing to
+		// even attempt the start left the user with a charger that starts fine from the
+		// ChargePoint app while Sunkeep insists the car is full. Let ChargePoint be the
+		// judge: a car that genuinely will not take current comes back as
+		// VehicleNotReadyError, which startSession() surfaces as "Car fully charged" and
+		// re-latches the guard.
+		this.carReportedFull = false;
 		if (chargerStatus.chargingStatus === 'CHARGING') {
 			await this.reconcileWithCharger(chargerStatus);
 			// Cast: TS narrowed state to non-CHARGING after the early return at the
@@ -295,9 +474,10 @@ export class SunkeepService {
 		// A deliberate force-start: bypass the solar/battery policy gates on subsequent
 		// ticks until the car is unplugged/full or the session is stopped.
 		this.forced = true;
-		const excessKw = pwData.solarKw - pwData.loadKw;
-		const targetAmps = calcTargetAmps(excessKw);
-		await this.startSession(targetAmps);
+		// The charger is not delivering current on this path, so the whole measured
+		// surplus is available. A forced start ignores the MIN_AMPS floor and takes the
+		// charger's minimum when the surplus cannot cover it.
+		await this.startSession(clampAmps(this.resolveTargetAmps(pwData, 0)));
 	}
 
 	// Mark the in-flight session as force-charged and persist the flag onto its
@@ -416,8 +596,10 @@ export class SunkeepService {
 		this.isDuringScheduledTime = chargerStatus.isDuringScheduledTime;
 		this.chargerChargingStatus = chargerStatus.chargingStatus;
 		this.lastPwData = pwData;
+		this.observePower(pwData);
 		if (typeof chargerStatus.energyKwh === 'number')
 			this.lastKnownEnergyKwh = chargerStatus.energyKwh;
+		if (this.activeEventId) this.accrueEnergy(pwData);
 		if (chargerStatus.chargingStatus === 'CHARGING' && (this.activeSession || this.activeEventId)) {
 			this.chargerConfirmedCurrentSession = true;
 		}
@@ -515,14 +697,15 @@ export class SunkeepService {
 			return;
 		}
 
-		// Car previously rejected a start with error 25 (at its charge limit) and the
-		// charger reports a non-DONE status. Don't re-attempt a start (which would create
-		// a junk ChargingEvent row every tick) — hold in WAITING until the car is
-		// unplugged (handled in the !isPluggedIn branch below) or starts charging again
-		// (handled at the top of tick).
+		// A previous start was rejected with error 25 while the charger reports a non-DONE
+		// status. Don't re-attempt (which would create a junk ChargingEvent row every
+		// tick) — hold in WAITING until the car is unplugged (handled in the !isPluggedIn
+		// branch below) or starts charging again (handled at the top of tick). The DONE
+		// handler above already claimed the genuine car-full case, so anything reaching
+		// here is ChargePoint refusing a start for a car it does not call full.
 		if (chargerStatus.isPluggedIn && this.carReportedFull) {
 			this.state = SunkeepState.WAITING;
-			this.waitReason = 'Car fully charged';
+			this.waitReason = 'ChargePoint rejected start';
 			return;
 		}
 
@@ -584,19 +767,18 @@ export class SunkeepService {
 			return;
 		}
 
-		// Tesla load_power includes EV charging load; add it back so we measure solar excess
-		// available for the car rather than treating the car's own draw as a deficit.
-		// When we have an adopted session use currentAmps (what we commanded); otherwise
-		// fall back to the charger's reported amperageLimit if it's actively charging.
 		const carAmps =
 			this.state === SunkeepState.CHARGING
 				? this.currentAmps
 				: chargerStatus.chargingStatus === 'CHARGING' && chargerStatus.amperageLimit
 					? chargerStatus.amperageLimit
 					: 0;
-		const excessKw = pwData.solarKw - pwData.loadKw + (carAmps * VOLTAGE) / 1000;
+		// Below MIN_AMPS means the charger cannot go low enough to stay within the solar
+		// we are measuring — for a live session, that the car's present draw is no longer
+		// covered even after winding it all the way down.
+		const rawTargetAmps = this.resolveTargetAmps(pwData, carAmps);
 
-		if (!this.forced && excessKw < MIN_EXCESS_KW) {
+		if (!this.forced && rawTargetAmps < MIN_AMPS) {
 			if (this.state === SunkeepState.CHARGING) {
 				await this.stopActiveSession(StopReason.SOLAR_DROPPED);
 				this.state = SunkeepState.WAITING;
@@ -607,13 +789,44 @@ export class SunkeepService {
 			return;
 		}
 
-		const targetAmps = calcTargetAmps(excessKw);
+		const targetAmps = clampAmps(rawTargetAmps);
 
 		if (this.state === SunkeepState.CHARGING) {
+			// Policy allows charging again, so any stop we were holding open is moot — the
+			// session continues on the same row and will close with whatever ends it.
+			this.stopPendingReason = null;
+			// Two ticks that read the same Tesla live_status snapshot must not both act on
+			// it: the second is looking at a measurement taken before the first one's
+			// amperage change, so the car's response is not in the data yet. Bursts of
+			// POST /sunkeep/poll hit this constantly — the Tesla client serves a 30-second
+			// cache, and Tesla's own telemetry lags further behind that.
+			const readingKey = pwData.lastTeslaAt ?? null;
+			const alreadyActedOnReading = readingKey !== null && readingKey === this.lastAdjustTeslaAt;
+			// The car ignored the last raise, so it will ignore this one too — and every
+			// unheeded raise leaves a bigger limit for it to wake up into.
+			const raising = targetAmps > this.currentAmps;
+			const carIgnoredLastRaise =
+				raising &&
+				this.loadAtLastRaiseKw !== null &&
+				pwData.loadKw <= this.loadAtLastRaiseKw + RAISE_RESPONSE_EPSILON_KW;
 			if (this.lockedAmps === null && targetAmps !== this.currentAmps) {
-				await this.chargePoint.setAmperageLimit(this.config.chargePointDeviceId, targetAmps);
-				this.currentAmps = targetAmps;
-				log.info({ targetAmps }, 'Adjusted charge amps');
+				if (alreadyActedOnReading) {
+					log.debug(
+						{ targetAmps, currentAmps: this.currentAmps, lastTeslaAt: readingKey },
+						'Skipping amp adjustment — Powerwall reading predates the last change'
+					);
+				} else if (carIgnoredLastRaise) {
+					log.info(
+						{ targetAmps, currentAmps: this.currentAmps, loadKw: pwData.loadKw },
+						'Skipping amp raise — car did not draw the headroom from the last one'
+					);
+				} else {
+					await this.chargePoint.setAmperageLimit(this.config.chargePointDeviceId, targetAmps);
+					this.currentAmps = targetAmps;
+					this.lastAdjustTeslaAt = readingKey;
+					this.loadAtLastRaiseKw = raising ? pwData.loadKw : null;
+					log.info({ targetAmps }, 'Adjusted charge amps');
+				}
 			}
 			if (pwData.solarKw > this.peakSolarKw && this.activeEventId) {
 				this.peakSolarKw = pwData.solarKw;
@@ -655,8 +868,8 @@ export class SunkeepService {
 			chargerStatus.chargingStatus === 'CHARGING' && chargerStatus.amperageLimit
 				? chargerStatus.amperageLimit
 				: 0;
-		const excessKw = pwData.solarKw - pwData.loadKw + (carAmps * VOLTAGE) / 1000;
-		if (excessKw < MIN_EXCESS_KW) return { waitReason: 'Insufficient solar excess' };
+		if (this.resolveTargetAmps(pwData, carAmps) < MIN_AMPS)
+			return { waitReason: 'Insufficient solar excess' };
 		return null;
 	}
 
@@ -914,6 +1127,11 @@ export class SunkeepService {
 		this.state = SunkeepState.CHARGING;
 		this.waitReason = null;
 		this.chargerConfirmedCurrentSession = true;
+		this.lastAdjustTeslaAt = null;
+		this.loadAtLastRaiseKw = null;
+		this.estimatedEnergyKwh = 0;
+		this.lastEnergyAccrualAt = Date.now();
+		this.stopPendingReason = null;
 		log.info(
 			{
 				eventId,
@@ -1021,25 +1239,39 @@ export class SunkeepService {
 				this.sessionStartedAt = startedAt;
 				this.state = SunkeepState.CHARGING;
 				this.chargerConfirmedCurrentSession = false;
+				this.lastAdjustTeslaAt = null;
+				this.loadAtLastRaiseKw = null;
+				this.estimatedEnergyKwh = 0;
+				this.lastEnergyAccrualAt = Date.now();
+				this.stopPendingReason = null;
 				log.warn(
 					{ targetAmps, eventId: event.id, pollAttempts: err.pollAttempts },
 					'ChargePoint user-status poll timed out but charger reports CHARGING; treating as success'
 				);
 				return;
 			}
-			// VehicleNotReadyError (ChargePoint error 25) means the Tesla's onboard charger
-			// rejected the start because the car is at its charge limit — treat it as "Car
-			// fully charged" so the status is consistent with the DONE path. The start was
-			// definitively rejected, so no charging happened — drop the event row we
-			// optimistically created instead of leaving it open for next-tick reconcile to
-			// close as a bogus UNKNOWN "session". Set the guard so we stop re-attempting.
+			// VehicleNotReadyError (ChargePoint error 25) — "try again after the vehicle
+			// charging has unplugged". A car sitting at its charge limit is one cause, but
+			// so is a stale session on ChargePoint's backend that the REST API will not let
+			// us clear: the charger then refuses every start until something outside Sunkeep
+			// (the ChargePoint app) resets it. Only claim "Car fully charged" when the
+			// charger corroborates it with DONE — reporting that for a car that is merely
+			// blocked sends the user hunting for a charge limit that is not the problem.
+			//
+			// The start was definitively rejected either way, so no charging happened — drop
+			// the event row we optimistically created instead of leaving it open for
+			// next-tick reconcile to close as a bogus UNKNOWN "session". Set the guard so we
+			// stop re-attempting (and churning rows) until something changes.
 			if (err instanceof VehicleNotReadyError) {
+				const carFull = this.chargerChargingStatus === 'DONE';
 				log.warn(
-					{ err, eventId: event.id, targetAmps },
-					'startChargingSession rejected: vehicle not ready (car at charge limit) — dropping event row'
+					{ err, eventId: event.id, targetAmps, chargerStatus: this.chargerChargingStatus },
+					carFull
+						? 'startChargingSession rejected: vehicle not ready (car at charge limit) — dropping event row'
+						: 'startChargingSession rejected with error 25 but charger is not DONE — ChargePoint is refusing the start, dropping event row'
 				);
 				this.state = SunkeepState.WAITING;
-				this.waitReason = 'Car fully charged';
+				this.waitReason = carFull ? 'Car fully charged' : 'ChargePoint rejected start';
 				this.carReportedFull = true;
 				// No session exists, so this force-start did not take — drop the forced flag
 				// to keep the invariant "no active session ⇒ not forced" and avoid poisoning a
@@ -1130,6 +1362,11 @@ export class SunkeepService {
 		this.sessionStartedAt = startedAt;
 		this.state = SunkeepState.CHARGING;
 		this.chargerConfirmedCurrentSession = false;
+		this.lastAdjustTeslaAt = null;
+		this.loadAtLastRaiseKw = null;
+		this.estimatedEnergyKwh = 0;
+		this.lastEnergyAccrualAt = Date.now();
+		this.stopPendingReason = null;
 		log.info(
 			{ targetAmps, sessionId: session.sessionId, eventId: event.id },
 			'Charging session started'
@@ -1208,17 +1445,39 @@ export class SunkeepService {
 				log.warn({ err }, 'Failed to set minimum amps after session stop');
 			});
 
+		// The stop did not take and the charger is still delivering current — all we
+		// achieved was the MIN_AMPS clamp. Closing the row here would record a session
+		// that never ended, and the next poll would adopt the same continuous charge into
+		// a brand new row: one physical session becomes a fresh "session" every time the
+		// policy flickers. Keep the row open, remember why we wanted it closed, and let a
+		// later poll close it once the charger actually stops. If policy allows charging
+		// again before that, reconcile picks the row back up and nothing was lost.
+		if (!chargerStopConfirmed && this.chargerChargingStatus === 'CHARGING') {
+			this.stopPendingReason = reason;
+			this.currentAmps = MIN_AMPS;
+			this.lockedAmps = null;
+			this.forced = false;
+			// The handle just failed to stop its own session, so it is no use to us. Drop
+			// it and let reconcile re-adopt the row by device — that path retries the
+			// device-level stop on every later poll.
+			this.activeSession = null;
+			log.warn(
+				{ reason, eventId },
+				'Charger still delivering after a failed stop — holding the event open at minimum amps rather than recording an end'
+			);
+			return;
+		}
+
+		const { energyKwh, energyEstimated } = this.resolveSessionEnergy(session);
 		try {
 			await this.prisma.chargingEvent.update({
 				where: { id: eventId },
 				data: {
 					stoppedAt: new Date(),
-					stopReason: reason,
+					stopReason: this.stopPendingReason ?? reason,
 					endAmps,
-					// session?.energyKwh (driver-plane) is only populated when we hold a real
-					// session handle and refreshed it — never true for sessions adopted without
-					// one. Fall back to the device-plane reading polled on every tick.
-					energyKwh: session?.energyKwh ?? this.lastKnownEnergyKwh ?? null,
+					energyKwh,
+					energyEstimated,
 				},
 			});
 		} catch (err) {
@@ -1236,5 +1495,10 @@ export class SunkeepService {
 		this.chargerConfirmedCurrentSession = false;
 		this.forced = false;
 		this.notChargingStreak = 0;
+		this.lastAdjustTeslaAt = null;
+		this.loadAtLastRaiseKw = null;
+		this.estimatedEnergyKwh = 0;
+		this.lastEnergyAccrualAt = null;
+		this.stopPendingReason = null;
 	}
 }
