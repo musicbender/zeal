@@ -30,17 +30,21 @@ model Setting {
 }
 
 model ChargingEvent {
-  id          String    @id @default(uuid())
-  startedAt   DateTime  @default(now())
-  stoppedAt   DateTime?
-  stopReason  String?
-  startAmps   Int
-  endAmps     Int?
-  peakSolarKw Float?
-  energyKwh   Float?
-  forced      Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id              String    @id @default(uuid())
+  startedAt       DateTime  @default(now())
+  stoppedAt       DateTime?
+  stopReason      String?
+  startAmps       Int
+  endAmps         Int?
+  peakSolarKw     Float?
+  energyKwh       Float?
+  // True when energyKwh was integrated from Sunkeep's own power estimate rather than
+  // read from ChargePoint. Chargers whose device plane omits energyKwh from the status
+  // payload give us nothing else to record.
+  energyEstimated Boolean   @default(false)
+  forced          Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@map("charging_event")
 }

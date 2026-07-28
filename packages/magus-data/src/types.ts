@@ -105,6 +105,9 @@ export interface ChargingEventSummary {
 	endAmps: number | null;
 	peakSolarKw: number | null;
 	energyKwh: number | null;
+	// True when energyKwh was integrated from Sunkeep's own power estimate because
+	// ChargePoint reported none for the session.
+	energyEstimated: boolean;
 	forced: boolean;
 }
 

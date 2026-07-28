@@ -41,7 +41,12 @@ const STOP_REASON_LABELS: Record<string, string> = {
 function EventRow({ event }: { event: ChargingEventSummary }) {
 	const isRunning = event.stoppedAt === null;
 	const duration = formatDuration(event.startedAt, event.stoppedAt);
-	const energy = event.energyKwh != null ? `${event.energyKwh.toFixed(2)} kWh` : '—';
+	// A "~" prefix marks energy Sunkeep integrated itself because ChargePoint reported
+	// none — it is an estimate from the car's draw, not a meter reading.
+	const energy =
+		event.energyKwh != null
+			? `${event.energyEstimated ? '~' : ''}${event.energyKwh.toFixed(2)} kWh`
+			: '—';
 	const peakSolar = event.peakSolarKw != null ? `${event.peakSolarKw.toFixed(1)} kW` : '—';
 	const amps =
 		event.endAmps != null ? `${event.startAmps}→${event.endAmps}A` : `${event.startAmps}A`;
