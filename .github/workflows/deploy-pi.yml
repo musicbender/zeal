@@ -92,6 +92,20 @@ jobs:
 
       - run: pnpm turbo run build --filter=gaspar
 
+      # Migrations run before the new code is staged or the service is restarted.
+      # Our migrations are additive, so the running (old) build keeps working against
+      # the migrated schema — whereas shipping code first leaves gaspar querying columns
+      # that don't exist yet, which is exactly how sunkeep lost `energyEstimated` and
+      # stopped charging entirely. A failure here aborts the deploy with the previous
+      # build still running.
+      #
+      # Neon's pooled endpoint can't hold the advisory lock Prisma Migrate needs, so use
+      # DIRECT_DATABASE_URL (the non-pooled `-pooler`-less host) when it is configured.
+      - name: Apply Prisma migrations
+        run: pnpm --filter=gaspar exec prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL || secrets.DATABASE_URL }}
+
       - name: Stage to stable deploy directory
         run: |
           rm -rf /tmp/gaspar-deploy

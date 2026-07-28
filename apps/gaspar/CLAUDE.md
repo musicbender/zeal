@@ -66,9 +66,24 @@ pnpm --filter gaspar prisma:generate  # Always run this first — updates the Pr
 
 # Apply migrations locally:
 pnpm --filter gaspar prisma:migrate
+```
 
-# Production (Pi): SSH in and run migrations there.
-# Never run prod migrations from a dev machine.
+Every schema change needs a checked-in migration under `prisma/migrations/`. Generating the
+client is not enough — the client will happily select a column that production doesn't have,
+and every query against that table then fails with `P2022`.
+
+Production migrations run automatically: the `deploy-gaspar` job in `.github/workflows/deploy-pi.yml`
+runs `prisma migrate deploy` on the Pi runner before staging the build or restarting the service.
+Don't SSH in to migrate by hand, and never run prod migrations from a dev machine.
+
+To repair a prod DB that has already drifted, re-run the "Deploy to Raspberry Pi" workflow with
+the `gaspar` input checked — the migrate step brings the schema forward. The deployed directory
+at `/home/magus/apps/gaspar` has no `prisma/` folder, so a manual fallback has to run from a repo
+checkout on the Pi (e.g. the Actions runner workspace):
+
+```bash
+DATABASE_URL="$(sudo grep '^DATABASE_URL=' /etc/gaspar/env | cut -d= -f2-)" \
+  pnpm --filter gaspar exec prisma migrate deploy
 ```
 
 ## Environment Variables
