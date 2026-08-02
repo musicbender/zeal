@@ -72,19 +72,20 @@ Every schema change needs a checked-in migration under `prisma/migrations/`. Gen
 client is not enough — the client will happily select a column that production doesn't have,
 and every query against that table then fails with `P2022`.
 
-Production migrations run automatically: the `deploy-gaspar` job in `.github/workflows/deploy-pi.yml`
-runs `prisma migrate deploy` on the Pi runner before staging the build or restarting the service.
-Don't SSH in to migrate by hand, and never run prod migrations from a dev machine.
+Production migrations run automatically: the `migrate-gaspar` job in `.github/workflows/deploy-pi.yml`
+runs `prisma migrate deploy`, and `deploy-gaspar` gates on it, so the schema moves before the new
+build does. Don't SSH in to migrate by hand.
+
+That job runs on a **GitHub-hosted runner, not the Pi**, and that's deliberate. Neon is a cloud
+database; the Pi is only where the app runs. Gaspar reaches Neon through `@prisma/adapter-neon`
+over HTTPS/WSS on 443, but the Prisma CLI ignores driver adapters and opens a raw Postgres TCP
+connection on 5432 — a path the Pi's network can't carry (`P1001`). Don't move this job back to
+`[self-hosted, magus]`.
 
 To repair a prod DB that has already drifted, re-run the "Deploy to Raspberry Pi" workflow with
-the `gaspar` input checked — the migrate step brings the schema forward. The deployed directory
-at `/home/magus/apps/gaspar` has no `prisma/` folder, so a manual fallback has to run from a repo
-checkout on the Pi (e.g. the Actions runner workspace):
-
-```bash
-DATABASE_URL="$(sudo grep '^DATABASE_URL=' /etc/gaspar/env | cut -d= -f2-)" \
-  pnpm --filter gaspar exec prisma migrate deploy
-```
+the `gaspar` input checked. Running it by hand needs a machine with outbound 5432 to Neon and a
+repo checkout — not the Pi, and note the deployed directory at `/home/magus/apps/gaspar` has no
+`prisma/` folder anyway.
 
 ## Environment Variables
 
