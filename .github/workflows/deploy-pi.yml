@@ -68,9 +68,57 @@ jobs:
             echo "fiendlord-keep-ui=$FIENDLORD" >> "$GITHUB_OUTPUT"
           fi
 
+  # Migrations run as their own job, on a GitHub-hosted runner rather than the Pi, and
+  # deploy-gaspar gates on it — so a migration failure aborts the deploy with the previous
+  # build still running. Our migrations are additive, so the still-running old build keeps
+  # working against the migrated schema; shipping code first is what left gaspar querying
+  # an energyEstimated column that didn't exist and stopped sunkeep charging entirely.
+  #
+  # This does NOT belong on the Pi. Neon is a cloud database — the Pi is only where the app
+  # runs — and gaspar reaches it through @prisma/adapter-neon, which tunnels over HTTPS/WSS
+  # on 443. The Prisma CLI ignores driver adapters and opens a raw Postgres TCP connection
+  # on 5432 instead, a path the Pi's network has never had to carry and evidently can't
+  # (P1001, unreachable). A hosted runner has clean egress on 5432.
+  migrate-gaspar:
+    name: Migrate gaspar database
+    needs: detect
+    if: needs.detect.outputs.gaspar == 'true'
+    runs-on: ubuntu-latest
+    environment: pi-production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Prefer the non-pooled host: PgBouncer can't hold the session-level advisory lock
+      # Prisma Migrate takes. DATABASE_URL_UNPOOLED is the Neon integration's name for it and
+      # is already in turbo.json's globalEnv; without that secret we fall back to the pooled
+      # URL, which usually still works for the short additive migrations we write.
+      #
+      # connect_timeout is raised from Prisma's 5s default because a suspended Neon compute
+      # takes a few seconds to wake, and gaspar's 10-minute poll is slower than Neon's idle
+      # suspend — so the compute is often cold when this runs.
+      - name: Apply Prisma migrations
+        env:
+          MIGRATE_URL: ${{ secrets.DATABASE_URL_UNPOOLED || secrets.DATABASE_URL }}
+        run: |
+          case "$MIGRATE_URL" in
+            *\?*) DATABASE_URL="$MIGRATE_URL&connect_timeout=30" ;;
+            *)    DATABASE_URL="$MIGRATE_URL?connect_timeout=30" ;;
+          esac
+          export DATABASE_URL
+          pnpm --filter=gaspar exec prisma migrate deploy
+
   deploy-gaspar:
     name: Deploy gaspar
-    needs: detect
+    needs: [detect, migrate-gaspar]
     if: needs.detect.outputs.gaspar == 'true'
     runs-on: [self-hosted, magus]
     environment: pi-production
@@ -91,21 +139,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm turbo run build --filter=gaspar
-
-      # Migrations run before the new code is staged or the service is restarted.
-      # Our migrations are additive, so the running (old) build keeps working against
-      # the migrated schema — whereas shipping code first leaves gaspar querying columns
-      # that don't exist yet, which is exactly how sunkeep lost `energyEstimated` and
-      # stopped charging entirely. A failure here aborts the deploy with the previous
-      # build still running.
-      #
-      # Neon's pooled endpoint can't hold the advisory lock Prisma Migrate needs, so prefer
-      # the non-pooled host when that secret exists. DATABASE_URL_UNPOOLED is the name the
-      # Neon integration uses and the one already listed in turbo.json's globalEnv.
-      - name: Apply Prisma migrations
-        run: pnpm --filter=gaspar exec prisma migrate deploy
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL_UNPOOLED || secrets.DATABASE_URL }}
 
       - name: Stage to stable deploy directory
         run: |
