@@ -22,15 +22,25 @@ in `FINDINGS.md` and move to APK static analysis instead of pushing on this furt
 2. **Open Chrome, log into `https://mc.chargepoint.com`**, navigate to your home charger's
    detail/status page.
 
-3. **Open DevTools → Network tab → filter to `WS`** (WebSocket) before doing anything else.
-   If a connection opens on page load, you need the filter active first or you'll miss it.
+3. **Open DevTools → Network tab.** Do NOT filter to `WS` only this time — leave `Fetch/XHR`
+   visible too (or use `All` and eyeball it). The discovery dump turned up
+   `hcpo_auth_endpoint` = `https://internal-api-us.chargepoint.com/hcpo-token-exchange/`,
+   which is a plain HTTPS call, not a socket — if the portal calls it before opening the
+   websocket, filtering to `WS` only would hide it.
 
-4. **Reload the page** with DevTools already open (Cmd+R) so the WS handshake is captured
-   from the start.
+4. **Reload the page** with DevTools already open (Cmd+R) so both the token-exchange call
+   and the WS handshake are captured from the start.
 
 ## What to capture
 
-For each row that appears under the `WS` filter:
+**First, the token exchange (if it happens):** find the request to
+`internal-api-us.chargepoint.com/hcpo-token-exchange/` in the Fetch/XHR list. Capture its
+full request (headers + body) and response (headers + body). This is the strongest
+candidate for how the browser authenticates to the panda/kestrel socket — the discovery
+config marks both websocket endpoints `"dataDome": true`, so a bare cookie replay from a
+script may not be accepted; whatever this call returns is likely the real credential.
+
+**Then, for each row that appears under the `WS` filter:**
 
 - **Request URL** — full `wss://...` URL including query string
 - **Status** — 101 (switching protocols) means it connected
@@ -47,11 +57,20 @@ For each row that appears under the `WS` filter:
   against `getChargingSession()` id shapes (`session_id`, `sessionId`) already known from
   the REST API. Large-ish integers, distinct from `deviceId`/`chargerId`/`userId`.
 - The **subscribe/auth handshake** — the first client→server frame(s) after connect. This
-  tells us whether the socket needs the `coulomb_sess` token, a separate ticket, or the
-  `chargerId`/MAC to subscribe to that specific charger's channel.
-- Whether `wss://panda.chargepoint.com` or `wss://ws.chargepoint.com` is the one actually
-  used (or a third host neither library knows about — check the URL against `01-discovery-dump.sh`
-  output first).
+  tells us whether the socket needs the `coulomb_sess` token, the token from
+  `hcpo-token-exchange` above, or the `chargerId`/MAC to subscribe to that specific
+  charger's channel.
+- **Which host actually gets used.** Confirmed live (2026-08-15 discovery dump — see
+  `FINDINGS.md`), the real candidates are:
+  - `wss://homecharger-cph50k-na.chargepoint.com:443/ws-prod/panda/v1` — **CPH50-specific,
+    top candidate.**
+  - `wss://homecharger-na.chargepoint.com:443/ws-prod/panda/v1` — general home-charger
+    channel, same path, different host.
+
+  Both are marked `dataDome: true` in the discovery response. Ignore
+  `panda.chargepoint.com` / `ws.chargepoint.com` — those were placeholder values from a
+  stale test fixture, not real hostnames; if you see either in real traffic that's itself
+  worth noting since it'd mean the fixture wasn't as fake as it looked.
 
 ## Exporting for analysis
 
