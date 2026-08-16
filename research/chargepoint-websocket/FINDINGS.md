@@ -240,6 +240,37 @@ passing 84/84 locally) on `musicbender/node-chargepoint`, bump the dependency in
 auto-started session end-to-end (the Postman "Stop Session — Send Command" request, using
 the now-resolvable `sessionId`/`deviceId`) as final real-world validation.
 
+### 2026-08-16 — `cp-session-type`/`cp-session-token`/`cp-region` were never real, on any endpoint
+
+**Method:** User checked Chrome DevTools Network tab broadly — account calls, home charger
+calls, session calls — specifically looking for these three headers on any real
+ChargePoint request.
+
+**Result:** None of them appear anywhere, on any host. `node-chargepoint`'s `_request()`
+had been sending all three unconditionally on every authenticated call since presumably
+the library's inception; they were tolerated (ignored) by every endpoint that happened to
+also receive a valid `coulomb_sess` cookie, which is why nothing ever visibly broke — but
+they were never required, and evidently never real. The entire ChargePoint API
+authenticates on the `coulomb_sess` cookie alone.
+
+This came right after the earlier (2026-08-16, "still empty" curl round) discovery that a
+minimal `Content-Type` + `cookie` curl worked identically to one with a full browser
+fingerprint attached — same lesson, larger scope: an assumption baked into the library's
+auth model for a long time turned out to be untested cruft, not a real requirement.
+
+**Fix applied:** Removed the three header sends from `client.ts`'s `_request()` entirely,
+along with the now-dead `_region` private field and the `region` parameters that only ever
+fed it (`_setToken()`, the constructor). Postman collection updated to match: every request
+across all hosts now sends just `cookie: coulomb_sess={{coulombToken}}` (+ `ci_ui_session`
+on the three `mapcacheEndpoint` requests, still unconfirmed whether that one's load-bearing
+— see the entry above). 84/84 tests, typecheck, and lint all still pass after removal; no
+test had ever asserted on those headers being sent, which is itself notable — nothing in
+the test suite was actually pinning this behavior down as intentional.
+
+**Next step:** None outstanding for this specific finding — fully resolved. Combined with
+the `charging`/camelCase parser fix and the auto-started-session confirmation above, the
+PR for `musicbender/node-chargepoint` is ready to open pending push-access approval.
+
 <!--
 Copy this template per session:
 
