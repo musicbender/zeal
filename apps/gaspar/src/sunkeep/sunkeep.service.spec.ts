@@ -793,6 +793,28 @@ describe('SunkeepService', () => {
 		expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
 	});
 
+	it('persists the started session id onto the ChargingEvent for debugging/audit', async () => {
+		// The event row is created before startChargingSession() resolves (so the
+		// attempt is recorded even if it times out) — sessionId can only be known
+		// afterward, via a follow-up update.
+		service.enable();
+		vi.setSystemTime(NOON);
+		mockCp.getHomeChargerStatus.mockResolvedValue(pluggedInStatus());
+		mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 4.0, loadKw: 1.0 }));
+
+		await service.runTick();
+
+		expect(mockPrisma.chargingEvent.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.not.objectContaining({ sessionId: expect.anything() }),
+			})
+		);
+		expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith({
+			where: { id: 'event-1' },
+			data: { sessionId: mockSession.sessionId },
+		});
+	});
+
 	it('persists event and enters CHARGING when start verification times out but charger confirms charging', async () => {
 		// Simulates the ChargePoint user-status endpoint being slow to reflect a
 		// newly-started session, while getHomeChargerStatus already shows the
@@ -1774,7 +1796,9 @@ describe('SunkeepService', () => {
 			await service.runTick();
 
 			expect(mockPrisma.chargingEvent.create).toHaveBeenCalledWith(
-				expect.objectContaining({ data: expect.objectContaining({ startedAt: trueStart }) })
+				expect.objectContaining({
+					data: expect.objectContaining({ startedAt: trueStart, sessionId: 7777 }),
+				})
 			);
 			expect(service.getStatus().activeSession?.startedAt).toBe(trueStart.toISOString());
 		});
@@ -1921,7 +1945,6 @@ describe('SunkeepService', () => {
 			await service.runTick();
 
 			// All three rows should be closed
-			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledTimes(3);
 			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
 				expect.objectContaining({
 					where: { id: 'event-a' },
@@ -1939,6 +1962,12 @@ describe('SunkeepService', () => {
 					where: { id: 'event-c' },
 					data: expect.objectContaining({ stopReason: StopReason.UNKNOWN }),
 				})
+			);
+			// Solar/battery still allow charging, so Sunkeep starts a fresh session right
+			// after closing the stale rows — a 4th update persists its sessionId.
+			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledTimes(4);
+			expect(mockPrisma.chargingEvent.update).toHaveBeenCalledWith(
+				expect.objectContaining({ data: { sessionId: mockSession.sessionId } })
 			);
 		});
 

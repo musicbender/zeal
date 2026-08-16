@@ -34,6 +34,10 @@ model ChargingEvent {
   startedAt       DateTime  @default(now())
   stoppedAt       DateTime?
   stopReason      String?
+  // ChargePoint's own session id, when a driver-plane handle was resolved. Null for a
+  // session adopted without one (the charger is still managed via device-level amperage
+  // control either way) — debugging/audit only, not read back by any recovery logic.
+  sessionId       Int?
   startAmps       Int
   endAmps         Int?
   peakSolarKw     Float?

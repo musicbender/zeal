@@ -1124,6 +1124,7 @@ export class SunkeepService {
 			const event = await this.prisma.chargingEvent.create({
 				data: {
 					startedAt: driverStartTime ?? now,
+					sessionId: session?.sessionId ?? null,
 					startAmps: amps,
 					peakSolarKw: this.lastPwData?.solarKw ?? null,
 				},
@@ -1387,6 +1388,14 @@ export class SunkeepService {
 		this.estimatedEnergyKwh = 0;
 		this.lastEnergyAccrualAt = Date.now();
 		this.stopPendingReason = null;
+		// The event row was created before the session id was known (see the comment
+		// above the create() call). Debugging/audit only — never awaited-critical, so a
+		// failure here does not affect the already-successful start.
+		await this.prisma.chargingEvent
+			.update({ where: { id: event.id }, data: { sessionId: session.sessionId } })
+			.catch((err: unknown) => {
+				log.warn({ err, eventId: event.id }, 'Failed to persist sessionId on ChargingEvent');
+			});
 		log.info(
 			{ targetAmps, sessionId: session.sessionId, eventId: event.id },
 			'Charging session started'
