@@ -423,7 +423,7 @@
 							"status": "OK",
 							"code": 200,
 							"header": [{ "key": "Content-Type", "value": "application/json" }],
-							"body": "{\n  \"events\": [\n    {\n      \"id\": \"clx123abc\",\n      \"startedAt\": \"2026-05-14T08:00:00.000Z\",\n      \"stoppedAt\": \"2026-05-14T11:00:00.000Z\",\n      \"stopReason\": \"solar_dropped\",\n      \"startAmps\": 8,\n      \"endAmps\": 20,\n      \"peakSolarKw\": 5.89,\n      \"energyKwh\": 9.42,\n      \"energyEstimated\": true,\n      \"forced\": false,\n      \"createdAt\": \"2026-05-14T08:00:00.000Z\",\n      \"updatedAt\": \"2026-05-14T11:00:00.000Z\"\n    }\n  ],\n  \"total\": 1,\n  \"page\": 1,\n  \"limit\": 20\n}"
+							"body": "{\n  \"events\": [\n    {\n      \"id\": \"clx123abc\",\n      \"startedAt\": \"2026-05-14T08:00:00.000Z\",\n      \"stoppedAt\": \"2026-05-14T11:00:00.000Z\",\n      \"stopReason\": \"solar_dropped\",\n      \"sessionId\": 5429306431,\n      \"startAmps\": 8,\n      \"endAmps\": 20,\n      \"peakSolarKw\": 5.89,\n      \"energyKwh\": 9.42,\n      \"energyEstimated\": true,\n      \"forced\": false,\n      \"createdAt\": \"2026-05-14T08:00:00.000Z\",\n      \"updatedAt\": \"2026-05-14T11:00:00.000Z\"\n    }\n  ],\n  \"total\": 1,\n  \"page\": 1,\n  \"limit\": 20\n}"
 						}
 					]
 				},
@@ -444,7 +444,7 @@
 							"status": "OK",
 							"code": 200,
 							"header": [{ "key": "Content-Type", "value": "application/json" }],
-							"body": "{\n  \"id\": \"clx123abc\",\n  \"startedAt\": \"2026-05-14T08:00:00.000Z\",\n  \"stoppedAt\": \"2026-05-14T11:00:00.000Z\",\n  \"stopReason\": \"solar_dropped\",\n  \"startAmps\": 8,\n  \"endAmps\": 20,\n  \"peakSolarKw\": 5.89,\n  \"energyKwh\": 9.42,\n  \"energyEstimated\": true,\n  \"forced\": false,\n  \"createdAt\": \"2026-05-14T08:00:00.000Z\",\n  \"updatedAt\": \"2026-05-14T11:00:00.000Z\"\n}"
+							"body": "{\n  \"id\": \"clx123abc\",\n  \"startedAt\": \"2026-05-14T08:00:00.000Z\",\n  \"stoppedAt\": \"2026-05-14T11:00:00.000Z\",\n  \"stopReason\": \"solar_dropped\",\n  \"sessionId\": 5429306431,\n  \"startAmps\": 8,\n  \"endAmps\": 20,\n  \"peakSolarKw\": 5.89,\n  \"energyKwh\": 9.42,\n  \"energyEstimated\": true,\n  \"forced\": false,\n  \"createdAt\": \"2026-05-14T08:00:00.000Z\",\n  \"updatedAt\": \"2026-05-14T11:00:00.000Z\"\n}"
 						},
 						{
 							"name": "404 Not Found",

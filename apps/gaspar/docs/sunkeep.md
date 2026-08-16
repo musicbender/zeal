@@ -130,10 +130,13 @@ Paginated list of charging events, newest first.
 			"startedAt": "2026-05-10T12:50:00.000Z",
 			"stoppedAt": "2026-05-10T15:30:00.000Z",
 			"stopReason": "solar_dropped",
+			"sessionId": 5429306431,
 			"startAmps": 16,
 			"endAmps": 8,
 			"peakSolarKw": 6.1,
 			"energyKwh": 12.4,
+			"energyEstimated": false,
+			"forced": false,
 			"createdAt": "2026-05-10T12:50:00.000Z",
 			"updatedAt": "2026-05-10T15:30:00.000Z"
 		}
@@ -156,20 +159,27 @@ Single charging event by ID.
 
 ```prisma
 model ChargingEvent {
-  id          String    @id @default(uuid())
-  startedAt   DateTime  @default(now())
-  stoppedAt   DateTime?
-  stopReason  String?
-  startAmps   Int
-  endAmps     Int?
-  peakSolarKw Float?
-  energyKwh   Float?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id              String    @id @default(uuid())
+  startedAt       DateTime  @default(now())
+  stoppedAt       DateTime?
+  stopReason      String?
+  sessionId       Int?
+  startAmps       Int
+  endAmps         Int?
+  peakSolarKw     Float?
+  energyKwh       Float?
+  energyEstimated Boolean   @default(false)
+  forced          Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 ```
 
-`energyKwh` is populated at session stop from the ChargePoint session data. `peakSolarKw` is updated live during charging whenever a higher reading is observed.
+`energyKwh` is populated at session stop from the ChargePoint session data. `peakSolarKw` is updated live during charging whenever a higher reading is observed. `energyEstimated` is true when `energyKwh` came from Sunkeep integrating the car's draw rather than from a ChargePoint reading. `forced` marks a session started via `POST /sunkeep/charge/start`, bypassing the solar/battery policy gates.
+
+`sessionId` is ChargePoint's own session id, persisted for debugging/audit purposes only — nothing reads it back to make decisions. Null for a session adopted without a driver-plane handle (rare as of node-chargepoint 0.12.0, but still possible on a transient API failure).
+
+`startedAt` uses ChargePoint's own recorded session start time (`getUserChargingStatus().startTime`, node-chargepoint ≥0.12.0) when the driver plane resolves a session at adoption — more accurate than "when Sunkeep's poll noticed it," which could lag the true start by up to one 10-minute tick interval. As of node-chargepoint 0.12.0 this now resolves for auto-started sessions on CPH50-family chargers too (previously a known limitation — see the [ChargePoint skill](/.claude/skills/chargepoint.md)), so the fallback to the adoption moment is now the exception rather than the common case.
 
 ## Amperage Formula
 
