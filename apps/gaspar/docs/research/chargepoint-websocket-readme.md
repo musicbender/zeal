@@ -21,17 +21,17 @@ resolution paths return empty for a session the car auto-started on plug-in:
 Sunkeep currently falls back to clamping amperage to the 8A minimum, which is a mitigation,
 not a stop.
 
-**Scope note:** we need to *read one number*. A full WebSocket control plane is not required.
+**Scope note:** we need to _read one number_. A full WebSocket control plane is not required.
 If any channel exposes the live session id, the existing REST stop path works unchanged.
 
 ## Files
 
-| File | Purpose |
-| --- | --- |
-| `01-discovery-dump.sh` | Dump the raw service-discovery payload, unparsed, across request variants |
-| `02-capture-playbook.md` | Step-by-step browser WebSocket capture procedure |
-| `redact.py` | Scrub tokens/user ids/MACs out of captures before sharing |
-| `FINDINGS.md` | Living log of confirmed facts — **update this as we learn** |
+| File                     | Purpose                                                                   |
+| ------------------------ | ------------------------------------------------------------------------- |
+| `01-discovery-dump.sh`   | Dump the raw service-discovery payload, unparsed, across request variants |
+| `02-capture-playbook.md` | Step-by-step browser WebSocket capture procedure                          |
+| `redact.py`              | Scrub tokens/user ids/MACs out of captures before sharing                 |
+| `FINDINGS.md`            | Living log of confirmed facts — **update this as we learn**               |
 
 ## Usage
 

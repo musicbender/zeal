@@ -10,12 +10,12 @@ in `FINDINGS.md` and move to APK static analysis instead of pushing on this furt
 
 ## Setup
 
-1. **Trigger the actual scenario.** The bug is specifically about *auto-started* sessions —
+1. **Trigger the actual scenario.** The bug is specifically about _auto-started_ sessions —
    the car begins charging from being plugged in, not from tapping "start" in the app. If
    you have an active manual/app-started session, stop it, unplug, then plug back in and
    let it auto-start. If your car doesn't auto-start on plug-in, plug in and use the
    **ChargePoint app** (not this capture) to start it — some auto-start behavior only
-   differs at the *stop* resolution step, so a portal-started session may still reproduce
+   differs at the _stop_ resolution step, so a portal-started session may still reproduce
    the missing-session-id symptom. Try auto-start first; fall back to app-start if the car
    won't auto-start.
 

@@ -43,12 +43,12 @@ gets superseded, strike it through rather than deleting, so the trail of reasoni
 - Live payload has **26 endpoint keys**, not the 12 `node-chargepoint` parses. 14 are
   currently discarded. Full list in the raw capture; the relevant ones:
 
-  | Key | Value | Note |
-  | --- | --- | --- |
-  | `kestrel_websocket_endpoint` | `wss://homecharger-cph50k-na.chargepoint.com:443/ws-prod/panda/v1` | **CPH50-scoped. Confirmed real — was previously only a memory from a prior session.** Not parsed by node-chargepoint or python-chargepoint. `dataDome: true`. |
-  | `hcpo_auth_endpoint` | `https://internal-api-us.chargepoint.com/hcpo-token-exchange/` | Likely exchanges `coulomb_sess` for a credential the HCPO (home-charger) system — possibly the websocket — actually accepts. Not parsed by either library. |
-  | `station_updates_live_endpoint` | `wss://internal-api-us.chargepoint.com/a/0/cposvc/station-live/v1/station-updates/live` | Probably public station-map live status, not home-charger session telemetry. Lower priority. |
-  | `driver_bff_endpoint` | `https://internal-api-us.chargepoint.com/driver-bff/` | A *second*, newer driver-bff host distinct from the `cpapi.chargepoint.com` one node-chargepoint's `internalApiGatewayEndpoint` currently uses. Unclear if both are live or one is legacy. |
+  | Key                             | Value                                                                                   | Note                                                                                                                                                                                       |
+  | ------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+  | `kestrel_websocket_endpoint`    | `wss://homecharger-cph50k-na.chargepoint.com:443/ws-prod/panda/v1`                      | **CPH50-scoped. Confirmed real — was previously only a memory from a prior session.** Not parsed by node-chargepoint or python-chargepoint. `dataDome: true`.                              |
+  | `hcpo_auth_endpoint`            | `https://internal-api-us.chargepoint.com/hcpo-token-exchange/`                          | Likely exchanges `coulomb_sess` for a credential the HCPO (home-charger) system — possibly the websocket — actually accepts. Not parsed by either library.                                 |
+  | `station_updates_live_endpoint` | `wss://internal-api-us.chargepoint.com/a/0/cposvc/station-live/v1/station-updates/live` | Probably public station-map live status, not home-charger session telemetry. Lower priority.                                                                                               |
+  | `driver_bff_endpoint`           | `https://internal-api-us.chargepoint.com/driver-bff/`                                   | A _second_, newer driver-bff host distinct from the `cpapi.chargepoint.com` one node-chargepoint's `internalApiGatewayEndpoint` currently uses. Unclear if both are live or one is legacy. |
 
   Full 14-key discard list also includes chatbot/CCaaS, fraud-detection, route-planning,
   smart-car-integration, installer-app, and org-management endpoints — not relevant to this
@@ -69,7 +69,7 @@ gets superseded, strike it through rather than deleting, so the trail of reasoni
 
 **Raw evidence:** `out/baseline-na.json` on the user's laptop (gitignored, not committed).
 
-**Next step:** Browser WS capture, retargeted at the *real* hostnames now known
+**Next step:** Browser WS capture, retargeted at the _real_ hostnames now known
 (`homecharger-cph50k-na.chargepoint.com`, `homecharger-na.chargepoint.com` — not the
 placeholder `panda.chargepoint.com`/`ws.chargepoint.com` originally assumed), and watching
 the Fetch/XHR tab for a call to `hcpo-token-exchange` immediately before/during the WS
@@ -135,7 +135,7 @@ actually the parser just couldn't read what was there.
 
 A corresponding follow-on call (entries 40/54) confirms the richer per-session detail shape
 too: `POST {mapcacheEndpoint}/v2` with `{"charging_status":{"mfhs":{},"session_id":<id>}}`
-(note: here the *outer* request key genuinely is `charging_status` — that's the request
+(note: here the _outer_ request key genuinely is `charging_status` — that's the request
 envelope name, unrelated to the response's `charging` key) returns full session telemetry
 (`device_id`, `energy_kwh`, `power_kw`, `vehicle_info`, live `update_data` samples) keyed in
 snake_case, matching what `session.ts`'s `refresh()` already expects from the driver-bff host
@@ -157,12 +157,13 @@ cookies). Analyzed via a throwaway script against a copy in this session's scrat
 committed to the repo.
 
 **Next step:**
+
 1. Patch `node-chargepoint`'s `getUserChargingStatus()` to read `charging`/camelCase/
    `deviceId` instead of `charging_status`/snake_case/`id`.
 2. Re-test against a **freshly auto-started** (unplug/replug, no app) CPH50 session to see if
    `UnresolvedSessionError` goes away now that the driver-plane fallback can actually see data.
 3. If confirmed, this closes (or mostly closes) the original ask without touching WebSockets
-   at all. If auto-start still comes back empty even with the parser fixed, *then* the
+   at all. If auto-start still comes back empty even with the parser fixed, _then_ the
    WS/APK-static track becomes relevant again — but not before this cheaper fix is ruled out.
 
 ### 2026-08-16 — Postman/curl validation of both fixes, live
@@ -175,11 +176,12 @@ were code or auth-model problems, just assembly mistakes in manual testing).
 
 **Result:** Confirmed working. `getUserChargingStatus()`'s two fixes both hold up against
 live traffic:
+
 1. Opaque `coulomb_sess` handling (no `decodeURIComponent`) — a token containing `%23`
    round-trips correctly now.
 2. `mapcacheEndpoint` (`mc.chargepoint.com`) auth model — no `cp-session-*` headers, cookie
    jar needs `ci_ui_session` alongside `coulomb_sess`, plus a browser-realistic header set
-   (origin/referer/sec-fetch-*/etc.) — confirmed as the actual requirement, not
+   (origin/referer/sec-fetch-\*/etc.) — confirmed as the actual requirement, not
    over-engineering.
 
 The response returned full session data (`sessionId`, `state`, `stations`) for an
@@ -216,6 +218,7 @@ state: "in_use" for both, stations[0].deviceId: 17618011 (the CPH50) for both
 **This is the answer to the original question.** No session id was ever actually missing
 from the REST API for auto-started sessions — `getUserChargingStatus()` was always capable
 of resolving them, but two independent bugs in `node-chargepoint` masked it:
+
 1. `_setToken`/`_request()` corrupted any `coulomb_sess` token containing reserved
    characters by decoding it before every replay.
 2. The response parser looked for the wrong container key (`charging_status` snake_case
