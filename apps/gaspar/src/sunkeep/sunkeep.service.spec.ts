@@ -1748,6 +1748,65 @@ describe('SunkeepService', () => {
 			expect(new Date(sessionStart!).getTime()).toBeCloseTo(NOON.getTime(), -3); // within ~1s
 		});
 
+		it('uses the driver-plane startTime for a freshly-created ChargingEvent, when available', async () => {
+			// The car auto-started 6 minutes before this poll noticed it — well within
+			// a single 10-minute tick interval, so "now" would understate the true
+			// start by that much. getUserChargingStatus's startTime is ChargePoint's
+			// own record and should be used instead.
+			const trueStart = new Date(NOON.getTime() - 6 * 60 * 1000);
+			mockPrisma.chargingEvent.findMany.mockResolvedValueOnce([]);
+			mockCp.getUserChargingStatus.mockResolvedValueOnce({
+				sessionId: 7777,
+				startTime: trueStart,
+				asOf: NOON,
+			});
+
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 21,
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 5.5, loadKw: 5.4 }));
+
+			await service.runTick();
+
+			expect(mockPrisma.chargingEvent.create).toHaveBeenCalledWith(
+				expect.objectContaining({ data: expect.objectContaining({ startedAt: trueStart }) })
+			);
+			expect(service.getStatus().activeSession?.startedAt).toBe(trueStart.toISOString());
+		});
+
+		it('falls back to now when the driver-plane status has no usable startTime', async () => {
+			mockPrisma.chargingEvent.findMany.mockResolvedValueOnce([]);
+			// node-chargepoint returns epoch(0) when it can't parse a timestamp — must
+			// not be mistaken for a real start time.
+			mockCp.getUserChargingStatus.mockResolvedValueOnce({
+				sessionId: 7777,
+				startTime: new Date(0),
+				asOf: NOON,
+			});
+
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 21,
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 5.5, loadKw: 5.4 }));
+
+			await service.runTick();
+
+			expect(mockPrisma.chargingEvent.create).toHaveBeenCalledWith(
+				expect.objectContaining({ data: expect.objectContaining({ startedAt: NOON }) })
+			);
+			expect(service.getStatus().activeSession?.startedAt).toBe(NOON.toISOString());
+		});
+
 		it('reuses an open event that is just under the 12h threshold (preserves startedAt)', async () => {
 			const recentStartedAt = new Date(NOON.getTime() - 11 * 60 * 60 * 1000); // 11h before NOON
 			mockPrisma.chargingEvent.findMany.mockResolvedValueOnce([

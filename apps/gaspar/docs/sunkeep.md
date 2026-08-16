@@ -171,6 +171,8 @@ model ChargingEvent {
 
 `energyKwh` is populated at session stop from the ChargePoint session data. `peakSolarKw` is updated live during charging whenever a higher reading is observed.
 
+`startedAt` uses ChargePoint's own recorded session start time (`getUserChargingStatus().startTime`, node-chargepoint ≥0.12.0) when the driver plane resolves a session at adoption — more accurate than "when Sunkeep's poll noticed it," which could lag the true start by up to one 10-minute tick interval. As of node-chargepoint 0.12.0 this now resolves for auto-started sessions on CPH50-family chargers too (previously a known limitation — see the [ChargePoint skill](/.claude/skills/chargepoint.md)), so the fallback to the adoption moment is now the exception rather than the common case.
+
 ## Amperage Formula
 
 ```

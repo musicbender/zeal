@@ -1021,16 +1021,21 @@ export class SunkeepService {
 			);
 		}
 
-		await this.finalizeAdoption(chargerStatus, session);
+		await this.finalizeAdoption(chargerStatus, session, userStatus);
 	}
 
 	// Resolve the DB ChargingEvent row (reuse a fresh one, close stale/extra rows,
 	// or create a new one) and move into CHARGING state. The session handle may be
 	// null when the charger is charging but no API-visible session exists; amperage
-	// is still managed via setAmperageLimit on the device.
+	// is still managed via setAmperageLimit on the device. driverStatus is the
+	// getUserChargingStatus() snapshot that resolved `session` (null when the session
+	// isn't driver-plane-visible) — its startTime, when present, is ChargePoint's own
+	// record of when the session began, more accurate than the adoption-moment "now"
+	// a freshly-created row would otherwise use.
 	private async finalizeAdoption(
 		chargerStatus: HomeChargerStatus,
-		session: ChargingSession | null
+		session: ChargingSession | null,
+		driverStatus: UserChargingStatus | null = null
 	): Promise<void> {
 		const amps = chargerStatus.amperageLimit;
 		const incompletes = await this.prisma.chargingEvent
@@ -1106,14 +1111,25 @@ export class SunkeepService {
 					'Closed stale incomplete ChargingEvent (older than max age) before fresh adoption'
 				);
 			}
+			// ChargePoint's own record of when the session began, when the driver plane
+			// resolved one. More accurate than "now" (the adoption moment) for a session
+			// that had already been running for a while before this poll noticed it — e.g.
+			// after a process restart, or simply because the 10-minute poll interval means
+			// "now" can lag the true start by up to that long. getTime() > 0 guards against
+			// node-chargepoint's epoch(0) fallback for an unparseable timestamp.
+			const driverStartTime =
+				driverStatus?.startTime && driverStatus.startTime.getTime() > 0
+					? driverStatus.startTime
+					: null;
 			const event = await this.prisma.chargingEvent.create({
 				data: {
+					startedAt: driverStartTime ?? now,
 					startAmps: amps,
 					peakSolarKw: this.lastPwData?.solarKw ?? null,
 				},
 			});
 			eventId = event.id;
-			startedAt = now;
+			startedAt = driverStartTime ?? now;
 			peakSolarKw = this.lastPwData?.solarKw ?? 0;
 			forcedFlag = false;
 		}
@@ -1140,6 +1156,10 @@ export class SunkeepService {
 				recoveredFromDb: isFresh,
 				adoptedWithoutHandle: session === null,
 				forced: forcedFlag,
+				// Server time the driver-plane snapshot reflects, when one was available —
+				// diagnostic only (not persisted). A large gap from this poll's own clock
+				// would indicate ChargePoint's snapshot is running behind.
+				driverStatusAsOf: driverStatus?.asOf?.toISOString() ?? null,
 			},
 			'Adopted in-progress charging session'
 		);
