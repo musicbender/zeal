@@ -294,10 +294,11 @@ export class ChargingSession {
    * a session handle. Returns `null` when no session id can be found.
    *
    * Resolution order:
-   * 1. Driver plane (`getUserChargingStatus`) — works for public stations and
-   *    sessions started/owned by the authenticated driver.
-   * 2. Device plane (`getHomeChargerStatus`) — home chargers' auto-started sessions
-   *    are invisible to the driver plane but surface a session id here.
+   * 1. Driver plane (`getUserChargingStatus`) — works for any session bound to the
+   *    authenticated driver, including ones the car auto-started on plug-in.
+   * 2. Device plane (`getHomeChargerStatus`) — used when the driver plane has no session,
+   *    or reports one belonging to a different charger. Some models (CPH50 family) never
+   *    surface a session id here, which is why the driver plane is tried first.
    */
   private static async resolveActiveByDevice(
     deviceId: number,
@@ -378,8 +379,8 @@ export class ChargingSession {
     const startAckData = await sendCommand(client, 'start', deviceId);
 
     // Some ChargePoint backends include the session_id in the start ack body.
-    // Use it directly when present — home charger sessions (HCPO API) don't
-    // appear in getUserChargingStatus, so this is the only reliable path.
+    // Use it directly when present — it names the session this very command created,
+    // so it needs no cross-plane corroboration.
     const directSessionId =
       typeof startAckData?.session_id === 'number' && startAckData.session_id > 0
         ? startAckData.session_id
@@ -401,39 +402,63 @@ export class ChargingSession {
     const pollIntervalMs = options?.pollIntervalMs ?? 2_000;
     const deadline = Date.now() + pollTimeoutMs;
     let pollAttempts = 0;
-    let status = await client.getUserChargingStatus();
-    pollAttempts++;
-    while (!status && Date.now() < deadline) {
-      await sleep(pollIntervalMs);
-      status = await client.getUserChargingStatus();
+
+    for (;;) {
+      const status = await client.getUserChargingStatus();
       pollAttempts++;
-    }
 
-    if (!status) {
-      let chargerConfirmedCharging = false;
-      let chargerSessionId: number | undefined;
-      try {
-        const chargerStatus = await client.getHomeChargerStatus(deviceId);
-        chargerConfirmedCharging = chargerStatus.chargingStatus === 'CHARGING';
-        chargerSessionId = chargerStatus.sessionId;
-      } catch {
-        // Cross-check unavailable; proceed with what we know.
+      // The driver plane reports whichever session the *account* is running, which in a
+      // multi-charger household may be a different charger than the one we just started.
+      // Only accept a session we can tie back to `deviceId` — mirroring
+      // resolveActiveByDevice() — otherwise calling .stop() on the returned handle would
+      // stop the wrong charger.
+      if (status && typeof status.sessionId === 'number' && status.sessionId > 0) {
+        const session = await client.getChargingSession(status.sessionId);
+
+        if (session.deviceId === deviceId) {
+          return session;
+        }
+
+        if (session.deviceId === 0) {
+          // driver-bff omitted device_id entirely (observed on some home-charger
+          // sessions). Corroborate against the device plane before claiming it.
+          const chargerStatus = await ChargingSession._tryGetHomeChargerStatus(deviceId, client);
+          if (chargerStatus?.chargingStatus === 'CHARGING') {
+            session._ensureDeviceId(deviceId);
+            session._ensureOutletNumber(1);
+            return session;
+          }
+        }
+        // Otherwise the session names a different charger — keep polling for ours.
       }
 
-      // Device plane may supply a session id even when the driver plane does not
-      if (chargerConfirmedCharging && chargerSessionId !== undefined) {
-        const session = new ChargingSession(chargerSessionId);
-        session._setClient(client);
-        await session.refresh();
-        return session;
-      }
-
-      throw new StartVerificationTimeoutError(deviceId, pollTimeoutMs, pollAttempts, chargerConfirmedCharging);
+      if (Date.now() >= deadline) break;
+      await sleep(pollIntervalMs);
     }
 
-    const session = new ChargingSession(status.sessionId);
-    session._setClient(client);
-    await session.refresh();
-    return session;
+    // Driver plane never produced a session for this device — fall back to the device plane.
+    let chargerConfirmedCharging = false;
+    let chargerSessionId: number | undefined;
+    try {
+      const chargerStatus = await client.getHomeChargerStatus(deviceId);
+      chargerConfirmedCharging = chargerStatus.chargingStatus === 'CHARGING';
+      chargerSessionId = chargerStatus.sessionId;
+    } catch {
+      // Cross-check unavailable; proceed with what we know.
+    }
+
+    // Device plane may supply a session id even when the driver plane does not
+    if (chargerConfirmedCharging && chargerSessionId !== undefined) {
+      const session = new ChargingSession(chargerSessionId);
+      session._setClient(client);
+      await session.refresh();
+      // The device plane named this session for this charger, so backfill the identifiers
+      // a later stop() needs when the driver-bff response omits them.
+      session._ensureDeviceId(deviceId);
+      session._ensureOutletNumber(1);
+      return session;
+    }
+
+    throw new StartVerificationTimeoutError(deviceId, pollTimeoutMs, pollAttempts, chargerConfirmedCharging);
   }
 }

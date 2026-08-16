@@ -127,9 +127,15 @@ describe('getUserChargingStatus()', () => {
     const status = await client.getUserChargingStatus();
     expect(status).not.toBeNull();
     expect(status?.sessionId).toBe(1);
-    expect(status?.state).toBe('CHARGING');
+    // 'in_use' matches the live API's vocabulary for this field, distinct from the
+    // device-plane's ChargingStatus ('CHARGING'/etc).
+    expect(status?.state).toBe('in_use');
     expect(status?.startTime).toBeInstanceOf(Date);
+    expect(status?.startTime.getTime()).toBe(1609459200000);
+    expect(status?.asOf).toBeInstanceOf(Date);
+    expect(status?.asOf.getTime()).toBe(1609462800000);
     expect(status?.stations).toHaveLength(1);
+    expect(status?.stations[0]?.id).toBe(1);
   });
 
   it('returns null when no active session', async () => {
@@ -286,14 +292,52 @@ describe('getHomeChargerSession()', () => {
           // no sessionId field
         }),
       ),
+      // Driver plane reports session 99, which genuinely lives on TEST_CHARGER_ID.
+      http.post('https://mc.chargepoint.com/map-prod/v2', async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>;
+        if ('user_status' in body) {
+          return HttpResponse.json({
+            user_status: {
+              charging: {
+                sessionId: TEST_SESSION_ID_99, startTimeUTC: 1609459200,
+                state: 'in_use', stations: [{ deviceId: TEST_CHARGER_ID }],
+              },
+            },
+          });
+        }
+        return new HttpResponse(null, { status: 400 });
+      }),
     );
 
     const client = await authenticatedClient();
-    // Default charging-status fixture has session_id: 1
     const session = await client.getHomeChargerSession(TEST_CHARGER_ID);
 
     expect(session).not.toBeNull();
-    expect(session?.sessionId).toBe(TEST_SESSION_ID);
+    expect(session?.sessionId).toBe(TEST_SESSION_ID_99);
+  });
+
+  it('returns null when the driver plane reports a session on a different charger', async () => {
+    server.use(
+      http.get(
+        `https://hcpoprodhcm.chargepoint.com/api/v1/configuration/users/1234567890/chargers/${TEST_CHARGER_ID}/status`,
+        () => HttpResponse.json({
+          brand: 'ChargePoint', model: 'CPH25', macAddress: 'AA:BB:CC:DD:EE:FF',
+          chargingStatus: 'CHARGING', isPluggedIn: true, isConnected: true,
+          isReminderEnabled: false, plugInReminderTime: '22:00',
+          hasUtilityInfo: false, isDuringScheduledTime: false,
+          chargeAmperageSettings: { chargeLimit: 32, inProgress: false, possibleChargeLimit: [16, 24, 32] },
+          // no sessionId field — forces the driver-plane fallback
+        }),
+      ),
+      // Default driver plane resolves TEST_SESSION_ID, whose session.json lives on
+      // device 1 — a *different* charger than TEST_CHARGER_ID. Returning it would hand
+      // back another charger's session under this charger's identity.
+    );
+
+    const client = await authenticatedClient();
+    const session = await client.getHomeChargerSession(TEST_CHARGER_ID);
+
+    expect(session).toBeNull();
   });
 
   it('backfills deviceId/outletNumber when the driver-bff session response omits them', async () => {

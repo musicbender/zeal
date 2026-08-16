@@ -4,7 +4,7 @@ import { server } from './setup.js';
 import { ChargePoint } from '../src/client.js';
 import { ChargingSession } from '../src/session.js';
 import { ChargerBusyError, CommunicationError, NoActiveSessionError, StartVerificationTimeoutError, UnresolvedSessionError, VehicleNotReadyError } from '../src/exceptions.js';
-import { TEST_TOKEN, TEST_SESSION_ID, TEST_SESSION_ID_99, TEST_SESSION_ID_100, TEST_DEVICE_ID, TEST_USER_ID } from './handlers.js';
+import { TEST_TOKEN, TEST_SESSION_ID, TEST_SESSION_ID_99, TEST_SESSION_ID_100, TEST_DEVICE_ID, TEST_USER_ID, TEST_CHARGER_ID, TEST_SESSION_DEVICE_ID } from './handlers.js';
 
 async function authenticatedClient(): Promise<ChargePoint> {
   return ChargePoint.create('testuser', { coulombToken: TEST_TOKEN });
@@ -246,9 +246,9 @@ describe('ChargingSession.stopByDevice()', () => {
         if ('user_status' in body) {
           return HttpResponse.json({
             user_status: {
-              charging_status: {
-                session_id: TEST_SESSION_ID, start_time: 1609459200000,
-                current_charging: 'CHARGING', stations: [],
+              charging: {
+                sessionId: TEST_SESSION_ID, startTimeUTC: 1609459200,
+                state: 'in_use', stations: [],
               },
             },
           });
@@ -325,9 +325,9 @@ describe('ChargingSession.stopByDevice()', () => {
         if ('user_status' in body) {
           return HttpResponse.json({
             user_status: {
-              charging_status: {
-                session_id: TEST_SESSION_ID_100, start_time: 1609459200000,
-                current_charging: 'CHARGING', stations: [],
+              charging: {
+                sessionId: TEST_SESSION_ID_100, startTimeUTC: 1609459200,
+                state: 'in_use', stations: [],
               },
             },
           });
@@ -370,9 +370,9 @@ describe('ChargingSession.stopByDevice()', () => {
         if ('user_status' in body) {
           return HttpResponse.json({
             user_status: {
-              charging_status: {
-                session_id: TEST_SESSION_ID_100, start_time: 1609459200000,
-                current_charging: 'CHARGING', stations: [],
+              charging: {
+                sessionId: TEST_SESSION_ID_100, startTimeUTC: 1609459200,
+                state: 'in_use', stations: [],
               },
             },
           });
@@ -450,10 +450,13 @@ describe('ChargingSession.stopByDevice()', () => {
 describe('ChargingSession.start()', () => {
   it('sends start command, polls ack, then fetches session on first try', async () => {
     const client = await authenticatedClient();
-    const session = await ChargingSession.start(TEST_DEVICE_ID, client);
+    // Started on the device fixtures/session.json actually belongs to, so the driver-plane
+    // session resolves to this charger rather than a different one.
+    const session = await ChargingSession.start(TEST_SESSION_DEVICE_ID, client);
 
     expect(session).toBeInstanceOf(ChargingSession);
     expect(session.sessionId).toBe(TEST_SESSION_ID);
+    expect(session.deviceId).toBe(TEST_SESSION_DEVICE_ID);
     expect(session.energyKwh).toBe(10.5);
   });
 
@@ -469,14 +472,14 @@ describe('ChargingSession.start()', () => {
           if (callCount < 3) {
             return HttpResponse.json({ user_status: null });
           }
-          return HttpResponse.json({ user_status: { charging_status: { session_id: TEST_SESSION_ID, start_time: 1609459200000, current_charging: 'CHARGING', stations: [] } } });
+          return HttpResponse.json({ user_status: { charging: { sessionId: TEST_SESSION_ID, startTimeUTC: 1609459200, state: 'in_use', stations: [] } } });
         }
         return new HttpResponse(null, { status: 400 });
       }),
     );
 
     const client = await authenticatedClient();
-    const startPromise = ChargingSession.start(TEST_DEVICE_ID, client, { pollTimeoutMs: 30_000 });
+    const startPromise = ChargingSession.start(TEST_SESSION_DEVICE_ID, client, { pollTimeoutMs: 30_000 });
 
     await vi.advanceTimersByTimeAsync(2000);
     await vi.advanceTimersByTimeAsync(2000);
@@ -521,6 +524,63 @@ describe('ChargingSession.start()', () => {
 
     expect(error).toBeInstanceOf(StartVerificationTimeoutError);
     expect(error.chargerConfirmedCharging).toBe(true);
+  });
+
+  it('does not return a driver-plane session belonging to a different charger', async () => {
+    // Two-charger household: the driver plane already reports an active session on
+    // charger 12345 while we start one on TEST_DEVICE_ID. Accepting it would hand back
+    // the wrong charger's session — and `.stop()` on it would stop the wrong car.
+    server.use(
+      http.post('https://mc.chargepoint.com/map-prod/v2', async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>;
+        if ('user_status' in body) {
+          return HttpResponse.json({
+            user_status: {
+              charging: {
+                sessionId: TEST_SESSION_ID_99, startTimeUTC: 1609459200,
+                state: 'in_use', stations: [{ deviceId: TEST_CHARGER_ID }],
+              },
+            },
+          });
+        }
+        return new HttpResponse(null, { status: 400 });
+      }),
+      // The device we actually started is not corroborated as charging, so there is
+      // no legitimate way to claim session 99 belongs to it.
+      http.get(
+        `https://hcpoprodhcm.chargepoint.com/api/v1/configuration/users/${TEST_USER_ID}/chargers/${TEST_DEVICE_ID}/status`,
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+    );
+
+    const client = await authenticatedClient();
+    const error = await ChargingSession.start(TEST_DEVICE_ID, client, { pollTimeoutMs: 0 }).catch((e) => e);
+
+    expect(error).toBeInstanceOf(StartVerificationTimeoutError);
+  });
+
+  it('ignores a driver-plane payload with no sessionId instead of requesting /sessions/undefined', async () => {
+    const requestedUrls: string[] = [];
+    server.events.on('request:start', ({ request }) => {
+      requestedUrls.push(request.url);
+    });
+
+    server.use(
+      http.post('https://mc.chargepoint.com/map-prod/v2', async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>;
+        if ('user_status' in body) {
+          // `charging` present but carries no sessionId.
+          return HttpResponse.json({ user_status: { charging: { state: 'in_use', stations: [] } } });
+        }
+        return new HttpResponse(null, { status: 400 });
+      }),
+    );
+
+    const client = await authenticatedClient();
+    const error = await ChargingSession.start(TEST_DEVICE_ID, client, { pollTimeoutMs: 0 }).catch((e) => e);
+
+    expect(error).toBeInstanceOf(StartVerificationTimeoutError);
+    expect(requestedUrls.some((u) => u.includes('/sessions/undefined'))).toBe(false);
   });
 
   it('uses session ID from start ack body and skips getUserChargingStatus polling', async () => {

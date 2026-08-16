@@ -28,6 +28,7 @@ export type {
   ChargingSessionUpdate,
   Country,
   Currency,
+  DriverChargingState,
   ElectricVehicle,
   GlobalConfiguration,
   HomeChargerConfiguration,

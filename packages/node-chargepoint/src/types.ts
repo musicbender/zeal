@@ -254,10 +254,20 @@ export interface Station {
   longitude: number;
 }
 
+/**
+ * Driver-plane session state as reported by `getUserChargingStatus()`, e.g. `'in_use'`.
+ *
+ * This is a *different vocabulary* from the device plane's {@link ChargingStatus}
+ * (`'CHARGING'`/`'NOT_CHARGING'`/`'DONE'`) — never compare the two directly.
+ */
+export type DriverChargingState = 'in_use' | (string & {});
+
 export interface UserChargingStatus {
   sessionId: number;
   startTime: Date;
-  state: ChargingStatus;
+  /** Server time this snapshot reflects (the API's `currentTimeUTC`) — not your local poll time. */
+  asOf: Date;
+  state: DriverChargingState;
   stations: Station[];
 }
 

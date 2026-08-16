@@ -21,6 +21,8 @@ export const TEST_SESSION_ID = 1;
 export const TEST_SESSION_ID_99 = 99;
 export const TEST_SESSION_ID_100 = 100;
 export const TEST_DEVICE_ID = 9001;
+/** The device `fixtures/session.json` (TEST_SESSION_ID) actually belongs to. */
+export const TEST_SESSION_DEVICE_ID = 1;
 export const TEST_ACK_ID = 'ack-12345';
 
 const SESSION_COOKIE = `coulomb_sess=${TEST_TOKEN}; Domain=.chargepoint.com; Path=/; Max-Age=7200`;

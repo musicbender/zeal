@@ -2,7 +2,7 @@
   "info": {
     "name": "ChargePoint API",
     "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-    "description": "Complete API collection for the node-chargepoint library.\n\n## Quick Start\n\n1. Run **Setup > Fetch Global Config** to populate all endpoint variables automatically.\n2. Set your `username` and `password` collection variables.\n3. Run **Authentication > Login with Password** — your session token is saved automatically.\n4. Run **Account > Get Account** to populate `userId`.\n5. You're ready to use any other request.\n\n## Authentication\n\nAll authenticated requests send:\n- `cookie: coulomb_sess={{coulombToken}}`\n- `cp-session-type: CP_SESSION_TOKEN`\n- `cp-session-token: {{coulombToken}}`\n- `cp-region: {{region}}`\n\nThese are injected by the collection-level pre-request script automatically once `coulombToken` is set.",
+    "description": "Complete API collection for the node-chargepoint library.\n\n## Quick Start\n\n1. Run **Setup > Fetch Global Config** to populate all endpoint variables automatically.\n2. Set your `username` and `password` collection variables.\n3. Run **Authentication > Login with Password** — your session token is saved automatically.\n4. Run **Account > Get Account** to populate `userId`.\n5. You're ready to use any other request.\n\n## Authentication\n\nThe real ChargePoint API authenticates on a single cookie, `coulomb_sess`, and nothing else — verified against live browser traffic across every endpoint (account, home charger, and session calls alike). Earlier versions of this collection sent `cp-session-type`, `cp-session-token`, and `cp-region` headers alongside it; those were never real. They were silently tolerated by endpoints that also received a valid cookie, which is why nothing ever visibly broke, but the API never required them.\n\nEvery authenticated request below (all except **Fetch Global Config**, **Login with Password**, and **Login with SSO Session**, which run before a token exists) sends a static `cookie: coulomb_sess={{coulombToken}}` header. `coulombToken` is opaque — it is captured verbatim from `Set-Cookie` by the login requests' test scripts and must never be percent-decoded before being resent.\n\nThe three requests against `mapcacheEndpoint` (**Get User Charging Status**, **Get Nearby Stations**, **Get Station Info**) additionally send `ci_ui_session={{ciUiSession}}` in the same cookie header, matching a second cookie observed alongside `coulomb_sess` in live captures of that host. Whether `ci_ui_session` is actually required or just incidentally present has not been confirmed — it is unset by default and everything has worked in testing without it.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -31,6 +31,11 @@
       "key": "coulombToken",
       "value": "",
       "description": "Session token — set automatically by Login requests"
+    },
+    {
+      "key": "ciUiSession",
+      "value": "",
+      "description": "Second cookie (ci_ui_session) observed alongside coulomb_sess in live captures against mc.chargepoint.com, sourced from the browser's cookie jar. Not yet confirmed whether it's strictly required — leave empty unless you have a reason to test it."
     },
     {
       "key": "ssoEndpoint",
@@ -86,25 +91,6 @@
       "key": "ackId",
       "value": "",
       "description": "Acknowledgement ID from start/stop command — set automatically"
-    }
-  ],
-  "event": [
-    {
-      "listen": "prerequest",
-      "script": {
-        "type": "text/javascript",
-        "exec": [
-          "// Inject ChargePoint auth headers whenever a session token exists.",
-          "// The login and SSO requests work without a token, so skipping them is safe.",
-          "const token = pm.collectionVariables.get('coulombToken');",
-          "if (token) {",
-          "    pm.request.headers.upsert({ key: 'cookie', value: `coulomb_sess=${token}` });",
-          "    pm.request.headers.upsert({ key: 'cp-session-type', value: 'CP_SESSION_TOKEN' });",
-          "    pm.request.headers.upsert({ key: 'cp-session-token', value: token });",
-          "    pm.request.headers.upsert({ key: 'cp-region', value: pm.collectionVariables.get('region') || 'NA' });",
-          "}"
-        ]
-      }
     }
   ],
   "item": [
@@ -263,7 +249,9 @@
           "name": "Logout",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              { "key": "cookie", "value": "coulomb_sess={{coulombToken}}" }
+            ],
             "url": {
               "raw": "{{ssoEndpoint}}/v1/user/logout",
               "host": ["{{ssoEndpoint}}"],
@@ -297,7 +285,9 @@
           "name": "Get Account",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              { "key": "cookie", "value": "coulomb_sess={{coulombToken}}" }
+            ],
             "url": {
               "raw": "{{accountsEndpoint}}/v1/driver/profile/user",
               "host": ["{{accountsEndpoint}}"],
@@ -329,7 +319,9 @@
           "name": "Get Vehicles",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              { "key": "cookie", "value": "coulomb_sess={{coulombToken}}" }
+            ],
             "url": {
               "raw": "{{accountsEndpoint}}/v1/driver/vehicle",
               "host": ["{{accountsEndpoint}}"],
@@ -343,7 +335,8 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "cookie", "value": "coulomb_sess={{coulombToken}}; ci_ui_session={{ciUiSession}}" }
             ],
             "url": {
               "raw": "{{mapcacheEndpoint}}/v2",
@@ -352,10 +345,10 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"user_status\": {\n    \"timestamp\": {{$timestamp}}000\n  }\n}",
+              "raw": "{\n  \"user_status\": {\n    \"mfhs\": {}\n  }\n}",
               "options": { "raw": { "language": "json" } }
             },
-            "description": "Returns the user's current charging session status, or null if not currently charging.\n\n**Returns:** `UserChargingStatus | null` — `{ sessionId, startTime, state, stations[] }`"
+            "description": "Returns the user's current charging session status, or null if not currently charging.\n\n**Returns:** `UserChargingStatus | null` — `{ sessionId, startTime, asOf, state, stations[] }`"
           },
           "event": [
             {
@@ -368,10 +361,10 @@
                   "});",
                   "",
                   "const json = pm.response.json();",
-                  "const status = json.user_status?.charging_status;",
-                  "if (status?.session_id) {",
-                  "    pm.collectionVariables.set('sessionId', String(status.session_id));",
-                  "    console.log('Active session found:', status.session_id);",
+                  "const status = json.user_status?.charging;",
+                  "if (status?.sessionId) {",
+                  "    pm.collectionVariables.set('sessionId', String(status.sessionId));",
+                  "    console.log('Active session found:', status.sessionId);",
                   "} else {",
                   "    console.log('No active charging session.');",
                   "}"
@@ -390,7 +383,9 @@
           "name": "Get Home Chargers",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              { "key": "cookie", "value": "coulomb_sess={{coulombToken}}" }
+            ],
             "url": {
               "raw": "{{hcpoHcmEndpoint}}/api/v1/configuration/users/{{userId}}/chargers",
               "host": ["{{hcpoHcmEndpoint}}"],
@@ -425,7 +420,9 @@
           "name": "Get Home Charger Status",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              { "key": "cookie", "value": "coulomb_sess={{coulombToken}}" }
+            ],
             "url": {
               "raw": "{{hcpoHcmEndpoint}}/api/v1/configuration/users/{{userId}}/chargers/{{chargerId}}/status",
               "host": ["{{hcpoHcmEndpoint}}"],
@@ -438,7 +435,9 @@
           "name": "Get Home Charger Technical Info",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              { "key": "cookie", "value": "coulomb_sess={{coulombToken}}" }
+            ],
             "url": {
               "raw": "{{hcpoHcmEndpoint}}/api/v1/configuration/users/{{userId}}/chargers/{{chargerId}}/technical-info",
               "host": ["{{hcpoHcmEndpoint}}"],
@@ -451,7 +450,9 @@
           "name": "Get Home Charger Config",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              { "key": "cookie", "value": "coulomb_sess={{coulombToken}}" }
+            ],
             "url": {
               "raw": "{{hcpoHcmEndpoint}}/api/v1/configuration/users/{{userId}}/chargers/{{chargerId}}/configurations",
               "host": ["{{hcpoHcmEndpoint}}"],
@@ -464,7 +465,9 @@
           "name": "Get Home Charger Schedule",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              { "key": "cookie", "value": "coulomb_sess={{coulombToken}}" }
+            ],
             "url": {
               "raw": "{{hcpoHcmEndpoint}}/api/v1/schedule/charger/{{chargerId}}/schedule",
               "host": ["{{hcpoHcmEndpoint}}"],
@@ -478,7 +481,8 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "cookie", "value": "coulomb_sess={{coulombToken}}" }
             ],
             "url": {
               "raw": "{{hcpoHcmEndpoint}}/api/v1/schedule/charger/{{chargerId}}/schedule",
@@ -498,7 +502,8 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "cookie", "value": "coulomb_sess={{coulombToken}}" }
             ],
             "url": {
               "raw": "{{hcpoHcmEndpoint}}/api/v1/schedule/charger/{{chargerId}}/schedule",
@@ -518,7 +523,8 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "cookie", "value": "coulomb_sess={{coulombToken}}" }
             ],
             "url": {
               "raw": "{{hcpoHcmEndpoint}}/api/v1/configuration/chargers/{{chargerId}}/charge-amperage-limit",
@@ -538,7 +544,8 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "cookie", "value": "coulomb_sess={{coulombToken}}" }
             ],
             "url": {
               "raw": "{{hcpoHcmEndpoint}}/api/v1/configuration/chargers/{{chargerId}}/led-brightness",
@@ -557,7 +564,9 @@
           "name": "Restart Home Charger",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              { "key": "cookie", "value": "coulomb_sess={{coulombToken}}" }
+            ],
             "url": {
               "raw": "{{hcpoHcmEndpoint}}/api/v1/configuration/users/{{userId}}/chargers/{{chargerId}}/restart",
               "host": ["{{hcpoHcmEndpoint}}"],
@@ -577,7 +586,8 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "cookie", "value": "coulomb_sess={{coulombToken}}" }
             ],
             "url": {
               "raw": "{{accountsEndpoint}}/v1/driver/station/startsession",
@@ -616,7 +626,8 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "cookie", "value": "coulomb_sess={{coulombToken}}" }
             ],
             "url": {
               "raw": "{{accountsEndpoint}}/v1/driver/station/session/ack",
@@ -636,7 +647,8 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "cookie", "value": "coulomb_sess={{coulombToken}}" }
             ],
             "url": {
               "raw": "{{internalApiGatewayEndpoint}}/driver-bff/v1/sessions/{{sessionId}}",
@@ -656,7 +668,8 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "cookie", "value": "coulomb_sess={{coulombToken}}" }
             ],
             "url": {
               "raw": "{{accountsEndpoint}}/v1/driver/station/stopSession",
@@ -695,7 +708,8 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "cookie", "value": "coulomb_sess={{coulombToken}}" }
             ],
             "url": {
               "raw": "{{accountsEndpoint}}/v1/driver/station/session/ack",
@@ -720,7 +734,9 @@
           "name": "Get Station Info",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              { "key": "cookie", "value": "coulomb_sess={{coulombToken}}; ci_ui_session={{ciUiSession}}" }
+            ],
             "url": {
               "raw": "{{mapcacheEndpoint}}/v3/station/info?deviceId={{deviceId}}&use_cache=false",
               "host": ["{{mapcacheEndpoint}}"],
@@ -738,7 +754,8 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "cookie", "value": "coulomb_sess={{coulombToken}}; ci_ui_session={{ciUiSession}}" }
             ],
             "url": {
               "raw": "{{mapcacheEndpoint}}/v2",

@@ -257,8 +257,13 @@ Returns `null` when the charger is not actively charging or no session can be re
 Resolution order:
 1. **Device plane** — reads the session id from `getHomeChargerStatus` when the device API
    surfaces it.
-2. **Driver plane fallback** — calls `getUserChargingStatus` for driver-authenticated sessions
-   (started via this library's `startChargingSession`).
+2. **Driver plane fallback** — calls `getUserChargingStatus`, which resolves any session bound
+   to the authenticated driver, including ones the car auto-started on plug-in.
+
+A driver-plane session is only accepted when it actually belongs to `chargerId` (or names no
+device at all, in which case the device plane already confirmed this charger is charging). In a
+multi-charger household this prevents handing back a *different* charger's session under this
+charger's identity — which would stop the wrong car on `session.stop()`.
 
 `getHomeChargerStatus` also surfaces optional live telemetry fields when the device API includes
 them: `sessionId`, `energyKwh`, `powerKw`, and `sessionStartTime`.
@@ -274,20 +279,21 @@ on some home-charger sessions) — otherwise `session.stop()` would send a stop 
 > physical charger state and, on some models, surfaces sessions regardless of how they were
 > started. Use `getHomeChargerSession` as the primary path for home charger session management.
 
-> **Known limitation:** on chargers whose live telemetry runs over ChargePoint's WebSocket
-> channel rather than REST (observed on the `CPH50` family), neither plane surfaces a session
-> id for an EV-auto-started session — `getHomeChargerStatus().sessionId` stays `undefined` and
-> `getUserChargingStatus()` returns `null` even while actively charging. This library is
-> REST-only today, so such a session cannot currently be resolved or stopped through it; see
-> [Error Handling](docs/error-handling.md#known-limitation-some-home-chargers-never-surface-a-session-id-over-rest).
+> **Auto-started sessions:** on charger models where `getHomeChargerStatus().sessionId`
+> stays `undefined` (observed on the `CPH50` family), `getUserChargingStatus()` — the
+> driver plane — is what resolves an EV-auto-started session instead. See
+> [Session ID Resolution](docs/session-id-resolution.md) for how the two planes fit
+> together.
 
 #### Driver-plane status
 
 ```typescript
 const status = await client.getUserChargingStatus();
 if (status) {
-  console.log(status.state);      // "CHARGING"
+  console.log(status.state);      // "in_use" — driver-plane vocabulary, not ChargingStatus
   console.log(status.sessionId);  // 1234567890
+  console.log(status.startTime);  // Date — when the session began
+  console.log(status.asOf);       // Date — server time this snapshot reflects
 
   const session = await client.getChargingSession(status.sessionId);
   console.log(session.chargingState);  // "CHARGING"
@@ -316,11 +322,11 @@ await session.stop();
 Under the hood it resolves the active session before issuing the stop, because ChargePoint rejects a stop that does not carry the real session id (HTTP 422 `errorId` 165). Resolution order:
 
 1. **Driver plane** — `getUserChargingStatus()` (public stations and driver-owned sessions). The resolved session is only used when it actually belongs to `deviceId`, so a session on a *different* charger (e.g. a second charger in the same account) is never stopped by mistake.
-2. **Device plane fallback** — the session id surfaced by `getHomeChargerStatus`, on chargers where the device API includes it (see the known limitation below).
+2. **Device plane fallback** — the session id surfaced by `getHomeChargerStatus`, on chargers where the device API includes it (see [Session ID Resolution](docs/session-id-resolution.md)).
 
 On some home-charger sessions, the driver-bff `/sessions/{id}` response omits `device_id`/`outlet_number` entirely, which would otherwise leave both at their class default of `0` and send a stop command for the wrong device. When that happens, the resolved session's `deviceId` is only accepted once the device plane corroborates that `deviceId` itself is `CHARGING`, and `deviceId`/`outletNumber` are then backfilled from the device we already resolved for rather than trusted blindly from the API response.
 
-The resolved session's real `sessionId` and `outletNumber` are then sent to the stop endpoint. If no active session can be resolved on either plane, an `UnresolvedSessionError` (carrying the `deviceId`) is thrown — distinct from the `NoActiveSessionError` the API returns for a stop targeting a non-existent session. If the charger is currently busy (e.g. mid-handshake), a `ChargerBusyError` is thrown. If the vehicle isn't in a state that can charge (e.g. it's already at its charge limit), a `VehicleNotReadyError` is thrown — see [Error Handling](docs/error-handling.md). On some charger models an EV-auto-started session may be unresolvable by either plane; see the [known limitation](docs/error-handling.md#known-limitation-some-home-chargers-never-surface-a-session-id-over-rest).
+The resolved session's real `sessionId` and `outletNumber` are then sent to the stop endpoint. If no active session can be resolved on either plane, an `UnresolvedSessionError` (carrying the `deviceId`) is thrown — distinct from the `NoActiveSessionError` the API returns for a stop targeting a non-existent session. If the charger is currently busy (e.g. mid-handshake), a `ChargerBusyError` is thrown. If the vehicle isn't in a state that can charge (e.g. it's already at its charge limit), a `VehicleNotReadyError` is thrown — see [Error Handling](docs/error-handling.md). See [Session ID Resolution](docs/session-id-resolution.md) for how driver-plane and device-plane resolution fit together, including for auto-started sessions.
 
 ---
 
@@ -412,6 +418,12 @@ See [docs/cli.md](docs/cli.md) for usage, commands, and global options.
 ## Error Handling
 
 See [docs/error-handling.md](docs/error-handling.md) for the error class hierarchy and handling examples.
+
+---
+
+## Session ID Resolution
+
+See [docs/session-id-resolution.md](docs/session-id-resolution.md) for how driver-plane and device-plane session resolution work, including for EV-auto-started sessions.
 
 ---
 

@@ -1,5 +1,5 @@
 import { USER_AGENT } from './constants.js';
-import { APIError, CommunicationError, DatadomeCaptcha, InvalidSession, LoginError } from './exceptions.js';
+import { CommunicationError, DatadomeCaptcha, InvalidSession, LoginError } from './exceptions.js';
 import { fetchGlobalConfig } from './global-config.js';
 import { ChargingSession } from './session.js';
 import type {
@@ -28,11 +28,16 @@ function parseMsTimestamp(v: unknown): Date {
   return new Date(0);
 }
 
+function parseSecTimestamp(v: unknown): Date {
+  if (typeof v === 'number') return new Date(v * 1000);
+  if (typeof v === 'string') return new Date(Number(v) * 1000);
+  return new Date(0);
+}
+
 export class ChargePoint {
   public globalConfig: GlobalConfiguration;
   private _username: string;
   private _coulombToken: string | null = null;
-  private _region: string;
   private _userId: number | null = null;
   private _timeout: number | undefined;
   private _debug: ((msg: string) => void) | undefined;
@@ -43,19 +48,18 @@ export class ChargePoint {
     return this._coulombToken;
   }
 
-  private constructor(username: string, globalConfig: GlobalConfiguration, region: string) {
+  private constructor(username: string, globalConfig: GlobalConfiguration) {
     this._username = username;
     this.globalConfig = globalConfig;
-    this._region = region;
   }
 
   static async create(username: string, options: ChargePointOptions = {}): Promise<ChargePoint> {
     const region = options.region ?? 'NA';
     const config = await fetchGlobalConfig(region);
-    const client = new ChargePoint(username, config, region);
+    const client = new ChargePoint(username, config);
 
     if (options.coulombToken) {
-      client._setToken(options.coulombToken, region);
+      client._setToken(options.coulombToken);
     }
 
     client._timeout = options.timeout;
@@ -65,13 +69,12 @@ export class ChargePoint {
     return client;
   }
 
-  private _setToken(token: string, region: string): void {
-    try {
-      this._coulombToken = decodeURIComponent(token);
-    } catch {
-      throw new APIError('Malformed coulomb_sess token: invalid percent-encoding');
-    }
-    this._region = region;
+  private _setToken(token: string): void {
+    // coulomb_sess is opaque: some issued values contain percent-encoded characters
+    // (e.g. `...%23...`), and the server expects the exact bytes it issued back on every
+    // request — a browser never decodes/re-encodes cookie values, and neither must this
+    // client. Store and resend verbatim.
+    this._coulombToken = token;
   }
 
   /** @internal Used by session.ts and tests. */
@@ -83,11 +86,12 @@ export class ChargePoint {
       headers.set('content-type', 'application/json');
     }
 
+    // Verified against live browser traffic across every endpoint (account, home charger,
+    // and session calls alike): the real ChargePoint web app authenticates with the
+    // coulomb_sess cookie alone. It never sends cp-session-type / cp-session-token /
+    // cp-region — those headers were never real.
     if (this._coulombToken) {
       headers.set('cookie', `coulomb_sess=${this._coulombToken}`);
-      headers.set('cp-session-type', 'CP_SESSION_TOKEN');
-      headers.set('cp-session-token', this._coulombToken);
-      headers.set('cp-region', this._region);
     }
 
     this._debug?.(`${method} ${url}`);
@@ -107,11 +111,8 @@ export class ChargePoint {
     for (const cookie of setCookies) {
       const match = /^coulomb_sess=([^;]+)/.exec(cookie);
       if (match) {
-        try {
-          this._coulombToken = decodeURIComponent(match[1] ?? '');
-        } catch {
-          throw new CommunicationError(response.status, 'Malformed coulomb_sess cookie: invalid percent-encoding');
-        }
+        // Verbatim, as issued — see the comment in _setToken().
+        this._coulombToken = match[1] ?? '';
         this._onTokenRotated?.(this._coulombToken);
         break;
       }
@@ -246,7 +247,9 @@ export class ChargePoint {
   async getUserChargingStatus(): Promise<UserChargingStatus | null> {
     const url = `${this.globalConfig.endpoints.mapcacheEndpoint}/v2`;
     const response = await this._request('POST', url, {
-      body: JSON.stringify({ user_status: { timestamp: Date.now() } }),
+      // `mfhs` (empty object) mirrors what the ChargePoint web app actually sends; the API
+      // appears to require the key to be present at all.
+      body: JSON.stringify({ user_status: { mfhs: {} } }),
       headers: { 'Content-Type': 'application/json' },
     });
 
@@ -259,12 +262,16 @@ export class ChargePoint {
 
     if (!userStatus) return null;
 
-    const charging = userStatus.charging_status as RawObj | null | undefined;
+    // The active session is nested under `charging` with camelCase fields — verified
+    // against live traffic. (An earlier version of this method looked for `charging_status`
+    // with snake_case fields; that shape was never observed on the real API and this method
+    // always returned null as a result.)
+    const charging = userStatus.charging as RawObj | null | undefined;
     if (!charging) return null;
 
     const stations: Station[] = Array.isArray(charging.stations)
       ? (charging.stations as RawObj[]).map((s) => ({
-          id: s.id as number,
+          id: s.deviceId as number,
           name: typeof s.name === 'string' ? s.name : '',
           latitude: typeof s.lat === 'number' ? s.lat : (s.latitude as number ?? 0),
           longitude: typeof s.lon === 'number' ? s.lon : (s.longitude as number ?? 0),
@@ -272,9 +279,12 @@ export class ChargePoint {
       : [];
 
     return {
-      sessionId: charging.session_id as number,
-      startTime: parseMsTimestamp(charging.start_time),
-      state: typeof charging.current_charging === 'string' ? charging.current_charging : '',
+      sessionId: charging.sessionId as number,
+      // startTimeUTC/currentTimeUTC are Unix seconds, unlike the millisecond timestamps
+      // used elsewhere in this API.
+      startTime: parseSecTimestamp(charging.startTimeUTC),
+      asOf: parseSecTimestamp(charging.currentTimeUTC),
+      state: typeof charging.state === 'string' ? charging.state : '',
       stations,
     };
   }
@@ -568,11 +578,17 @@ export class ChargePoint {
 
     // Device plane had no session id — try driver plane
     const userStatus = await this.getUserChargingStatus();
-    if (userStatus) {
+    if (userStatus && typeof userStatus.sessionId === 'number' && userStatus.sessionId > 0) {
       const session = await this.getChargingSession(userStatus.sessionId);
-      session._ensureDeviceId(chargerId);
-      session._ensureOutletNumber(1);
-      return session;
+      // The driver plane reports the account's active session, which may belong to a
+      // different charger in a multi-charger household. Accept it only when it names
+      // this charger, or names no device at all (in which case the device plane already
+      // corroborated that `chargerId` is CHARGING, above).
+      if (session.deviceId === chargerId || session.deviceId === 0) {
+        session._ensureDeviceId(chargerId);
+        session._ensureOutletNumber(1);
+        return session;
+      }
     }
 
     return null;

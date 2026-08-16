@@ -120,27 +120,13 @@ try {
 }
 ```
 
-### Known limitation: some home chargers never surface a session id over REST
+### Resolved: auto-started sessions were unresolvable due to three bugs, not a WebSocket gap
 
-For an EV session that auto-starts on plug-in (no app/RFID interaction), both resolution
-paths can come back empty depending on the charger model:
-
-- `getUserChargingStatus()` — the driver plane — was verified live to return an empty
-  `user_status: {}` for an actively-charging home session, regardless of request body.
-- `getHomeChargerStatus()` — the device plane — was verified live to return no
-  `sessionId`/`energyKwh`/`powerKw`/`sessionStartTime` fields at all for a
-  `CPH50`-family charger, despite `chargingStatus: "CHARGING"`.
-
-ChargePoint's own service discovery config advertises a model-specific WebSocket channel
-for these chargers (`kestrel_websocket_endpoint`, scoped to the `CPH50` family) separate
-from the REST `hcpo-charger-management` API this library uses. That suggests live session
-state and control for these models may be WebSocket-native rather than REST-polled — which
-this library does not implement.
-
-**Net effect:** for a charger in this situation, `stopChargingSession(deviceId)` /
-`ChargingSession.stopByDevice()` cannot resolve a session and will throw
-`UnresolvedSessionError` rather than silently failing or sending a bogus stop command. This
-is considered correct, honest behavior — not a bug — until WebSocket support is added (see
-the library's issue tracker for status). Sessions started via this library's own
-`startChargingSession()` are unaffected, since the session id is captured directly from the
-start acknowledgement.
+Earlier versions of this library couldn't resolve a session id for an EV session that
+auto-starts on plug-in (no app/RFID interaction), and this section used to document that as
+a known limitation requiring WebSocket support. That theory was wrong — investigation found
+three unrelated bugs in `getUserChargingStatus()` (the driver-plane resolution path) that
+together made it return `null` unconditionally, masking session data the REST API had all
+along. No WebSocket work was needed. See
+[Session ID Resolution](session-id-resolution.md) for the full explanation and current
+usage examples.
