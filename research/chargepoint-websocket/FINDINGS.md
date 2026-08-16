@@ -197,6 +197,49 @@ empty even with both fixes in place, that's a real, different signal worth inves
 the API level, independent of the bugs found so far) — and only then does the WS/APK-static
 track become relevant again.
 
+### 2026-08-16 — CONFIRMED: auto-started CPH50 session resolves cleanly. Original problem solved.
+
+**Method:** Unplugged and replugged the car (zero app/RFID interaction, genuine auto-start
+on plug-in — the exact scenario `docs/error-handling.md`'s known limitation describes) and
+called `getUserChargingStatus()` (`mc.chargepoint.com/map-prod/v2`, `user_status` request)
+before and after the replug, using both fixes from this branch (opaque `coulomb_sess`,
+`mapcacheEndpoint` auth model with `ci_ui_session` + browser headers).
+
+**Result:** Both auto-started sessions — the one already running, and the new one created
+by the replug — returned fully populated data:
+
+```
+sessionId: 5429277421 → (replug) → sessionId: 5429306431
+state: "in_use" for both, stations[0].deviceId: 17618011 (the CPH50) for both
+```
+
+**This is the answer to the original question.** No session id was ever actually missing
+from the REST API for auto-started sessions — `getUserChargingStatus()` was always capable
+of resolving them, but two independent bugs in `node-chargepoint` masked it:
+1. `_setToken`/`_request()` corrupted any `coulomb_sess` token containing reserved
+   characters by decoding it before every replay.
+2. The response parser looked for the wrong container key (`charging_status` snake_case
+   instead of the real `charging` camelCase), so even a correctly-authenticated response
+   was silently discarded as "no session."
+
+With both fixed, `ChargingSession.resolveActiveByDevice()`'s existing driver-plane
+resolution path (`getUserChargingStatus()` → `getChargingSession()`) should now succeed for
+auto-started CPH50 sessions, meaning `stopChargingSession(deviceId)` should work end-to-end
+without ever needing the WebSocket channel.
+
+**No WebSocket reverse-engineering is needed to close the original ask.** The
+`kestrel_websocket_endpoint`/`panda_websocket_endpoint` findings from earlier in this branch
+remain documented above as a real, confirmed discovery (unused endpoints, real live-telemetry
+channel for CPH50) in case live push-based session updates become independently interesting
+later — but they were never actually required to solve "how do we get a session id to stop a
+session."
+
+**Next step:** Land the PR (`src/client.ts` + test fixture/assertion updates, both already
+passing 84/84 locally) on `musicbender/node-chargepoint`, bump the dependency in `zeal`'s
+`apps/gaspar/package.json`, and confirm `stopChargingSession()` actually stops a live
+auto-started session end-to-end (the Postman "Stop Session — Send Command" request, using
+the now-resolvable `sessionId`/`deviceId`) as final real-world validation.
+
 <!--
 Copy this template per session:
 
