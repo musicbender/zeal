@@ -1,6 +1,15 @@
-## [v0.11.2](https://github.com/musicbender/node-chargepoint/releases/tag/v0.11.2) — 2026-07-26
+## [v0.12.0](https://github.com/musicbender/node-chargepoint/releases/tag/v0.12.0) — 2026-08-16
 
-<!-- Release notes generated using configuration in .github/release.yml at v0.11.2 -->
+<!-- Release notes generated using configuration in .github/release.yml at v0.12.0 -->
+
+## What's Changed
+### New Features
+* fix: getUserChargingStatus() silently discarded valid sessions by @musicbender in https://github.com/musicbender/node-chargepoint/pull/41
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.11.2...v0.12.0
+
+---
 
 ## What's Changed
 ### Bug Fixes & Patches
