@@ -165,6 +165,38 @@ committed to the repo.
    at all. If auto-start still comes back empty even with the parser fixed, *then* the
    WS/APK-static track becomes relevant again — but not before this cheaper fix is ruled out.
 
+### 2026-08-16 — Postman/curl validation of both fixes, live
+
+**Method:** Manual curl testing against `mc.chargepoint.com/map-prod/v2` using freshly
+copied browser cookies, iterating on header/cookie shape until it matched real traffic
+exactly (several failed attempts along the way had stale reused tokens, duplicate cookie
+entries, and cookie-export-tool artifacts like a stray `Cookie_1=value` — none of those
+were code or auth-model problems, just assembly mistakes in manual testing).
+
+**Result:** Confirmed working. `getUserChargingStatus()`'s two fixes both hold up against
+live traffic:
+1. Opaque `coulomb_sess` handling (no `decodeURIComponent`) — a token containing `%23`
+   round-trips correctly now.
+2. `mapcacheEndpoint` (`mc.chargepoint.com`) auth model — no `cp-session-*` headers, cookie
+   jar needs `ci_ui_session` alongside `coulomb_sess`, plus a browser-realistic header set
+   (origin/referer/sec-fetch-*/etc.) — confirmed as the actual requirement, not
+   over-engineering.
+
+The response returned full session data (`sessionId`, `state`, `stations`) for an
+**app/portal-started** session — confirms the parser fix and the mapcache auth model are
+both correct. Does **not yet** confirm the original ask: whether this resolves
+`UnresolvedSessionError` for a **freshly auto-started** (car plugged in, zero app/RFID
+interaction) CPH50 session specifically — that's still the one open question from the
+2026-08-16 HAR-capture entry above.
+
+**Next step:** Same as before — test against a genuinely auto-started session (unplug,
+replug, don't touch the app) before considering the original CPH50 stop-session problem
+fully closed. If it also resolves there, this is done. If auto-start still comes back
+empty even with both fixes in place, that's a real, different signal worth investigating
+(possibly session binding genuinely differs for auto-start vs. driver-initiated sessions at
+the API level, independent of the bugs found so far) — and only then does the WS/APK-static
+track become relevant again.
+
 <!--
 Copy this template per session:
 
