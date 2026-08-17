@@ -65,13 +65,28 @@ export async function registerSunkeepPlugin(
 	try {
 		if (effectiveToken) {
 			// Validate the stored token is still alive; fall back to password if it's stale.
+			// Also probe the device-plane call sunkeep actually depends on every tick — an
+			// account-only check can pass while that call is broken (different ChargePoint
+			// backend host, can fail independently of account auth).
 			try {
 				await chargePoint.getAccount();
+				await chargePoint.getHomeChargerStatus(config.chargePointDeviceId);
 				log.info('ChargePoint authenticated via token');
 			} catch (err) {
-				if (!(err instanceof InvalidSession)) throw err;
-				log.warn('Stored ChargePoint token is expired — falling back to password login');
-				await authenticateWithPassword(chargePoint, config.chargePointPassword);
+				if (err instanceof InvalidSession) {
+					log.warn('Stored ChargePoint token is expired — falling back to password login');
+					await authenticateWithPassword(chargePoint, config.chargePointPassword);
+				} else if (err instanceof CommunicationError) {
+					// Not necessarily a stale token — could be a transient outage. Don't force a
+					// password re-login here (risks tripping Datadome bot protection); just make
+					// the failure loud at boot instead of silently discovered on the first tick.
+					log.error(
+						{ err },
+						`ChargePoint token passed account check but failed device check (HTTP ${err.statusCode}) — sunkeep will retry on the next tick`
+					);
+				} else {
+					throw err;
+				}
 			}
 		} else {
 			await authenticateWithPassword(chargePoint, config.chargePointPassword);
