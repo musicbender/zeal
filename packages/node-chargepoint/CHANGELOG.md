@@ -1,6 +1,15 @@
-## [v0.12.0](https://github.com/musicbender/node-chargepoint/releases/tag/v0.12.0) — 2026-08-16
+## [v0.12.1](https://github.com/musicbender/node-chargepoint/releases/tag/v0.12.1) — 2026-08-17
 
-<!-- Release notes generated using configuration in .github/release.yml at v0.12.0 -->
+<!-- Release notes generated using configuration in .github/release.yml at v0.12.1 -->
+
+## What's Changed
+### Bug Fixes & Patches
+* fix: restore cp-session-type, cp-session-token, cp-region headers for hcpoHcmEndpoint by @musicbender in https://github.com/musicbender/node-chargepoint/pull/42
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.12.0...v0.12.1
+
+---
 
 ## What's Changed
 ### New Features
