@@ -433,6 +433,52 @@ describe('getNearbyStations()', () => {
   });
 });
 
+describe('_request() header handling', () => {
+  it('sends cp-session-type, cp-session-token, and cp-region headers when authenticated', async () => {
+    let capturedHeaders: Headers | undefined;
+    server.use(
+      http.get('https://hcpoprodhcm.chargepoint.com/api/v1/configuration/users/1234567890/chargers/12345/status', ({ request }) => {
+        capturedHeaders = request.headers;
+        return HttpResponse.json({
+          brand: 'ChargePoint', model: 'CPH25', macAddress: 'AA:BB:CC:DD:EE:FF',
+          chargingStatus: 'NOT_CHARGING', isPluggedIn: false, isConnected: true,
+          isReminderEnabled: false, plugInReminderTime: '22:00',
+          hasUtilityInfo: false, isDuringScheduledTime: false,
+          chargeAmperageSettings: { chargeLimit: 32, inProgress: false, possibleChargeLimit: [16, 24, 32, 40, 48] },
+        });
+      }),
+    );
+
+    const client = await authenticatedClient();
+    await client.getHomeChargerStatus(TEST_CHARGER_ID);
+
+    expect(capturedHeaders?.get('cp-session-type')).toBe('CP_SESSION_TOKEN');
+    expect(capturedHeaders?.get('cp-session-token')).toBe(TEST_TOKEN);
+    expect(capturedHeaders?.get('cp-region')).toBe('NA');
+  });
+
+  it('sends cp-region from options.region when creating client', async () => {
+    let capturedHeaders: Headers | undefined;
+    server.use(
+      http.get('https://hcpoprodhcm.chargepoint.com/api/v1/configuration/users/1234567890/chargers/12345/status', ({ request }) => {
+        capturedHeaders = request.headers;
+        return HttpResponse.json({
+          brand: 'ChargePoint', model: 'CPH25', macAddress: 'AA:BB:CC:DD:EE:FF',
+          chargingStatus: 'NOT_CHARGING', isPluggedIn: false, isConnected: true,
+          isReminderEnabled: false, plugInReminderTime: '22:00',
+          hasUtilityInfo: false, isDuringScheduledTime: false,
+          chargeAmperageSettings: { chargeLimit: 32, inProgress: false, possibleChargeLimit: [16, 24, 32, 40, 48] },
+        });
+      }),
+    );
+
+    const client = await ChargePoint.create('testuser', { coulombToken: TEST_TOKEN, region: 'EU' });
+    await client.getHomeChargerStatus(TEST_CHARGER_ID);
+
+    expect(capturedHeaders?.get('cp-region')).toBe('EU');
+  });
+});
+
 describe('_request() error handling', () => {
   it('refreshes coulomb_sess from Set-Cookie on response', async () => {
     const newToken = 'refreshed-token-xyz';

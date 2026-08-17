@@ -39,6 +39,7 @@ export class ChargePoint {
   private _username: string;
   private _coulombToken: string | null = null;
   private _userId: number | null = null;
+  private _region: string = 'NA';
   private _timeout: number | undefined;
   private _debug: ((msg: string) => void) | undefined;
   private _onTokenRotated: ((token: string) => void) | undefined;
@@ -57,6 +58,8 @@ export class ChargePoint {
     const region = options.region ?? 'NA';
     const config = await fetchGlobalConfig(region);
     const client = new ChargePoint(username, config);
+
+    client._region = region;
 
     if (options.coulombToken) {
       client._setToken(options.coulombToken);
@@ -86,12 +89,11 @@ export class ChargePoint {
       headers.set('content-type', 'application/json');
     }
 
-    // Verified against live browser traffic across every endpoint (account, home charger,
-    // and session calls alike): the real ChargePoint web app authenticates with the
-    // coulomb_sess cookie alone. It never sends cp-session-type / cp-session-token /
-    // cp-region — those headers were never real.
     if (this._coulombToken) {
       headers.set('cookie', `coulomb_sess=${this._coulombToken}`);
+      headers.set('cp-session-type', 'CP_SESSION_TOKEN');
+      headers.set('cp-session-token', this._coulombToken);
+      headers.set('cp-region', this._region);
     }
 
     this._debug?.(`${method} ${url}`);
