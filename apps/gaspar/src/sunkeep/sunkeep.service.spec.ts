@@ -2240,6 +2240,33 @@ describe('SunkeepService', () => {
 			expect(mockCp.setAmperageLimit).toHaveBeenCalledWith(42, 20);
 		});
 
+		it('adopts a session via the device-plane session id when the driver plane has none', async () => {
+			// Some CPH50-family chargers never surface a session via getUserChargingStatus
+			// (driver plane) for an app/auto-started session, but do report a sessionId on
+			// getHomeChargerStatus (device plane). Adoption must use that id to get a real
+			// session handle — falling back to a handle-less adoption here is what leaves
+			// stopActiveSession() unable to resolve the session later (UnresolvedSessionError)
+			// and the charger stuck delivering current at the minimum-amps clamp forever.
+			mockCp.getUserChargingStatus.mockResolvedValue(null);
+			mockCp.getChargingSession.mockResolvedValueOnce({ ...mockSession, sessionId: 321 });
+			service.enable();
+			vi.setSystemTime(NOON);
+			mockCp.getHomeChargerStatus.mockResolvedValue(
+				pluggedInStatus({
+					chargingStatus: 'CHARGING' as HomeChargerStatus['chargingStatus'],
+					amperageLimit: 15,
+					sessionId: 321,
+				})
+			);
+			mockPw.getData.mockResolvedValue(goodPwData({ solarKw: 6.0, loadKw: 4.6 }));
+
+			await service.runTick();
+
+			expect(mockCp.getChargingSession).toHaveBeenCalledWith(321);
+			expect(service.getStatus().state).toBe(SunkeepState.CHARGING);
+			expect(service.getStatus().activeSession?.sessionId).toBe(321);
+		});
+
 		it('keeps an externally-started session adopted across ticks without duplicating events or stopping it', async () => {
 			// Regression for the "Charger busy / never adjusts" bug: a session started
 			// outside Sunkeep (getUserChargingStatus null) is adopted without a handle,
