@@ -1412,6 +1412,16 @@ export class SunkeepService {
 		const session = this.activeSession;
 		const eventId = this.activeEventId;
 		const endAmps = this.currentAmps;
+		// stopPendingReason is only ever set by a prior failed stop attempt against this
+		// same still-open event (see the bottom of this method) and cleared once the
+		// charger actually stops or policy allows charging again — so its presence here
+		// means this call is a retry of an already-diagnosed unresolvable stop. For a
+		// charger model that never surfaces a session id over REST (see the
+		// UnresolvedSessionError branch below), every retry hits the identical failure
+		// every ~10 minutes for as long as the car stays plugged in; logging the same WARN
+		// triplet each time drowns real signal in the logs, so only the first occurrence
+		// warns and the rest are recorded at debug.
+		const isRetryOfKnownUnresolvedStop = this.stopPendingReason !== null;
 
 		// Two independent stop mechanisms: session-handle stop (by session ID) and
 		// device-level stop (by device ID). They hit different ChargePoint API endpoints.
@@ -1450,7 +1460,7 @@ export class SunkeepService {
 					// The session id can't be resolved over REST (e.g. a CPH50 that only
 					// surfaces auto-started sessions over WebSocket). Nothing more we can do via
 					// the API — the MIN_AMPS clamp below is the remaining mitigation.
-					log.warn(
+					log[isRetryOfKnownUnresolvedStop ? 'debug' : 'warn'](
 						'Device-level stop could not resolve an active session over REST — relying on minimum-amps clamp'
 					);
 				} else {
@@ -1462,7 +1472,7 @@ export class SunkeepService {
 		if (!chargerStopConfirmed) {
 			// Both mechanisms failed — the ChargePoint API/hardware may be desynced.
 			// Set minimum amps so the charger cannot continue at high current.
-			log.warn(
+			log[isRetryOfKnownUnresolvedStop ? 'debug' : 'warn'](
 				'Both stop mechanisms failed or reported no active session; setting minimum amps as fallback'
 			);
 		}
@@ -1490,7 +1500,7 @@ export class SunkeepService {
 			// it and let reconcile re-adopt the row by device — that path retries the
 			// device-level stop on every later poll.
 			this.activeSession = null;
-			log.warn(
+			log[isRetryOfKnownUnresolvedStop ? 'debug' : 'warn'](
 				{ reason, eventId },
 				'Charger still delivering after a failed stop — holding the event open at minimum amps rather than recording an end'
 			);
