@@ -997,6 +997,22 @@ export class SunkeepService {
 				log.warn({ err, sessionId: userStatus.sessionId }, 'getChargingSession failed');
 				return;
 			}
+		} else if (typeof chargerStatus.sessionId === 'number') {
+			// Driver plane has no session, but the device plane (getHomeChargerStatus) is
+			// reporting one directly. CPH50-family chargers only surface this here
+			// intermittently — often right after a session starts — and it can go stale by
+			// the time a later tick needs to stop the session, so grab a handle now while
+			// it is visible rather than relying solely on a fresh device-plane resolution
+			// inside stopChargingSession() at stop time.
+			try {
+				session = await this.chargePoint.getChargingSession(chargerStatus.sessionId);
+			} catch (err) {
+				log.warn(
+					{ err, sessionId: chargerStatus.sessionId },
+					'getChargingSession (device-plane session id) failed'
+				);
+				return;
+			}
 		} else if (this.activeEventId) {
 			// We own this session but it isn't visible via the user-status API. For
 			// app/auto-started sessions this is the normal steady state (it never becomes
