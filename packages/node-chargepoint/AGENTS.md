@@ -42,39 +42,48 @@ tests/
 ## Architecture decisions
 
 ### HTTP — native fetch, no library
+
 Node 24 ships `fetch` globally. All HTTP calls go through `ChargePoint._request()` in
 `src/client.ts`. Do not add `axios`, `node-fetch`, or any other HTTP client.
 
 ### Cookies — manual, no library
+
 The ChargePoint API only requires one cookie: `coulomb_sess` on `.chargepoint.com`.
 `_request()` extracts it from `Set-Cookie` response headers with a regex and stores it as
 a plain string. Do not add `tough-cookie` or any cookie library.
 
 ### Types — interfaces only, no runtime validation
+
 All types in `src/types.ts` are plain TypeScript interfaces. There is no Zod, class-validator,
 or Pydantic equivalent. Validation happens at compile time only. If the API returns unexpected
 shapes, the code will silently ignore unknown fields.
 
 ### One runtime dependency
+
 `commander` (for the CLI bin). The library itself (`src/index.ts` exports) has zero runtime
 dependencies. Do not add runtime dependencies to the library entry point without a strong reason.
 
 ### camelCase everywhere
+
 The ChargePoint API returns camelCase JSON. TypeScript interfaces mirror that directly — no
 transformation layer. The exception is the session detail endpoint (`driver-bff/v1/sessions/`)
 which returns snake_case; `ChargingSession._apply()` handles that mapping manually.
 
 ### Module resolution — NodeNext
+
 All relative imports inside `src/` and `tests/` must use `.js` extensions:
+
 ```typescript
-import { sendCommand } from './session.js';   // correct
-import { sendCommand } from './session';       // wrong — fails under NodeNext
+import { sendCommand } from './session.js'; // correct
+import { sendCommand } from './session'; // wrong — fails under NodeNext
 ```
+
 tsup resolves `.js` → `.ts` at build time; TypeScript resolves them for type-checking.
 
 ## Key patterns
 
 ### Adding a new API method
+
 1. Add the TypeScript return type to `src/types.ts` if needed.
 2. Add the async method to `ChargePoint` in `src/client.ts`. Follow the existing pattern:
    - Construct the URL from `this.globalConfig.endpoints.*`
@@ -87,17 +96,20 @@ tsup resolves `.js` → `.ts` at build time; TypeScript resolves them for type-c
 5. Add a test in `tests/client.test.ts`.
 
 ### Adding a new error condition
+
 Extend the hierarchy in `src/exceptions.ts`. Always call
 `Object.setPrototypeOf(this, new.target.prototype)` in the constructor — this is required for
 `instanceof` checks to work correctly when the code is compiled to CommonJS.
 
 ### Polling loop (start/stop sessions)
+
 `sendCommand()` in `src/session.ts` polls the `/session/ack` endpoint up to 20 times with a
 3-second sleep between attempts. Use `vi.useFakeTimers()` + `vi.advanceTimersByTimeAsync(3000)`
 in tests to avoid real 60-second waits. Attach `.catch()` immediately to the promise under test
 to suppress `PromiseRejectionHandledWarning` from Node.js.
 
 ### Circular dependency (session ↔ client)
+
 `session.ts` uses `import type { ChargePoint } from './client.js'` — a type-only import. This
 avoids a circular runtime dependency. Do not change it to a value import.
 
@@ -120,7 +132,7 @@ E2E tests live in `tests/e2e/` and run against the live ChargePoint API with no 
 - **Config**: `vitest.e2e.config.ts` — no MSW `setupFiles`, 30 s timeout, serial `singleFork` execution.
 - **Auth helper**: `tests/e2e/auth.ts` — reads `.env.e2e`, supports token-first + password fallback, prints token after login.
 - **Credentials**: `.env.e2e` (gitignored). See the E2E Tests section in `README.md` for the setup template.
-- **Run**: `pnpm test:e2e` — requires filled-in `.env.e2e` or exported env vars (`CP_USERNAME`, `CP_PASSWORD` or `CP_TOKEN`).
+- **Run**: `pnpm test:e2e` — requires filled-in `.env.e2e` or exported env vars (`CHARGEPOINT_USERNAME`, `CHARGEPOINT_PASSWORD` or `CHARGEPOINT_TOKEN`).
 - **Mutations**: disabled by default. Set `E2E_MUTATIONS=true` to run schedule/amperage/LED tests (each restores original state).
 - **Do not import** `tests/setup.ts` or `tests/handlers.ts` from any e2e file — those start the MSW server.
 - **Excluded from automation**: `restartHomeCharger()`, `startChargingSession()`, `stopChargingSession()` — run manually via CLI.

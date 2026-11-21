@@ -31,17 +31,18 @@ An optional E2E suite runs against the live ChargePoint API using a real home ch
 Create a `.env.e2e` file in the project root (it is gitignored):
 
 ```
-CP_USERNAME=your-chargepoint-email@example.com
-CP_PASSWORD=your-chargepoint-password
+CHARGEPOINT_USERNAME=your-chargepoint-email@example.com
+CHARGEPOINT_PASSWORD=your-chargepoint-password
 
 # After first run, paste the printed token here to avoid re-logging in:
-# CP_TOKEN=
+# CHARGEPOINT_TOKEN=
 ```
 
 > **Tip:** `coulomb_sess` tokens contain special characters (`#`, `?`). Always wrap the value in
 > double quotes when exporting to your shell:
+>
 > ```bash
-> export CP_TOKEN="abc...#D???"
+> export CHARGEPOINT_TOKEN="abc...#D???"
 > ```
 
 ### Run (read-only — safe with charger in any state)
@@ -50,7 +51,7 @@ CP_PASSWORD=your-chargepoint-password
 pnpm test:e2e
 ```
 
-On first run the session token is printed. Paste it into `CP_TOKEN` in `.env.e2e` to skip
+On first run the session token is printed. Paste it into `CHARGEPOINT_TOKEN` in `.env.e2e` to skip
 password re-authentication on subsequent runs.
 
 ### Run with mutation tests
@@ -75,9 +76,9 @@ Produces `dist/index.js` (ESM), `dist/index.cjs` (CommonJS), and `dist/index.d.t
 
 ## Commands reference
 
-| Command | Purpose |
-|---|---|
-| `pnpm typecheck` | TypeScript strict type checking |
-| `pnpm test` | Run all tests |
-| `pnpm build` | Build CJS + ESM + `.d.ts` |
+| Command               | Purpose                                                      |
+| --------------------- | ------------------------------------------------------------ |
+| `pnpm typecheck`      | TypeScript strict type checking                              |
+| `pnpm test`           | Run all tests                                                |
+| `pnpm build`          | Build CJS + ESM + `.d.ts`                                    |
 | `pnpm prepublishOnly` | Build + typecheck (runs automatically before `pnpm publish`) |

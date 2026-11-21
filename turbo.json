@@ -41,6 +41,7 @@
 	],
 	"tasks": {
 		"dev": {
+			"dependsOn": ["^build"],
 			"cache": false,
 			"persistent": true
 		},
@@ -50,10 +51,11 @@
 		},
 		"prisma:generate": { "cache": false },
 		"prisma:migrate": {},
-		"typecheck": {},
+		"typecheck": { "dependsOn": ["^build"] },
 		"lint": {},
-		"test": {},
+		"test": { "dependsOn": ["^build"] },
 		"test:integration": {
+			"dependsOn": ["^build"],
 			"cache": false
 		},
 		"test:e2e": {

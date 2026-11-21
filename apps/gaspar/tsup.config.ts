@@ -6,5 +6,5 @@ export default defineConfig({
 	outDir: 'dist',
 	clean: true,
 	external: ['@prisma/client', 'pino', 'pino-pretty'],
-	noExternal: [/@repo\/.*/],
+	noExternal: [/@repo\/.*/, 'node-chargepoint'],
 });
