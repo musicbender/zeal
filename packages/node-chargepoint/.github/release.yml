@@ -1,0 +1,10 @@
+changelog:
+  categories:
+    - title: Breaking Changes
+      labels: [bump:major]
+    - title: New Features
+      labels: [bump:minor]
+    - title: Bug Fixes & Patches
+      labels: [bump:patch]
+    - title: Other Changes
+      labels: ['*']

@@ -1,0 +1,49 @@
+{
+  "charging_status": {
+    "session_id": 1,
+    "start_time": 1609459200000,
+    "device_id": 1,
+    "device_name": "ChargePoint Home Flex",
+    "current_charging": "CHARGING",
+    "charging_time": 3600,
+    "energy_kwh": 10.5,
+    "miles_added": 35.0,
+    "miles_added_per_hour": 25.0,
+    "outlet_number": 1,
+    "port_level": 2,
+    "power_kw": 7.2,
+    "purpose": "PERSONAL",
+    "currency_iso_code": "USD",
+    "payment_completed": false,
+    "payment_type": "PREPAID",
+    "pricing_spec_id": 0,
+    "total_amount": 0.0,
+    "api_flag": false,
+    "enable_stop_charging": true,
+    "has_charging_receipt": false,
+    "has_utility_info": false,
+    "is_home_charger": true,
+    "is_purpose_finalized": false,
+    "last_update_data_timestamp": 1609462800000,
+    "stop_charge_supported": true,
+    "company_id": 99,
+    "company_name": "Test Home",
+    "lat": 37.7749,
+    "lon": -122.4194,
+    "address1": "123 Main St",
+    "city": "San Francisco",
+    "state_name": "California",
+    "country": "US",
+    "zipcode": "94102",
+    "update_period": 60,
+    "update_data": [
+      {
+        "energy_kwh": 10.5,
+        "power_kw": 7.2,
+        "timestamp": 1609462800000
+      }
+    ],
+    "utility": null,
+    "vehicle_info": null
+  }
+}

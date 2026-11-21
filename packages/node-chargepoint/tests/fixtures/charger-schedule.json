@@ -1,0 +1,15 @@
+{
+  "hasTouPricing": false,
+  "scheduleEnabled": true,
+  "hasUtilityInfo": false,
+  "basedOnUtility": null,
+  "defaultSchedule": {
+    "weekdays": { "startTime": "00:00", "endTime": "23:59" },
+    "weekends": { "startTime": "00:00", "endTime": "23:59" }
+  },
+  "userSchedule": {
+    "weekdays": { "startTime": "22:00", "endTime": "06:00" },
+    "weekends": { "startTime": "22:00", "endTime": "08:00" }
+  },
+  "utilitySchedule": null
+}

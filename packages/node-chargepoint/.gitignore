@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.local
+.env.e2e
+coverage/
+.worktrees/
+package-lock.json
+yarn.lock
