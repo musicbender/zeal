@@ -50,6 +50,7 @@ pnpm --filter fiendlord-keep-ui dev   # Next.js dev server on port 3002
 - **`@repo/types`** — Domain enums: `Room` (LIVING_ROOM, BEDROOM, etc.) and `SensorType` (BED_OCCUPANCY, MOTION, CONTACT, TEMPERATURE)
 - **`@repo/gaspar-data`** — DTOs and entity classes for Sensor. Uses `@nestjs/mapped-types` for DTO inheritance. Shared between gaspar and frontend apps.
 - **`@repo/worfbot`** — Discord bot logic: slash commands, keyword matcher, Worf quotes. Consumed by worfbot-gateway and portfolio.
+- **`node-chargepoint`** — Public, unscoped npm package (ChargePoint API client + `chargepoint` CLI). The only publishable package in the repo: must never depend on private `@repo/*` packages at runtime. Built with tsup to `dist/`. Released by label — see `packages/node-chargepoint/CLAUDE.md`.
 - **`@repo/worfbot-data`** — Data types for worfbot.
 - **`@repo/magus-data`** — Types for homelab service stats (`MagusStats`, `ServiceHealth`, `ServiceConfig`). Used by fiendlord-keep-ui.
 - **`@repo/neon-client`** — Neon serverless Postgres client wrapper (server-only).
@@ -66,7 +67,7 @@ pnpm --filter fiendlord-keep-ui dev   # Next.js dev server on port 3002
 ### External Integrations
 
 - **Tesla Fleet API** → `apps/gaspar/src/sunkeep/tesla.client.ts` · see `.claude/skills/tesla-fleet-api.md`
-- **ChargePoint** → `apps/gaspar/src/sunkeep/` via `node-chargepoint` npm package · source at `../node-chargepoint` (GitHub: `musicbender/node-chargepoint`, **owned by Pat** — fixes go there, not just in gaspar) · see `.claude/skills/chargepoint.md`
+- **ChargePoint** → `apps/gaspar/src/sunkeep/` via the `node-chargepoint` workspace package (`packages/node-chargepoint`, **owned by Pat**, also published to npm — fix bugs there directly) · see `.claude/skills/chargepoint.md`
 - **Discord** → `apps/worfbot-gateway` + `@repo/worfbot` · see `.claude/skills/discord.md` + `.claude/skills/worfbot.md`
 - **Hygraph CMS** → `@repo/remote-data/src/hygraph.ts`
 

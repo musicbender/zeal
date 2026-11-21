@@ -14,7 +14,7 @@ Only the latest stable release receives security fixes. This library is pre-v1 (
 Please **do not** open a public issue for security vulnerabilities.
 
 Use GitHub's private vulnerability reporting:
-**[Report a vulnerability](https://github.com/musicbender/node-chargepoint/security/advisories/new)**
+**[Report a vulnerability](https://github.com/musicbender/zeal/security/advisories/new)**
 
 You can expect an acknowledgment within 72 hours and a fix or mitigation plan within 14 days for confirmed vulnerabilities.
 

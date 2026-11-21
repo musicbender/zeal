@@ -3,9 +3,10 @@
 ## Setup
 
 ```bash
-git clone https://github.com/musicbender/node-chargepoint.git
-cd node-chargepoint
+git clone https://github.com/musicbender/zeal.git
+cd zeal
 pnpm install
+cd packages/node-chargepoint   # or use `pnpm --filter node-chargepoint <script>` from the root
 ```
 
 ## Type checking

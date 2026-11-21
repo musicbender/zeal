@@ -20,34 +20,34 @@
 
 **Confirmed by Pat:** D2 (`chargepoint:*` label prefix), D4 (bundle into gaspar), and renaming the e2e env vars to `CHARGEPOINT_*` (Task 4). Others are recommendations pending review.
 
-| # | Decision | Recommendation |
-| - | -------- | -------------- |
-| D1 | How to import history | `git filter-repo --to-subdirectory-filter` + merge with `--allow-unrelated-histories`. Paths are rewritten so `git log`/`blame` work naturally. The migration PR **must be merged with a merge commit**, not squash, or history is lost. |
-| D2 | Release labels | Package-prefixed: `chargepoint:patch`, `chargepoint:minor`, `chargepoint:major`, `chargepoint:skip-release`. Keeps the bump obviously scoped and leaves room for other publishable packages later. |
-| D3 | Tag format | `node-chargepoint@vX.Y.Z`. Optionally re-import old `vX.Y.Z` tags renamed to this format. |
-| D4 | gaspar runtime | Bundle `node-chargepoint` into gaspar's tsup output (add to `noExternal`) like `@repo/*`, so the Pi deploy doesn't depend on `pnpm deploy` copying a workspace package's `dist`. |
-| D5 | Live dev loop | `dev: tsup --watch` in the package so `pnpm dev` rebuilds `dist` while gaspar's `tsx --watch` picks it up. (Alternative later: a `source` export condition + `customConditions`.) |
-| D6 | Old repo | Freeze publishing, add "moved" notice, transfer open issues, archive. |
+| #   | Decision              | Recommendation                                                                                                                                                                                                                           |
+| --- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | How to import history | `git filter-repo --to-subdirectory-filter` + merge with `--allow-unrelated-histories`. Paths are rewritten so `git log`/`blame` work naturally. The migration PR **must be merged with a merge commit**, not squash, or history is lost. |
+| D2  | Release labels        | Package-prefixed: `chargepoint:patch`, `chargepoint:minor`, `chargepoint:major`, `chargepoint:skip-release`. Keeps the bump obviously scoped and leaves room for other publishable packages later.                                       |
+| D3  | Tag format            | `node-chargepoint@vX.Y.Z`. Optionally re-import old `vX.Y.Z` tags renamed to this format.                                                                                                                                                |
+| D4  | gaspar runtime        | Bundle `node-chargepoint` into gaspar's tsup output (add to `noExternal`) like `@repo/*`, so the Pi deploy doesn't depend on `pnpm deploy` copying a workspace package's `dist`.                                                         |
+| D5  | Live dev loop         | `dev: tsup --watch` in the package so `pnpm dev` rebuilds `dist` while gaspar's `tsx --watch` picks it up. (Alternative later: a `source` export condition + `customConditions`.)                                                        |
+| D6  | Old repo              | Freeze publishing, add "moved" notice, transfer open issues, archive.                                                                                                                                                                    |
 
 ---
 
 ## File Map
 
-| Action  | Path |
-| ------- | ---- |
-| Import  | `packages/node-chargepoint/**` (from old repo, with history) |
-| Delete  | `packages/node-chargepoint/{pnpm-lock.yaml,pnpm-workspace.yaml,.github/,.gitignore}` (folded into root) |
-| Modify  | `packages/node-chargepoint/{package.json,tsconfig.json,eslint.config.js,CLAUDE.md,AGENTS.md,SECURITY.md,docs/development.md}` |
-| Create  | `packages/typescript-config/node-library.json` |
-| Modify  | `turbo.json` |
-| Modify  | root `package.json` (`pnpm.onlyBuiltDependencies`, `pnpm.overrides`) |
-| Modify  | `.github/workflows/e2e.yml` (stop running library e2e by accident) |
-| Create  | `.github/workflows/node-chargepoint-labels.yml` |
-| Create  | `.github/workflows/node-chargepoint-release.yml` |
-| Create  | `.github/release.yml` (only if keeping generated notes — see Task 7) |
-| Create  | `.git-blame-ignore-revs` |
-| Modify  | `apps/gaspar/package.json`, `apps/gaspar/tsup.config.ts` |
-| Modify  | `CLAUDE.md`, `.claude/skills/chargepoint.md`, gaspar docs referencing `../node-chargepoint` |
+| Action | Path                                                                                                                          |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| Import | `packages/node-chargepoint/**` (from old repo, with history)                                                                  |
+| Delete | `packages/node-chargepoint/{pnpm-lock.yaml,pnpm-workspace.yaml,.github/,.gitignore}` (folded into root)                       |
+| Modify | `packages/node-chargepoint/{package.json,tsconfig.json,eslint.config.js,CLAUDE.md,AGENTS.md,SECURITY.md,docs/development.md}` |
+| Create | `packages/typescript-config/node-library.json`                                                                                |
+| Modify | `turbo.json`                                                                                                                  |
+| Modify | root `package.json` (`pnpm.onlyBuiltDependencies`, `pnpm.overrides`)                                                          |
+| Modify | `.github/workflows/e2e.yml` (stop running library e2e by accident)                                                            |
+| Create | `.github/workflows/node-chargepoint-labels.yml`                                                                               |
+| Create | `.github/workflows/node-chargepoint-release.yml`                                                                              |
+| Create | `.github/release.yml` (only if keeping generated notes — see Task 7)                                                          |
+| Create | `.git-blame-ignore-revs`                                                                                                      |
+| Modify | `apps/gaspar/package.json`, `apps/gaspar/tsup.config.ts`                                                                      |
+| Modify | `CLAUDE.md`, `.claude/skills/chargepoint.md`, gaspar docs referencing `../node-chargepoint`                                   |
 
 ---
 
@@ -101,25 +101,25 @@ git remote remove ncp
 - [ ] **Create** `packages/typescript-config/node-library.json` — reusable for any Node-only package (gaspar could adopt it later):
   ```json
   {
-    "$schema": "https://json.schemastore.org/tsconfig",
-    "extends": "./base.json",
-    "compilerOptions": {
-      "target": "ES2023",
-      "lib": ["ES2023"],
-      "module": "NodeNext",
-      "moduleResolution": "NodeNext",
-      "sourceMap": true
-    }
+  	"$schema": "https://json.schemastore.org/tsconfig",
+  	"extends": "./base.json",
+  	"compilerOptions": {
+  		"target": "ES2023",
+  		"lib": ["ES2023"],
+  		"module": "NodeNext",
+  		"moduleResolution": "NodeNext",
+  		"sourceMap": true
+  	}
   }
   ```
   (base.json's `DOM` lib and `moduleResolution: node` are wrong for a Node ESM library that imports `../package.json` with import attributes.)
 - [ ] **Rewrite** `packages/node-chargepoint/tsconfig.json`:
   ```json
   {
-    "extends": "@repo/typescript-config/node-library.json",
-    "compilerOptions": { "outDir": "./dist", "noUncheckedIndexedAccess": false },
-    "include": ["src/**/*", "tests/**/*"],
-    "exclude": ["node_modules", "dist"]
+  	"extends": "@repo/typescript-config/node-library.json",
+  	"compilerOptions": { "outDir": "./dist", "noUncheckedIndexedAccess": false },
+  	"include": ["src/**/*", "tests/**/*"],
+  	"exclude": ["node_modules", "dist"]
   }
   ```
   `noUncheckedIndexedAccess: false` preserves current behavior; enabling it (base default) is a follow-up.
@@ -202,3 +202,15 @@ git remote remove ncp
 ## Rollback
 
 Until Task 9's old-repo archive, nothing is irreversible: revert the merge in zeal, point gaspar back at `"node-chargepoint": "0.12.1"`, and re-point npm trusted publishing to the old repo.
+
+---
+
+## As built (deviations from the plan above)
+
+- **Env var rename** applies to the e2e suite and its docs only. The `chargepoint` CLI still reads `CP_USERNAME` / `CP_PASSWORD` / `CP_TOKEN` — that is public interface for npm users, so renaming it would be a breaking change.
+- **`turbo/no-undeclared-env-vars` is off for this package** (`eslint.config.js`): the CLI's `CP_*` and the opt-in `E2E_*` flags are runtime user inputs, not turbo task inputs. Needed because lint runs with `--max-warnings 0`.
+- **`e2e.yml` needed no change** — its step already runs inside `apps/portfolio-e2e`.
+- **No `.github/release.yml`** — release notes come from the merged PR, not GitHub's generated notes.
+- **CHANGELOG bug not ported:** the old `publish.yml` did `tail -n +5 CHANGELOG.md`, which dropped the first four lines (the previous entry's header) on every release. The new workflow prepends without trimming; older entries in `CHANGELOG.md` remain headerless.
+- **Pre-commit hook** typechecks all affected packages; gaspar needs `pnpm --filter gaspar prisma:generate` and `... exec prisma generate --schema=prisma/schema.test.prisma` run once in a fresh checkout.
+- Imported `node-chargepoint@v*` tags exist locally only; they are pushed at cutover (Task 9), not with the branch.
