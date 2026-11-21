@@ -1,25 +1,25 @@
 {
-  "settings": {
-    "powerSource": { "amps": 50, "type": "hardwired" },
-    "serialNumber": "CHPXXX123456",
-    "macAddress": "AA:BB:CC:DD:EE:FF",
-    "stationNickname": "Home Charger",
-    "streetAddress": "123 Main St",
-    "hasUtilityInfo": false,
-    "utility": null,
-    "indicatorLightEcoMode": "OFF",
-    "flashlightReset": false,
-    "worksWithNest": false,
-    "isPairedWithNest": false,
-    "isInstalledByInstaller": false,
-    "led": {
-      "brightness": {
-        "level": "3",
-        "inProgress": false,
-        "supportedLevels": ["0", "1", "2", "3", "4", "5"],
-        "currentBrightnessSettings": 3,
-        "isEnabled": true
-      }
-    }
-  }
+	"settings": {
+		"powerSource": { "amps": 50, "type": "hardwired" },
+		"serialNumber": "CHPXXX123456",
+		"macAddress": "AA:BB:CC:DD:EE:FF",
+		"stationNickname": "Home Charger",
+		"streetAddress": "123 Main St",
+		"hasUtilityInfo": false,
+		"utility": null,
+		"indicatorLightEcoMode": "OFF",
+		"flashlightReset": false,
+		"worksWithNest": false,
+		"isPairedWithNest": false,
+		"isInstalledByInstaller": false,
+		"led": {
+			"brightness": {
+				"level": "3",
+				"inProgress": false,
+				"supportedLevels": ["0", "1", "2", "3", "4", "5"],
+				"currentBrightnessSettings": 3,
+				"isEnabled": true
+			}
+		}
+	}
 }

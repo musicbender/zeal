@@ -1,7 +1,6 @@
 import pkg from '../package.json' with { type: 'json' };
 
-export const DISCOVERY_API =
-  'https://discovery.chargepoint.com/discovery/v3/globalconfig';
+export const DISCOVERY_API = 'https://discovery.chargepoint.com/discovery/v3/globalconfig';
 
 export const VERSION: string = pkg.version;
 export const NODE_CHARGEPOINT_VERSION: string = pkg.version;

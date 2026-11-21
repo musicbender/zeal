@@ -4,10 +4,10 @@
 
 Only the latest stable release receives security fixes. This library is pre-v1 (`0.x.y`) — no long-term support branches exist.
 
-| Version | Supported |
-|---|---|
-| Latest `0.x.y` | Yes |
-| Older releases | No |
+| Version        | Supported |
+| -------------- | --------- |
+| Latest `0.x.y` | Yes       |
+| Older releases | No        |
 
 ## Reporting a Vulnerability
 

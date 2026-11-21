@@ -2,32 +2,32 @@
 
 ```typescript
 import {
-  ChargePoint,
-  ChargerBusyError,
-  VehicleNotReadyError,
-  LoginError,
-  InvalidSession,
-  DatadomeCaptcha,
-  CommunicationError,
-  APIError,
+	ChargePoint,
+	ChargerBusyError,
+	VehicleNotReadyError,
+	LoginError,
+	InvalidSession,
+	DatadomeCaptcha,
+	CommunicationError,
+	APIError,
 } from 'node-chargepoint';
 
 try {
-  await client.loginWithPassword('bad-password');
+	await client.loginWithPassword('bad-password');
 } catch (err) {
-  if (err instanceof LoginError) {
-    console.error('Wrong credentials');
-  } else if (err instanceof InvalidSession) {
-    console.error('Session expired — re-authenticate');
-  } else if (err instanceof DatadomeCaptcha) {
-    console.error('Bot protection triggered:', err.captchaUrl);
-  } else if (err instanceof ChargerBusyError) {
-    console.error('Charger is busy — try again shortly');
-  } else if (err instanceof VehicleNotReadyError) {
-    console.error('Vehicle not ready to charge:', err.body?.errorMessage);
-  } else if (err instanceof CommunicationError) {
-    console.error(`API error ${err.statusCode}:`, err.message, err.body);
-  }
+	if (err instanceof LoginError) {
+		console.error('Wrong credentials');
+	} else if (err instanceof InvalidSession) {
+		console.error('Session expired — re-authenticate');
+	} else if (err instanceof DatadomeCaptcha) {
+		console.error('Bot protection triggered:', err.captchaUrl);
+	} else if (err instanceof ChargerBusyError) {
+		console.error('Charger is busy — try again shortly');
+	} else if (err instanceof VehicleNotReadyError) {
+		console.error('Vehicle not ready to charge:', err.body?.errorMessage);
+	} else if (err instanceof CommunicationError) {
+		console.error(`API error ${err.statusCode}:`, err.message, err.body);
+	}
 }
 ```
 
@@ -56,12 +56,12 @@ Thrown by `startChargingSession` and `stopChargingSession` (and `ChargingSession
 import { ChargerBusyError } from 'node-chargepoint';
 
 try {
-  await client.stopChargingSession(deviceId);
+	await client.stopChargingSession(deviceId);
 } catch (err) {
-  if (err instanceof ChargerBusyError) {
-    // err.statusCode === 422
-    console.error('Charger busy, retrying…');
-  }
+	if (err instanceof ChargerBusyError) {
+		// err.statusCode === 422
+		console.error('Charger busy, retrying…');
+	}
 }
 ```
 
@@ -73,12 +73,12 @@ Thrown by `startChargingSession` and `stopChargingSession` (and `ChargingSession
 import { VehicleNotReadyError } from 'node-chargepoint';
 
 try {
-  await client.startChargingSession(deviceId);
+	await client.startChargingSession(deviceId);
 } catch (err) {
-  if (err instanceof VehicleNotReadyError) {
-    // err.statusCode === 422, err.body?.errorId === 25
-    console.error('Vehicle not ready:', err.message);
-  }
+	if (err instanceof VehicleNotReadyError) {
+		// err.statusCode === 422, err.body?.errorId === 25
+		console.error('Vehicle not ready:', err.message);
+	}
 }
 ```
 
@@ -112,11 +112,11 @@ applies the same backfill unconditionally, since it already queried that specifi
 import { UnresolvedSessionError } from 'node-chargepoint';
 
 try {
-  await client.stopChargingSession(deviceId);
+	await client.stopChargingSession(deviceId);
 } catch (err) {
-  if (err instanceof UnresolvedSessionError) {
-    console.error(`No active session found for device ${err.deviceId}`);
-  }
+	if (err instanceof UnresolvedSessionError) {
+		console.error(`No active session found for device ${err.deviceId}`);
+	}
 }
 ```
 

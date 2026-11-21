@@ -1,18 +1,18 @@
 {
-  "user_status": {
-    "charging": {
-      "sessionId": 1,
-      "startTimeUTC": 1609459200,
-      "currentTimeUTC": 1609462800,
-      "state": "in_use",
-      "stations": [
-        {
-          "deviceId": 1,
-          "name": "ChargePoint Station",
-          "lat": 37.7749,
-          "lon": -122.4194
-        }
-      ]
-    }
-  }
+	"user_status": {
+		"charging": {
+			"sessionId": 1,
+			"startTimeUTC": 1609459200,
+			"currentTimeUTC": 1609462800,
+			"state": "in_use",
+			"stations": [
+				{
+					"deviceId": 1,
+					"name": "ChargePoint Station",
+					"lat": 37.7749,
+					"lon": -122.4194
+				}
+			]
+		}
+	}
 }

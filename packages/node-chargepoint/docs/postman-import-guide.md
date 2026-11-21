@@ -128,24 +128,24 @@ Charging Sessions → Get Session Data
 
 ## Collection Variables Reference
 
-| Variable | Description | Auto-populated |
-|---|---|---|
-| `discoveryEndpoint` | ChargePoint discovery URL — do not change | — |
-| `region` | Region code (`NA` or `EU`) | — |
-| `username` | Your ChargePoint email | — |
-| `password` | Your ChargePoint password | — |
-| `coulombToken` | Session token | Login requests |
-| `ssoEndpoint` | SSO API base URL | Fetch Global Config |
-| `portalDomainEndpoint` | Portal base URL | Fetch Global Config |
-| `accountsEndpoint` | Accounts API base URL | Fetch Global Config |
-| `mapcacheEndpoint` | Mapcache API base URL | Fetch Global Config |
-| `hcpoHcmEndpoint` | Home charger API base URL | Fetch Global Config |
-| `internalApiGatewayEndpoint` | Internal gateway base URL | Fetch Global Config |
-| `userId` | Your numeric user ID | Get Account |
-| `chargerId` | Home charger device ID | Get Home Chargers |
-| `deviceId` | Public station device ID | Set manually |
-| `sessionId` | Active charging session ID | Get User Charging Status |
-| `ackId` | Start/stop acknowledgement ID | Start/Stop Session commands |
+| Variable                     | Description                               | Auto-populated              |
+| ---------------------------- | ----------------------------------------- | --------------------------- |
+| `discoveryEndpoint`          | ChargePoint discovery URL — do not change | —                           |
+| `region`                     | Region code (`NA` or `EU`)                | —                           |
+| `username`                   | Your ChargePoint email                    | —                           |
+| `password`                   | Your ChargePoint password                 | —                           |
+| `coulombToken`               | Session token                             | Login requests              |
+| `ssoEndpoint`                | SSO API base URL                          | Fetch Global Config         |
+| `portalDomainEndpoint`       | Portal base URL                           | Fetch Global Config         |
+| `accountsEndpoint`           | Accounts API base URL                     | Fetch Global Config         |
+| `mapcacheEndpoint`           | Mapcache API base URL                     | Fetch Global Config         |
+| `hcpoHcmEndpoint`            | Home charger API base URL                 | Fetch Global Config         |
+| `internalApiGatewayEndpoint` | Internal gateway base URL                 | Fetch Global Config         |
+| `userId`                     | Your numeric user ID                      | Get Account                 |
+| `chargerId`                  | Home charger device ID                    | Get Home Chargers           |
+| `deviceId`                   | Public station device ID                  | Set manually                |
+| `sessionId`                  | Active charging session ID                | Get User Charging Status    |
+| `ackId`                      | Start/stop acknowledgement ID             | Start/Stop Session commands |
 
 ---
 

@@ -19,7 +19,7 @@ result. What changed is that the driver plane used to be silently broken.
 
 ### Sessions are always tied back to a device
 
-Because the driver plane reports whatever session the *account* is running, it may name a
+Because the driver plane reports whatever session the _account_ is running, it may name a
 different charger than the one you asked about. Every resolution path therefore accepts a
 driver-plane session only when it either names your device, or names no device at all —
 in which case the device plane must independently report that charger as `CHARGING`
@@ -69,8 +69,8 @@ the resolved session omits them:
 ```typescript
 const session = await client.getHomeChargerSession(chargerId);
 if (session) {
-  console.log(session.sessionId);
-  await session.stop();
+	console.log(session.sessionId);
+	await session.stop();
 }
 ```
 
@@ -81,15 +81,15 @@ currently charging):
 ```typescript
 const status = await client.getUserChargingStatus();
 if (status) {
-  console.log(status.sessionId);   // 1234567890
-  console.log(status.state);       // "in_use"
-  console.log(status.startTime);   // Date — when the session began; the only source of
-                                    // this for an auto-started session, since you never
-                                    // called startChargingSession() yourself
-  console.log(status.asOf);        // Date — server time this snapshot reflects
+	console.log(status.sessionId); // 1234567890
+	console.log(status.state); // "in_use"
+	console.log(status.startTime); // Date — when the session began; the only source of
+	// this for an auto-started session, since you never
+	// called startChargingSession() yourself
+	console.log(status.asOf); // Date — server time this snapshot reflects
 
-  const session = await client.getChargingSession(status.sessionId);
-  await session.stop();
+	const session = await client.getChargingSession(status.sessionId);
+	await session.stop();
 }
 ```
 
@@ -119,7 +119,7 @@ outside this library:
   `ci_ui_session` variable on the three `mapcacheEndpoint` requests, empty by default, in
   case you want to test with it present.
 - **`getUserChargingStatus()`'s request body must include `mfhs`.** `{ user_status: { mfhs:
-  {} } }` — the API appears to require the key to be present at all; it's unclear whether
+{} } }` — the API appears to require the key to be present at all; it's unclear whether
   its value matters.
 
 The fastest way to try this by hand is the **Account > Get User Charging Status** request

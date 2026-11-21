@@ -35,6 +35,7 @@ All client methods are `async` and return Promises.
 Three authentication methods are supported. The client is created via the async factory `ChargePoint.create()`.
 
 **Password:**
+
 ```typescript
 import { ChargePoint } from 'node-chargepoint';
 
@@ -45,13 +46,15 @@ await client.logout();
 ```
 
 **Long-lived session token** (recommended for automation):
+
 ```typescript
 const client = await ChargePoint.create('user@example.com', {
-  coulombToken: '<coulomb_sess cookie value>',
+	coulombToken: '<coulomb_sess cookie value>',
 });
 ```
 
 **SSO JWT:**
+
 ```typescript
 const client = await ChargePoint.create('user@example.com');
 await client.loginWithSsoSession('<sso jwt>');
@@ -68,10 +71,10 @@ you can capture a token directly from your browser and pass it to the client.
 2. Open Developer Tools and navigate to **Application > Cookies > https://driver.chargepoint.com**.
 3. Copy the value of one of the following cookies:
 
-| Cookie | Use as |
-|---|---|
+| Cookie         | Use as                                            |
+| -------------- | ------------------------------------------------- |
 | `coulomb_sess` | `coulombToken:` option (recommended — long-lived) |
-| `auth-session` | `loginWithSsoSession()` (shorter-lived JWT) |
+| `auth-session` | `loginWithSsoSession()` (shorter-lived JWT)       |
 
 > **Note:** The `coulomb_sess` value contains `#` and `?` characters. When setting it as a
 > shell environment variable, always wrap the value in **double quotes** to prevent the shell
@@ -87,13 +90,13 @@ you can capture a token directly from your browser and pass it to the client.
 
 ```typescript
 const account = await client.getAccount();
-console.log(account.user.fullName);          // "Jane Smith"
-console.log(account.accountBalance.amount);  // 12.34
+console.log(account.user.fullName); // "Jane Smith"
+console.log(account.accountBalance.amount); // 12.34
 
 const vehicles = await client.getVehicles();
 for (const ev of vehicles) {
-  console.log(`${ev.year} ${ev.make} ${ev.model}`);     // "2023 Polestar 2"
-  console.log(`  AC: ${ev.chargingSpeed} kW  DC: ${ev.dcChargingSpeed} kW`);
+	console.log(`${ev.year} ${ev.make} ${ev.model}`); // "2023 Polestar 2"
+	console.log(`  AC: ${ev.chargingSpeed} kW  DC: ${ev.dcChargingSpeed} kW`);
 }
 ```
 
@@ -151,7 +154,7 @@ Levels map to: `0`=off, `1`=20%, `2`=40%, `3`=60%, `4`=80%, `5`=100%.
 Available levels are returned by `getHomeChargerConfig()`.
 
 ```typescript
-await client.setLedBrightness(chargerId, 3);  // 60%
+await client.setLedBrightness(chargerId, 3); // 60%
 ```
 
 #### Restart
@@ -164,19 +167,21 @@ await client.restartHomeCharger(chargerId);
 
 ```typescript
 const schedule = await client.getHomeChargerSchedule(chargerId);
-console.log(schedule.scheduleEnabled);                      // false
-console.log(schedule.defaultSchedule.weekdays.startTime);   // "23:00"
-console.log(schedule.defaultSchedule.weekdays.endTime);     // "07:00"
-console.log(schedule.defaultSchedule.weekends.startTime);   // "19:00"
-console.log(schedule.defaultSchedule.weekends.endTime);     // "15:00"
+console.log(schedule.scheduleEnabled); // false
+console.log(schedule.defaultSchedule.weekdays.startTime); // "23:00"
+console.log(schedule.defaultSchedule.weekdays.endTime); // "07:00"
+console.log(schedule.defaultSchedule.weekends.startTime); // "19:00"
+console.log(schedule.defaultSchedule.weekends.endTime); // "15:00"
 
 // Enable a schedule
 const updated = await client.setHomeChargerSchedule(
-  chargerId,
-  '23:00', '07:00',  // weekday start, weekday end
-  '19:00', '15:00',  // weekend start, weekend end
+	chargerId,
+	'23:00',
+	'07:00', // weekday start, weekday end
+	'19:00',
+	'15:00' // weekend start, weekend end
 );
-console.log(updated.scheduleEnabled);  // true
+console.log(updated.scheduleEnabled); // true
 
 // Disable the schedule
 await client.disableHomeChargerSchedule(chargerId);
@@ -206,7 +211,7 @@ const schedule = await client.getHomeChargerSchedule(chargerId);
 const window = getActiveScheduleWindow(schedule);
 
 if (window && isWithinChargeScheduleWindow(window)) {
-  // within the configured off-peak window — ok to charge
+	// within the configured off-peak window — ok to charge
 }
 ```
 
@@ -217,11 +222,11 @@ const schedule = await client.getHomeChargerSchedule(chargerId);
 const window = getActiveScheduleWindow(schedule);
 
 if (!window) {
-  // ChargePoint schedule is disabled — use your own time window
-  const solarWindow = { startTime: '7:00', endTime: '19:00' };
-  if (isWithinChargeScheduleWindow(solarWindow)) {
-    // sun is up — ok to charge from solar
-  }
+	// ChargePoint schedule is disabled — use your own time window
+	const solarWindow = { startTime: '7:00', endTime: '19:00' };
+	if (isWithinChargeScheduleWindow(solarWindow)) {
+		// sun is up — ok to charge from solar
+	}
 }
 ```
 
@@ -245,16 +250,17 @@ const [chargerId] = await client.getHomeChargers();
 
 const session = await client.getHomeChargerSession(chargerId);
 if (session) {
-  console.log(session.chargingState);  // "CHARGING"
-  console.log(session.energyKwh);     // 6.42
-  console.log(session.powerKw);       // 7.2
-  await session.stop();
+	console.log(session.chargingState); // "CHARGING"
+	console.log(session.energyKwh); // 6.42
+	console.log(session.powerKw); // 7.2
+	await session.stop();
 }
 ```
 
 Returns `null` when the charger is not actively charging or no session can be resolved.
 
 Resolution order:
+
 1. **Device plane** — reads the session id from `getHomeChargerStatus` when the device API
    surfaces it.
 2. **Driver plane fallback** — calls `getUserChargingStatus`, which resolves any session bound
@@ -262,7 +268,7 @@ Resolution order:
 
 A driver-plane session is only accepted when it actually belongs to `chargerId` (or names no
 device at all, in which case the device plane already confirmed this charger is charging). In a
-multi-charger household this prevents handing back a *different* charger's session under this
+multi-charger household this prevents handing back a _different_ charger's session under this
 charger's identity — which would stop the wrong car on `session.stop()`.
 
 `getHomeChargerStatus` also surfaces optional live telemetry fields when the device API includes
@@ -273,9 +279,9 @@ driver-bff `/sessions/{id}` response doesn't include `device_id`/`outlet_number`
 on some home-charger sessions) — otherwise `session.stop()` would send a stop command for device
 `0` instead of the real charger.
 
-> **Driver-plane vs device-plane identity:** `getUserChargingStatus()` is the *driver plane*
+> **Driver-plane vs device-plane identity:** `getUserChargingStatus()` is the _driver plane_
 > and is only populated for sessions bound to the current authenticated context (API-started
-> or driver-authenticated sessions). The *device plane* (`getHomeChargerStatus`) reflects the
+> or driver-authenticated sessions). The _device plane_ (`getHomeChargerStatus`) reflects the
 > physical charger state and, on some models, surfaces sessions regardless of how they were
 > started. Use `getHomeChargerSession` as the primary path for home charger session management.
 
@@ -290,15 +296,15 @@ on some home-charger sessions) — otherwise `session.stop()` would send a stop 
 ```typescript
 const status = await client.getUserChargingStatus();
 if (status) {
-  console.log(status.state);      // "in_use" — driver-plane vocabulary, not ChargingStatus
-  console.log(status.sessionId);  // 1234567890
-  console.log(status.startTime);  // Date — when the session began
-  console.log(status.asOf);       // Date — server time this snapshot reflects
+	console.log(status.state); // "in_use" — driver-plane vocabulary, not ChargingStatus
+	console.log(status.sessionId); // 1234567890
+	console.log(status.startTime); // Date — when the session began
+	console.log(status.asOf); // Date — server time this snapshot reflects
 
-  const session = await client.getChargingSession(status.sessionId);
-  console.log(session.chargingState);  // "CHARGING"
-  console.log(session.energyKwh);     // 6.42
-  console.log(session.milesAdded);    // 22.3
+	const session = await client.getChargingSession(status.sessionId);
+	console.log(session.chargingState); // "CHARGING"
+	console.log(session.energyKwh); // 6.42
+	console.log(session.milesAdded); // 22.3
 }
 ```
 
@@ -321,7 +327,7 @@ await session.stop();
 
 Under the hood it resolves the active session before issuing the stop, because ChargePoint rejects a stop that does not carry the real session id (HTTP 422 `errorId` 165). Resolution order:
 
-1. **Driver plane** — `getUserChargingStatus()` (public stations and driver-owned sessions). The resolved session is only used when it actually belongs to `deviceId`, so a session on a *different* charger (e.g. a second charger in the same account) is never stopped by mistake.
+1. **Driver plane** — `getUserChargingStatus()` (public stations and driver-owned sessions). The resolved session is only used when it actually belongs to `deviceId`, so a session on a _different_ charger (e.g. a second charger in the same account) is never stopped by mistake.
 2. **Device plane fallback** — the session id surfaced by `getHomeChargerStatus`, on chargers where the device API includes it (see [Session ID Resolution](docs/session-id-resolution.md)).
 
 On some home-charger sessions, the driver-bff `/sessions/{id}` response omits `device_id`/`outlet_number` entirely, which would otherwise leave both at their class default of `0` and send a stop command for the wrong device. When that happens, the resolved session's `deviceId` is only accepted once the device plane corroborates that `deviceId` itself is `CHARGING`, and `deviceId`/`outletNumber` are then backfilled from the device we already resolved for rather than trusted blindly from the API response.
@@ -336,22 +342,22 @@ Fetch detailed information about any station by device ID — ports, pricing, co
 
 ```typescript
 const info = await client.getStation(13055991);
-console.log(info.name.join(' / '));    // "DOMAIN TOWER 2 / LVL 2_STATION 2"
-console.log(info.address.address1);   // "10025 Alterra Pkwy"
-console.log(info.stationStatusV2);    // "available"
-console.log(info.portsInfo.totalCount);  // 2
+console.log(info.name.join(' / ')); // "DOMAIN TOWER 2 / LVL 2_STATION 2"
+console.log(info.address.address1); // "10025 Alterra Pkwy"
+console.log(info.stationStatusV2); // "available"
+console.log(info.portsInfo.totalCount); // 2
 
 for (const port of info.portsInfo.ports) {
-  console.log(`Port ${port.outletNumber}: ${port.statusV2} (Level ${port.level})`);
-  for (const c of port.connectorList) {
-    console.log(`  ${c.displayPlugType}: ${c.statusV2}`);
-  }
+	console.log(`Port ${port.outletNumber}: ${port.statusV2} (Level ${port.level})`);
+	for (const c of port.connectorList) {
+		console.log(`  ${c.displayPlugType}: ${c.statusV2}`);
+	}
 }
 
 if (info.stationPrice) {
-  for (const tou of info.stationPrice.touFees) {
-    console.log(`Rate: ${tou.price} ${info.stationPrice.currencyCode}`);
-  }
+	for (const tou of info.stationPrice.touFees) {
+		console.log(`Rate: ${tou.price} ${info.stationPrice.currencyCode}`);
+	}
 }
 ```
 
@@ -365,8 +371,10 @@ Fetch all charging stations visible within a geographic bounding box.
 import type { MapFilter, ZoomBounds } from 'node-chargepoint';
 
 const bounds: ZoomBounds = {
-  swLat: 30.37, swLon: -97.66,
-  neLat: 30.40, neLon: -97.64,
+	swLat: 30.37,
+	swLon: -97.66,
+	neLat: 30.4,
+	neLon: -97.64,
 };
 
 // No filter — return all stations
@@ -374,38 +382,38 @@ const stations = await client.getNearbyStations(bounds);
 
 // Optional: filter by connector type or status
 const filter: MapFilter = {
-  connectorL2: true,
-  connectorCombo: true,
-  statusAvailable: true,
+	connectorL2: true,
+	connectorCombo: true,
+	statusAvailable: true,
 };
 const filtered = await client.getNearbyStations(bounds, filter);
 
 for (const s of filtered) {
-  console.log(`${s.name1} — ${s.stationStatusV2}`);
-  if (s.isHome && s.chargingInfo) {
-    console.log(`  Charging: ${s.chargingStatus}`);
-  }
+	console.log(`${s.name1} — ${s.stationStatusV2}`);
+	if (s.isHome && s.chargingInfo) {
+		console.log(`  Charging: ${s.chargingStatus}`);
+	}
 }
 ```
 
 **`MapFilter` fields** (all `boolean`, all optional):
 
-| Field | Description |
-|---|---|
-| `connectorL2` | Level 2 AC |
-| `connectorCombo` | CCS combo (DC) |
-| `connectorChademo` | CHAdeMO (DC) |
-| `connectorTesla` | Tesla proprietary |
-| `connectorL1` | Level 1 AC |
-| `connectorL2Tesla` | Tesla Level 2 |
-| `connectorL2Nema1450` | NEMA 14-50 |
-| `dcFastCharging` | Any DC fast charger |
-| `statusAvailable` | Only available stations |
-| `priceFree` | Only free stations |
-| `vanAccessible` | Van-accessible spaces |
-| `disabledParking` | Disability-accessible parking |
-| `networkChargepoint` | ChargePoint network |
-| `networkEvgo` | EVgo network |
+| Field                 | Description                   |
+| --------------------- | ----------------------------- |
+| `connectorL2`         | Level 2 AC                    |
+| `connectorCombo`      | CCS combo (DC)                |
+| `connectorChademo`    | CHAdeMO (DC)                  |
+| `connectorTesla`      | Tesla proprietary             |
+| `connectorL1`         | Level 1 AC                    |
+| `connectorL2Tesla`    | Tesla Level 2                 |
+| `connectorL2Nema1450` | NEMA 14-50                    |
+| `dcFastCharging`      | Any DC fast charger           |
+| `statusAvailable`     | Only available stations       |
+| `priceFree`           | Only free stations            |
+| `vanAccessible`       | Van-accessible spaces         |
+| `disabledParking`     | Disability-accessible parking |
+| `networkChargepoint`  | ChargePoint network           |
+| `networkEvgo`         | EVgo network                  |
 
 ---
 
