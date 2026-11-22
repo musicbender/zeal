@@ -439,4 +439,6 @@ See [docs/session-id-resolution.md](docs/session-id-resolution.md) for how drive
 
 See [docs/development.md](docs/development.md) for setup, tests, E2E tests, and build instructions.
 
+This package lives in the [zeal monorepo](https://github.com/musicbender/zeal/tree/main/packages/node-chargepoint). Please open issues and pull requests there.
+
 ---
