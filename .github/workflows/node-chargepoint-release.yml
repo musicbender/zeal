@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'packages/node-chargepoint/**'
+      - '.github/workflows/node-chargepoint-release.yml'
 
 concurrency:
   group: node-chargepoint-release
@@ -22,6 +23,9 @@ jobs:
     if: "!startsWith(github.event.head_commit.message, 'chore(node-chargepoint): release')"
     env:
       PKG_DIR: packages/node-chargepoint
+      # The repo's husky pre-commit hook (turbo typecheck --affected) needs generated Prisma
+      # clients that this job doesn't have. The "Verify package" step already checks the package.
+      HUSKY: '0'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -113,7 +117,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add "$PKG_DIR/package.json" "$PKG_DIR/CHANGELOG.md"
           # [skip ci] also keeps deploy-pi from redeploying gaspar for a version-only change
-          git commit -m "chore(node-chargepoint): release v${NEW_VERSION} [skip ci]"
+          git commit --no-verify -m "chore(node-chargepoint): release v${NEW_VERSION} [skip ci]"
           git tag "node-chargepoint@v${NEW_VERSION}"
           git push origin HEAD:main "node-chargepoint@v${NEW_VERSION}"
 
