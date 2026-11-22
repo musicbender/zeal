@@ -1,3 +1,9 @@
+## [v0.12.2](https://github.com/musicbender/zeal/releases/tag/node-chargepoint@v0.12.2) — 2026-11-22
+
+- fix(ci): skip husky hooks in the node-chargepoint release workflow ([#107](https://github.com/musicbender/zeal/pull/107)) by @musicbender
+
+---
+
 ## [v0.12.1](https://github.com/musicbender/node-chargepoint/releases/tag/v0.12.1) — 2026-08-17
 
 <!-- Release notes generated using configuration in .github/release.yml at v0.12.1 -->
