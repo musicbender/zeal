@@ -5,7 +5,7 @@ description: ChargePoint API reference — node-chargepoint client library, auth
 
 # ChargePoint
 
-The ChargePoint API is accessed via the `node-chargepoint` npm package. The source lives at `../node-chargepoint` (sibling repo, owned by Pat) — read it for types and method signatures when the npm package types are insufficient.
+The ChargePoint API is accessed via the `node-chargepoint` npm package. The source lives at `packages/node-chargepoint` (workspace package in this monorepo, owned by Pat) — read it for types and method signatures when the npm package types are insufficient.
 
 ## Auth
 
@@ -70,4 +70,4 @@ await client.getUserChargingStatus(): Promise<UserChargingStatus | null>
 - `InvalidSession` means the coulombToken expired — catch and re-authenticate.
 - `stopChargingSession()` can still throw `UnresolvedSessionError` in principle (no session visible via either the driver or device plane), but as of node-chargepoint 0.12.0 this is no longer expected for auto-started sessions on CPH50-family chargers — that was a library bug (`getUserChargingStatus()` parsing the wrong response keys, plus a `coulomb_sess` token-corruption bug), not a real API gap, and both are fixed. Confirmed live against a genuinely auto-started (zero app/RFID interaction) session. If `UnresolvedSessionError` does fire, the caller falls back to clamping amperage to the minimum.
 - `getUserChargingStatus()` (≥0.12.0) also returns `startTime` (when the session began, per ChargePoint) and `asOf` (server time of this snapshot) — `startTime` is more accurate than a local poll timestamp for recording when a session actually started; see `SunkeepService.finalizeAdoption()`.
-- Source types: `../node-chargepoint/src/types.ts` has all response shapes.
+- Source types: `packages/node-chargepoint/src/types.ts` has all response shapes.

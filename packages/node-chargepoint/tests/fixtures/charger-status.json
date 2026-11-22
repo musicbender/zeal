@@ -1,0 +1,17 @@
+{
+	"brand": "ChargePoint",
+	"model": "CPH25",
+	"macAddress": "AA:BB:CC:DD:EE:FF",
+	"chargingStatus": "NOT_CHARGING",
+	"isPluggedIn": false,
+	"isConnected": true,
+	"isReminderEnabled": false,
+	"plugInReminderTime": "22:00",
+	"hasUtilityInfo": false,
+	"isDuringScheduledTime": false,
+	"chargeAmperageSettings": {
+		"chargeLimit": 32,
+		"inProgress": false,
+		"possibleChargeLimit": [16, 24, 32, 40, 48]
+	}
+}

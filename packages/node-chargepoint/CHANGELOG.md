@@ -1,0 +1,176 @@
+## [v0.12.1](https://github.com/musicbender/node-chargepoint/releases/tag/v0.12.1) — 2026-08-17
+
+<!-- Release notes generated using configuration in .github/release.yml at v0.12.1 -->
+
+## What's Changed
+### Bug Fixes & Patches
+* fix: restore cp-session-type, cp-session-token, cp-region headers for hcpoHcmEndpoint by @musicbender in https://github.com/musicbender/node-chargepoint/pull/42
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.12.0...v0.12.1
+
+---
+
+## What's Changed
+### New Features
+* fix: getUserChargingStatus() silently discarded valid sessions by @musicbender in https://github.com/musicbender/node-chargepoint/pull/41
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.11.2...v0.12.0
+
+---
+
+## What's Changed
+### Bug Fixes & Patches
+* fix(session): backfill deviceId/outletNumber for home-charger sessions missing device_id by @musicbender in https://github.com/musicbender/node-chargepoint/pull/38
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.11.1...v0.11.2
+
+---
+
+## What's Changed
+### Bug Fixes & Patches
+* Bump the dev-dependencies group with 5 updates by @dependabot[bot] in https://github.com/musicbender/node-chargepoint/pull/34
+
+## New Contributors
+* @dependabot[bot] made their first contribution in https://github.com/musicbender/node-chargepoint/pull/34
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.11.0...v0.11.1
+
+---
+
+## What's Changed
+### New Features
+* Add VehicleNotReadyError for charge limit and vehicle state issues by @musicbender in https://github.com/musicbender/node-chargepoint/pull/36
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.10.0...v0.11.0
+
+---
+
+## What's Changed
+### New Features
+* Implement device-level session resolution for stopChargingSession by @musicbender in https://github.com/musicbender/node-chargepoint/pull/35
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.9.0...v0.10.0
+
+---
+
+## What's Changed
+### New Features
+* feat: add getHomeChargerSession() for device-plane session resolution by @musicbender in https://github.com/musicbender/node-chargepoint/pull/32
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.8.1...v0.9.0
+
+---
+
+## What's Changed
+### Bug Fixes & Patches
+* fix(session): add NoActiveSessionError for errorId 165 and use start-ack session ID by @musicbender in https://github.com/musicbender/node-chargepoint/pull/30
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.8.0...v0.8.1
+
+---
+
+## What's Changed
+### New Features
+* Add stopChargingSession(deviceId) and ChargerBusyError by @musicbender in https://github.com/musicbender/node-chargepoint/pull/29
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.7.0...v0.8.0
+
+---
+
+## What's Changed
+### New Features
+* feat(utils): add isWithinChargeScheduleWindow utility by @musicbender in https://github.com/musicbender/node-chargepoint/pull/28
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.6.0...v0.7.0
+
+---
+
+## What's Changed
+### New Features
+* Add onTokenRotated callback, ChargingStatus type, and explicit TechnicalInfo field mapping by @musicbender in https://github.com/musicbender/node-chargepoint/pull/27
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.5.0...v0.6.0
+
+---
+
+## What's Changed
+### New Features
+* fix(session): distinguish start-command success from poll timeout with StartVerificationTimeoutError by @musicbender in https://github.com/musicbender/node-chargepoint/pull/26
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.4.2...v0.5.0
+
+---
+
+## What's Changed
+### Bug Fixes & Patches
+* Feat/power source config by @musicbender in https://github.com/musicbender/node-chargepoint/pull/25
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.4.1...v0.4.2
+
+---
+
+## What's Changed
+### Bug Fixes & Patches
+* fix captcha handling by @musicbender in https://github.com/musicbender/node-chargepoint/pull/23
+### Other Changes
+* docs: add pre-release status badges and warning to README by @musicbender in https://github.com/musicbender/node-chargepoint/pull/22
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.4.0...v0.4.1
+
+---
+
+## What's Changed
+### New Features
+* Harden public API, add SECURITY.md, CHANGELOG automation, and CI audit by @musicbender in https://github.com/musicbender/node-chargepoint/pull/21
+
+
+**Full Changelog**: https://github.com/musicbender/node-chargepoint/compare/v0.3.5...v0.4.0
+
+---
+
+---
+
+## [v0.3.5](https://github.com/musicbender/node-chargepoint/releases/tag/v0.3.5) — 2026-05-10
+
+### Bug Fixes & Patches
+- Add Postman collection, import guide, and dynamic VERSION ([#20](https://github.com/musicbender/node-chargepoint/pull/20))
+
+---
+
+## [v0.3.4](https://github.com/musicbender/node-chargepoint/releases/tag/v0.3.4) — 2026-05-10
+
+### Bug Fixes & Patches
+- Fix mutating home charger API requests and e2e tests ([#19](https://github.com/musicbender/node-chargepoint/pull/19))
+
+---
+
+## [v0.3.3](https://github.com/musicbender/node-chargepoint/releases/tag/v0.3.3) — 2026-05-10
+
+### New Features
+- Add publish workflow with label-based versioning and GitHub Releases ([#12](https://github.com/musicbender/node-chargepoint/pull/12))
+- Fix publish workflow for branch protection compatibility ([#13](https://github.com/musicbender/node-chargepoint/pull/13))
+- Switch from pnpm publish to npm publish for provenance support ([#15](https://github.com/musicbender/node-chargepoint/pull/15))
+
+### Bug Fixes & Patches
+- Fix bin path missing `./` prefix ([#16](https://github.com/musicbender/node-chargepoint/pull/16))
+- Switch to npm trusted publishing via OIDC ([#17](https://github.com/musicbender/node-chargepoint/pull/17))
+- Fix lightweight tag not being pushed to remote ([#18](https://github.com/musicbender/node-chargepoint/pull/18))
+
+### Other Changes
+- Add README.md and AGENTS.md ([#1](https://github.com/musicbender/node-chargepoint/pull/1))
+- Add E2E test suite for real-charger validation ([#2](https://github.com/musicbender/node-chargepoint/pull/2))
+- Add PR validation workflow and fix CI ([#11](https://github.com/musicbender/node-chargepoint/pull/11))
+- Set npm as the package ecosystem for Dependabot ([#5](https://github.com/musicbender/node-chargepoint/pull/5))

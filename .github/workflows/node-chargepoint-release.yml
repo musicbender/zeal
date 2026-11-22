@@ -1,0 +1,138 @@
+name: node-chargepoint Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/node-chargepoint/**'
+
+concurrency:
+  group: node-chargepoint-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: read
+  id-token: write # npm provenance attestation
+
+jobs:
+  release:
+    name: Version, tag, and publish node-chargepoint
+    runs-on: ubuntu-latest
+    if: "!startsWith(github.event.head_commit.message, 'chore(node-chargepoint): release')"
+    env:
+      PKG_DIR: packages/node-chargepoint
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: 'https://registry.npmjs.org'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Read release label from merged PR
+        id: bump
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const { data: pulls } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+            });
+            const pr = pulls.find((p) => p.merged_at);
+            if (!pr) {
+              console.log('No merged PR found — skipping release (direct push to main)');
+              core.setOutput('type', 'none');
+              return;
+            }
+            const labels = pr.labels.map((l) => l.name);
+            let bump = 'none';
+            if (labels.includes('chargepoint:skip-release')) bump = 'none';
+            else if (labels.includes('chargepoint:major')) bump = 'major';
+            else if (labels.includes('chargepoint:minor')) bump = 'minor';
+            else if (labels.includes('chargepoint:patch')) bump = 'patch';
+            core.setOutput('type', bump);
+            console.log(`PR #${pr.number} "${pr.title}": bump = ${bump}`);
+            // Notes come from this PR only, not every zeal PR since the last tag.
+            // Written to a file so untrusted PR text never reaches a shell.
+            const notes = `- ${pr.title} ([#${pr.number}](${pr.html_url})) by @${pr.user.login}\n`;
+            fs.writeFileSync(`${process.env.RUNNER_TEMP}/notes.md`, notes);
+
+      - name: Verify package
+        if: steps.bump.outputs.type != 'none'
+        run: pnpm turbo run lint typecheck test build --filter=node-chargepoint
+
+      - name: Bump version
+        if: steps.bump.outputs.type != 'none'
+        id: version
+        working-directory: ${{ env.PKG_DIR }}
+        env:
+          BUMP: ${{ steps.bump.outputs.type }}
+        run: |
+          MAJOR=$(jq -r '.version | split(".")[0]' package.json)
+          # Pre-v1: major bumps become minor (stay on 0.x.y until 1.0.0 is intentional)
+          if [ "$MAJOR" = "0" ] && [ "$BUMP" = "major" ]; then
+            echo "Pre-v1: treating major as minor"
+            BUMP="minor"
+          fi
+          npm version "$BUMP" --no-git-tag-version
+          echo "new_version=$(jq -r '.version' package.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Update CHANGELOG
+        if: steps.bump.outputs.type != 'none'
+        working-directory: ${{ env.PKG_DIR }}
+        env:
+          NEW_VERSION: ${{ steps.version.outputs.new_version }}
+        run: |
+          TAG="node-chargepoint@v${NEW_VERSION}"
+          {
+            printf '## [v%s](https://github.com/%s/releases/tag/%s) — %s\n\n' \
+              "$NEW_VERSION" "$GITHUB_REPOSITORY" "$TAG" "$(date +%Y-%m-%d)"
+            cat "$RUNNER_TEMP/notes.md"
+            printf '\n---\n\n'
+            cat CHANGELOG.md
+          } > CHANGELOG.tmp
+          mv CHANGELOG.tmp CHANGELOG.md
+
+      - name: Commit and tag
+        if: steps.bump.outputs.type != 'none'
+        env:
+          NEW_VERSION: ${{ steps.version.outputs.new_version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$PKG_DIR/package.json" "$PKG_DIR/CHANGELOG.md"
+          # [skip ci] also keeps deploy-pi from redeploying gaspar for a version-only change
+          git commit -m "chore(node-chargepoint): release v${NEW_VERSION} [skip ci]"
+          git tag "node-chargepoint@v${NEW_VERSION}"
+          git push origin HEAD:main "node-chargepoint@v${NEW_VERSION}"
+
+      # pack (not a bare `npm publish`) so any workspace: ranges are rewritten
+      - name: Publish to npm
+        if: steps.bump.outputs.type != 'none'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.CHARGEPOINT_NPM_TOKEN }}
+          NEW_VERSION: ${{ steps.version.outputs.new_version }}
+        run: |
+          pnpm --filter node-chargepoint pack --pack-destination "$RUNNER_TEMP"
+          npm publish "$RUNNER_TEMP/node-chargepoint-${NEW_VERSION}.tgz" --provenance --access public
+
+      - name: Create GitHub Release
+        if: steps.bump.outputs.type != 'none'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_VERSION: ${{ steps.version.outputs.new_version }}
+        run: |
+          gh release create "node-chargepoint@v${NEW_VERSION}" \
+            --title "node-chargepoint v${NEW_VERSION}" \
+            --notes-file "$RUNNER_TEMP/notes.md"

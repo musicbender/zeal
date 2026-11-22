@@ -71,3 +71,7 @@ pnpm-debug.log*
 .DS_Store
 *.pem
 !apps/portfolio/public/.well-known/appspecific/com.tesla.3p.public-key.pem
+
+# node-chargepoint
+.env.e2e
+*.tsbuildinfo

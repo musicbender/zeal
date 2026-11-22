@@ -33,6 +33,7 @@
 			"@prisma/client",
 			"@prisma/engines",
 			"esbuild",
+			"msw",
 			"prisma"
 		]
 	},
