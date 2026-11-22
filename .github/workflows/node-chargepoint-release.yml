@@ -14,7 +14,7 @@ concurrency:
 permissions:
   contents: write
   pull-requests: read
-  id-token: write # npm provenance attestation
+  id-token: write # npm trusted publishing (OIDC) + provenance
 
 jobs:
   release:
@@ -38,7 +38,6 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-          registry-url: 'https://registry.npmjs.org'
 
       - run: pnpm install --frozen-lockfile
 
@@ -121,11 +120,12 @@ jobs:
           git tag "node-chargepoint@v${NEW_VERSION}"
           git push origin HEAD:main "node-chargepoint@v${NEW_VERSION}"
 
+      # Authenticates via npm trusted publishing (OIDC): no token. Configure the trusted publisher
+      # on npmjs.com for this repo + workflow file. Needs npm >= 11.5.1 (bundled with Node 24).
       # pack (not a bare `npm publish`) so any workspace: ranges are rewritten
       - name: Publish to npm
         if: steps.bump.outputs.type != 'none'
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.CHARGEPOINT_NPM_TOKEN }}
           NEW_VERSION: ${{ steps.version.outputs.new_version }}
         run: |
           pnpm --filter node-chargepoint pack --pack-destination "$RUNNER_TEMP"
