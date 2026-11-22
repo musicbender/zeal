@@ -13,7 +13,7 @@ concurrency:
 permissions:
   contents: write
   pull-requests: read
-  id-token: write # npm trusted publishing + provenance
+  id-token: write # npm provenance attestation
 
 jobs:
   release:
@@ -32,7 +32,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24 # ships npm 11, required for trusted publishing
+          node-version: 24
           cache: pnpm
           registry-url: 'https://registry.npmjs.org'
 
@@ -121,6 +121,7 @@ jobs:
       - name: Publish to npm
         if: steps.bump.outputs.type != 'none'
         env:
+          NODE_AUTH_TOKEN: ${{ secrets.CHARGEPOINT_NPM_TOKEN }}
           NEW_VERSION: ${{ steps.version.outputs.new_version }}
         run: |
           pnpm --filter node-chargepoint pack --pack-destination "$RUNNER_TEMP"

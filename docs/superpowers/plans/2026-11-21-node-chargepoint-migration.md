@@ -214,3 +214,4 @@ Until Task 9's old-repo archive, nothing is irreversible: revert the merge in ze
 - **CHANGELOG bug not ported:** the old `publish.yml` did `tail -n +5 CHANGELOG.md`, which dropped the first four lines (the previous entry's header) on every release. The new workflow prepends without trimming; older entries in `CHANGELOG.md` remain headerless.
 - **Pre-commit hook** typechecks all affected packages; gaspar needs `pnpm --filter gaspar prisma:generate` and `... exec prisma generate --schema=prisma/schema.test.prisma` run once in a fresh checkout.
 - Imported `node-chargepoint@v*` tags exist locally only; they are pushed at cutover (Task 9), not with the branch.
+- **npm auth:** publishing uses the `CHARGEPOINT_NPM_TOKEN` repo secret (`NODE_AUTH_TOKEN`) instead of trusted publishing, so switching the npm trusted publisher is **not** needed. Provenance still works via `id-token: write`.
