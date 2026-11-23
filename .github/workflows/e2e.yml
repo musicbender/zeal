@@ -1,24 +1,30 @@
 name: E2E Tests
 
-# Triggered by Vercel's GitHub integration when a deployment status changes,
-# or on pull_request to provide a required status check even when no preview
-# is created (i.e. portfolio app is not affected by the PR).
+# Single gate job, meant to be a required status check on main.
+#
+# - If the portfolio app (or anything it depends on) is NOT affected by the PR,
+#   Vercel skips the build (see apps/portfolio/vercel.json `ignoreCommand`), so
+#   there is no preview to wait for and the job passes immediately.
+# - If the portfolio IS affected, the job waits for the Vercel Preview
+#   deployment for the PR head commit to succeed, then runs the Playwright API
+#   tests against it. A failed deployment or failed tests fail the check.
 on:
-  deployment_status:
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
+  deployments: read
+
+concurrency:
+  group: e2e-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   e2e:
     name: Playwright API tests
     runs-on: ubuntu-latest
-
-    # For pull_request: always run so the required status check is satisfied.
-    # For deployment_status: only run on successful Preview deployments.
-    if: |
-      github.event_name == 'pull_request' ||
-      (github.event.deployment_status.state == 'success' &&
-       startsWith(github.event.deployment_status.environment, 'Preview'))
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -26,39 +32,83 @@ jobs:
         with:
           fetch-depth: 0
 
-      # On pull_request, check whether the portfolio app was affected. If not,
-      # the job exits here with success — no preview is needed and no tests run.
-      - name: Check if portfolio app changed
-        if: github.event_name == 'pull_request'
+      # Same check Vercel's ignoreCommand uses, so "needs a preview" here
+      # matches "Vercel will build a preview". Exit 0 = skip, exit 1 = build.
+      - name: Check if portfolio is affected
+        id: affected
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          git fetch origin ${{ github.base_ref }}
-          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q '^apps/portfolio'; then
-            echo "Portfolio changed — E2E tests will run against the Vercel preview deployment."
+          git fetch origin "$BASE_REF"
+          if npx --yes turbo-ignore portfolio --fallback="origin/$BASE_REF"; then
+            echo "affected=false" >> "$GITHUB_OUTPUT"
+            echo "Portfolio not affected - no preview needed, skipping E2E tests."
           else
-            echo "Portfolio not affected — skipping E2E tests."
+            echo "affected=true" >> "$GITHUB_OUTPUT"
+            echo "Portfolio affected - waiting for Vercel preview, then running E2E tests."
           fi
 
+      - name: Wait for Vercel preview deployment
+        id: preview
+        if: steps.affected.outputs.affected == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          echo "Waiting for a Preview deployment of $SHA..."
+          for i in $(seq 1 60); do
+            # Newest Preview deployment for this commit (Vercel names the
+            # environment "Preview", or "Preview – <project>").
+            DEPLOYMENT_ID=$(gh api "repos/$REPO/deployments?sha=$SHA&per_page=50" \
+              --jq '[.[] | select(.environment | startswith("Preview"))] | sort_by(.created_at) | last | .id // empty')
+
+            if [ -n "$DEPLOYMENT_ID" ]; then
+              STATUS=$(gh api "repos/$REPO/deployments/$DEPLOYMENT_ID/statuses?per_page=1" \
+                --jq '.[0] | "\(.state) \(.target_url // "")"')
+              STATE="${STATUS%% *}"
+              URL="${STATUS#* }"
+              echo "Attempt $i: deployment $DEPLOYMENT_ID is '$STATE'"
+
+              case "$STATE" in
+                success)
+                  echo "url=$URL" >> "$GITHUB_OUTPUT"
+                  exit 0
+                  ;;
+                failure|error|inactive)
+                  echo "::error::Vercel preview deployment ended in state '$STATE'"
+                  exit 1
+                  ;;
+              esac
+            else
+              echo "Attempt $i: no Preview deployment for $SHA yet"
+            fi
+            sleep 20
+          done
+          echo "::error::Timed out waiting for the Vercel preview deployment"
+          exit 1
+
       - name: Setup pnpm
-        if: github.event_name == 'deployment_status'
+        if: steps.affected.outputs.affected == 'true'
         uses: pnpm/action-setup@v4
 
       - name: Setup Node
-        if: github.event_name == 'deployment_status'
+        if: steps.affected.outputs.affected == 'true'
         uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: pnpm
 
       - name: Install dependencies
-        if: github.event_name == 'deployment_status'
+        if: steps.affected.outputs.affected == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers
-        if: github.event_name == 'deployment_status'
+        if: steps.affected.outputs.affected == 'true'
         run: pnpm --filter portfolio-e2e install:browsers
 
       - name: Wait for deployment to be ready
-        if: github.event_name == 'deployment_status'
+        if: steps.affected.outputs.affected == 'true'
         run: |
           URL="${PORTFOLIO_BASE_URL}"
           echo "Waiting for $URL to be ready..."
@@ -74,14 +124,14 @@ jobs:
           echo "Deployment not ready after 5 minutes"
           exit 1
         env:
-          PORTFOLIO_BASE_URL: ${{ github.event.deployment_status.target_url }}
+          PORTFOLIO_BASE_URL: ${{ steps.preview.outputs.url }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
 
       - name: Run E2E tests against preview URL
-        if: github.event_name == 'deployment_status'
+        if: steps.affected.outputs.affected == 'true'
         working-directory: apps/portfolio-e2e
         run: pnpm test:e2e --project=api
         env:
-          PORTFOLIO_BASE_URL: ${{ github.event.deployment_status.target_url }}
+          PORTFOLIO_BASE_URL: ${{ steps.preview.outputs.url }}
           PORTFOLIO_API_KEY: ${{ secrets.PORTFOLIO_API_KEY }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
