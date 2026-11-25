@@ -1,3 +1,9 @@
+## [v0.12.3](https://github.com/musicbender/zeal/releases/tag/node-chargepoint@v0.12.3) — 2026-11-25
+
+- docs(node-chargepoint): update AGENTS.md for the monorepo; untrack stray worktree gitlink ([#110](https://github.com/musicbender/zeal/pull/110)) by @musicbender
+
+---
+
 ## [v0.12.2](https://github.com/musicbender/zeal/releases/tag/node-chargepoint@v0.12.2) — 2026-11-22
 
 - fix(ci): skip husky hooks in the node-chargepoint release workflow ([#107](https://github.com/musicbender/zeal/pull/107)) by @musicbender
