@@ -10,14 +10,20 @@ wrapper around the ChargePoint EV charging network's private API, publishable on
 
 ## Essential commands
 
+This package lives in the zeal monorepo at `packages/node-chargepoint`. Run `pnpm install` once at
+the repo root; run the scripts below from this directory, or from the root with
+`pnpm --filter node-chargepoint <script>`.
+
 ```bash
-pnpm install         # install dependencies
+pnpm lint            # eslint src tests --max-warnings 0 (warnings fail the build)
 pnpm typecheck       # tsc --noEmit (zero errors required before committing)
-pnpm test            # vitest run (all 37 tests must pass)
+pnpm test            # vitest run (all tests must pass)
 pnpm build           # tsup — produces dist/ (CJS + ESM + .d.ts)
 ```
 
-Run **typecheck → test → build** in that order before every commit. All three must succeed.
+Run **lint → typecheck → test → build** in that order before every commit. All four must succeed.
+
+PRs that touch this package need one `chargepoint:*` release label; see `CLAUDE.md` in this folder.
 
 ## Repository layout
 
