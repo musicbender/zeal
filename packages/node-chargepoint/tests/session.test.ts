@@ -269,6 +269,29 @@ describe('ChargingSession.stopByDevice()', () => {
 		expect(stopBody?.sessionId).not.toBe(0);
 	});
 
+	it('backfills outletNumber when the driver-bff response names the device but omits outlet_number', async () => {
+		let stopBody: Record<string, unknown> | undefined;
+		server.use(
+			http.post(`https://cpapi.chargepoint.com/driver-bff/v1/sessions/${TEST_SESSION_ID}`, () =>
+				HttpResponse.json({ charging_status: { session_id: TEST_SESSION_ID, device_id: 1 } })
+			),
+			http.post(
+				'https://account.chargepoint.com/v1/driver/station/stopSession',
+				async ({ request }) => {
+					stopBody = (await request.json()) as Record<string, unknown>;
+					return HttpResponse.json({ ackId: 'ack-12345' });
+				}
+			)
+		);
+
+		const client = await authenticatedClient();
+		await ChargingSession.stopByDevice(1, client);
+
+		expect(stopBody?.sessionId).toBe(TEST_SESSION_ID);
+		expect(stopBody?.deviceId).toBe(1);
+		expect(stopBody?.portNumber).toBe(1);
+	});
+
 	it('ignores a driver-plane session on a different device and uses the device-plane session', async () => {
 		let stopBody: Record<string, unknown> | undefined;
 		server.use(

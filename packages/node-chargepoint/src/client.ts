@@ -91,9 +91,18 @@ export class ChargePoint {
 
 		if (this._coulombToken) {
 			headers.set('cookie', `coulomb_sess=${this._coulombToken}`);
-			headers.set('cp-session-type', 'CP_SESSION_TOKEN');
-			headers.set('cp-session-token', this._coulombToken);
-			headers.set('cp-region', this._region);
+			// Only hcpoprodhcm (the home-charger backend) needs the cp-* headers — 0.12.1
+			// restored them for that host after confirming it 500s without them. Every other
+			// host authenticates with the cookie alone, exactly as the web app does. Sending
+			// them everywhere also hit the driver plane (mc.chargepoint.com, behind
+			// getUserChargingStatus), which 0.12.0 had only confirmed working *without* them —
+			// so a driver-plane null there leaves stopChargingSession() with no session id to
+			// stop (UnresolvedSessionError) on chargers that don't echo one device-side.
+			if (this._isHcpoHcmUrl(url)) {
+				headers.set('cp-session-type', 'CP_SESSION_TOKEN');
+				headers.set('cp-session-token', this._coulombToken);
+				headers.set('cp-region', this._region);
+			}
 		}
 
 		this._debug?.(`${method} ${url}`);
@@ -151,6 +160,16 @@ export class ChargePoint {
 		}
 
 		return response;
+	}
+
+	private _isHcpoHcmUrl(url: string): boolean {
+		const base = this.globalConfig?.endpoints?.hcpoHcmEndpoint;
+		if (!base) return false;
+		try {
+			return new URL(url).host === new URL(base).host;
+		} catch {
+			return false;
+		}
 	}
 
 	private async _errorBody(response: Response): Promise<string> {

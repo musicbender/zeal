@@ -555,6 +555,25 @@ describe('_request() header handling', () => {
 
 		expect(capturedHeaders?.get('cp-region')).toBe('EU');
 	});
+
+	it('does not send cp-* headers to non-hcpoHcm hosts (driver plane, session commands)', async () => {
+		const captured: Headers[] = [];
+		server.use(
+			http.post('https://mc.chargepoint.com/map-prod/v2', ({ request }) => {
+				captured.push(request.headers);
+				return HttpResponse.json({ user_status: null });
+			})
+		);
+
+		const client = await authenticatedClient();
+		await client.getUserChargingStatus();
+
+		expect(captured).toHaveLength(1);
+		expect(captured[0]?.get('cookie')).toContain(`coulomb_sess=${TEST_TOKEN}`);
+		expect(captured[0]?.has('cp-session-type')).toBe(false);
+		expect(captured[0]?.has('cp-session-token')).toBe(false);
+		expect(captured[0]?.has('cp-region')).toBe(false);
+	});
 });
 
 describe('_request() error handling', () => {

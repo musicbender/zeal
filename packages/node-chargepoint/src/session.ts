@@ -330,6 +330,9 @@ export class ChargingSession {
 			// with two chargers). Only accept it when it belongs to this device, otherwise
 			// we could stop the wrong charger. Fall through to the device plane on mismatch.
 			if (session.deviceId === deviceId) {
+				// driver-bff can echo device_id but still omit outlet_number; a stop sent with
+				// portNumber 0 can't target the charger's only outlet.
+				session._ensureOutletNumber(1);
 				return session;
 			}
 			if (session.deviceId === 0) {
@@ -432,6 +435,7 @@ export class ChargingSession {
 				const session = await client.getChargingSession(status.sessionId);
 
 				if (session.deviceId === deviceId) {
+					session._ensureOutletNumber(1);
 					return session;
 				}
 
